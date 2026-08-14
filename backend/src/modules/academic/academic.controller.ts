@@ -9,6 +9,8 @@ import { CreateBatchDto } from './dto/create-batch.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
 import { CreateSemesterDto } from './dto/create-semester.dto';
 import { UpdateSemesterDto } from './dto/update-semester.dto';
+import { CreateSectionDto } from './dto/create-section.dto';
+import { UpdateSectionDto } from './dto/update-section.dto';
 
 @ApiTags('Academic - Departments')
 @ApiBearerAuth('JWT-auth')
@@ -248,7 +250,67 @@ export class AcademicController {
       data: await this.academicService.deactivateSemester(id),
     };
   }
-  
+
+  @Post('sections')
+  @ApiOperation({
+    summary: 'Create a section',
+  })
+  async createSection(@Body() dto: CreateSectionDto) {
+    return {
+      success: true,
+      message: 'Section created successfully.',
+      data: await this.academicService.createSection(dto),
+    };
+  }
+
+  @Get('sections')
+  @ApiOperation({
+    summary: 'Get all sections',
+  })
+  async getAllSections() {
+    return {
+      success: true,
+      message: 'Sections fetched successfully.',
+      data: await this.academicService.getAllSections(),
+    };
+  }
+
+  @Get('sections/:id')
+  @ApiOperation({
+    summary: 'Get section by ID',
+  })
+  async getSectionById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Section fetched successfully.',
+      data: await this.academicService.getSectionById(id),
+    };
+  }
+
+  @Patch('sections/:id')
+  @ApiOperation({
+    summary: 'Update a section',
+  })
+  async updateSection(@Param('id') id: string, @Body() dto: UpdateSectionDto) {
+    return {
+      success: true,
+      message: 'Section updated successfully.',
+      data: await this.academicService.updateSection(id, dto),
+    };
+  }
+
+  @Patch('sections/:id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate a section',
+  })
+  async deactivateSection(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Section deactivated successfully.',
+      data: await this.academicService.deactivateSection(id),
+    };
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get department by ID',
@@ -260,5 +322,4 @@ export class AcademicController {
       data: await this.academicService.getDepartmentById(id),
     };
   }
-
 }
