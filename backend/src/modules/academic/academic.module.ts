@@ -4,10 +4,10 @@ import { DepartmentRepository } from './repositories/department.repository';
 import { AcademicService } from './academic.service';
 import { ProgramRepository } from './repositories/program.repository';
 import { BatchRepository } from './repositories/batch.repository';
-
+import { SemesterRepository } from './repositories/semester.repository';
 
 @Module({
   controllers: [AcademicController],
-  providers: [AcademicService, DepartmentRepository, ProgramRepository, BatchRepository]
+  providers: [AcademicService, DepartmentRepository, ProgramRepository, BatchRepository, SemesterRepository]
 })
 export class AcademicModule {}

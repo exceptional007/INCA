@@ -196,6 +196,8 @@ model Semester {
   number Int
   name   String
 
+  isActive Boolean @default(true)
+
   subjects Subject[]
   sections Section[]
 

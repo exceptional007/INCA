@@ -6,12 +6,15 @@ import {
 import { DepartmentRepository } from './repositories/department.repository';
 import { ProgramRepository } from './repositories/program.repository';
 import { BatchRepository } from './repositories/batch.repository';
+import { SemesterRepository } from './repositories/semester.repository';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
+import { CreateSemesterDto } from './dto/create-semester.dto';
+import { UpdateSemesterDto } from './dto/update-semester.dto';
 
 @Injectable()
 export class AcademicService {
@@ -19,6 +22,7 @@ export class AcademicService {
     private readonly departmentRepository: DepartmentRepository,
     private readonly programRepository: ProgramRepository,
     private readonly batchRepository: BatchRepository,
+    private readonly semesterRepository: SemesterRepository,
   ) {}
 
   async createDepartment(dto: CreateDepartmentDto) {
@@ -231,6 +235,7 @@ export class AcademicService {
 
     return batch;
   }
+
   async updateBatch(id: string, dto: UpdateBatchDto) {
     const batch = await this.batchRepository.findById(id);
 
@@ -275,5 +280,140 @@ export class AcademicService {
     }
 
     return this.batchRepository.deactivate(id);
+  }
+
+  async createSemester(dto: CreateSemesterDto) {
+    const program = await this.programRepository.findById(dto.programId);
+
+    if (!program) {
+      throw new NotFoundException('Program not found.');
+    }
+
+    if (!program.isActive) {
+      throw new ConflictException(
+        'Cannot create a semester under an inactive program.',
+      );
+    }
+
+    const batch = await this.batchRepository.findById(dto.batchId);
+
+    if (!batch) {
+      throw new NotFoundException('Batch not found.');
+    }
+
+    if (!batch.isActive) {
+      throw new ConflictException(
+        'Cannot create a semester under an inactive batch.',
+      );
+    }
+
+    if (batch.programId !== dto.programId) {
+      throw new ConflictException(
+        'Batch does not belong to the selected program.',
+      );
+    }
+
+    const existingSemester = await this.semesterRepository.findByBatchAndNumber(
+      dto.batchId,
+      dto.number,
+    );
+
+    if (existingSemester) {
+      throw new ConflictException(
+        'This semester already exists for the selected batch.',
+      );
+    }
+
+    return this.semesterRepository.create({
+      programId: dto.programId,
+      batchId: dto.batchId,
+      number: dto.number,
+      name: dto.name,
+    });
+  }
+
+  async getAllSemesters() {
+    return this.semesterRepository.findAll();
+  }
+
+  async getSemesterById(id: string) {
+    const semester = await this.semesterRepository.findById(id);
+
+    if (!semester) {
+      throw new NotFoundException('Semester not found.');
+    }
+
+    return semester;
+  }
+
+  async updateSemester(id: string, dto: UpdateSemesterDto) {
+    const semester = await this.semesterRepository.findById(id);
+
+    if (!semester) {
+      throw new NotFoundException('Semester not found.');
+    }
+
+    const programId = dto.programId ?? semester.programId;
+
+    const batchId = dto.batchId ?? semester.batchId;
+
+    const program = await this.programRepository.findById(programId);
+
+    if (!program) {
+      throw new NotFoundException('Program not found.');
+    }
+
+    if (!program.isActive) {
+      throw new ConflictException(
+        'Cannot assign semester to an inactive program.',
+      );
+    }
+
+    const batch = await this.batchRepository.findById(batchId);
+
+    if (!batch) {
+      throw new NotFoundException('Batch not found.');
+    }
+
+    if (!batch.isActive) {
+      throw new ConflictException(
+        'Cannot assign semester to an inactive batch.',
+      );
+    }
+
+    if (batch.programId !== programId) {
+      throw new ConflictException(
+        'Batch does not belong to the selected program.',
+      );
+    }
+
+    const semesterNumber = dto.number ?? semester.number;
+
+    const existingSemester = await this.semesterRepository.findByBatchAndNumber(
+      batchId,
+      semesterNumber,
+    );
+
+    if (existingSemester && existingSemester.id !== id) {
+      throw new ConflictException(
+        'This semester already exists for the selected batch.',
+      );
+    }
+
+    return this.semesterRepository.update(id, dto);
+  }
+
+  async deactivateSemester(id: string) {
+    const semester = await this.semesterRepository.findById(id);
+
+    if (!semester) {
+      throw new NotFoundException('Semester not found.');
+    }
+
+    if (!semester.isActive) {
+      throw new ConflictException('Semester is already inactive.');
+    }
+
+    return this.semesterRepository.deactivate(id);
   }
 }

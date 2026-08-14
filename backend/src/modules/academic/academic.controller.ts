@@ -7,6 +7,8 @@ import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
+import { CreateSemesterDto } from './dto/create-semester.dto';
+import { UpdateSemesterDto } from './dto/update-semester.dto';
 
 @ApiTags('Academic - Departments')
 @ApiBearerAuth('JWT-auth')
@@ -160,16 +162,39 @@ export class AcademicController {
       data: await this.academicService.getBatchById(id),
     };
   }
-
-  @Get(':id')
+  @Post('semesters')
   @ApiOperation({
-    summary: 'Get department by ID',
+    summary: 'Create a semester',
   })
-  async getDepartmentById(@Param('id') id: string) {
+  async createSemester(@Body() dto: CreateSemesterDto) {
     return {
       success: true,
-      message: 'Department fetched successfully.',
-      data: await this.academicService.getDepartmentById(id),
+      message: 'Semester created successfully.',
+      data: await this.academicService.createSemester(dto),
+    };
+  }
+
+  @Get('semesters')
+  @ApiOperation({
+    summary: 'Get all semesters',
+  })
+  async getAllSemesters() {
+    return {
+      success: true,
+      message: 'Semesters fetched successfully.',
+      data: await this.academicService.getAllSemesters(),
+    };
+  }
+
+  @Get('semesters/:id')
+  @ApiOperation({
+    summary: 'Get semester by ID',
+  })
+  async getSemesterById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Semester fetched successfully.',
+      data: await this.academicService.getSemesterById(id),
     };
   }
 
@@ -196,4 +221,44 @@ export class AcademicController {
       data: await this.academicService.deactivateBatch(id),
     };
   }
+
+  @Patch('semesters/:id')
+  @ApiOperation({
+    summary: 'Update a semester',
+  })
+  async updateSemester(
+    @Param('id') id: string,
+    @Body() dto: UpdateSemesterDto,
+  ) {
+    return {
+      success: true,
+      message: 'Semester updated successfully.',
+      data: await this.academicService.updateSemester(id, dto),
+    };
+  }
+
+  @Patch('semesters/:id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate a semester',
+  })
+  async deactivateSemester(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Semester deactivated successfully.',
+      data: await this.academicService.deactivateSemester(id),
+    };
+  }
+  
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get department by ID',
+  })
+  async getDepartmentById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Department fetched successfully.',
+      data: await this.academicService.getDepartmentById(id),
+    };
+  }
+
 }
