@@ -5,6 +5,8 @@ import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
+import { CreateBatchDto } from './dto/create-batch.dto';
+import { UpdateBatchDto } from './dto/update-batch.dto';
 
 @ApiTags('Academic - Departments')
 @ApiBearerAuth('JWT-auth')
@@ -99,6 +101,66 @@ export class AcademicController {
     };
   }
 
+  @Patch('programs/:id')
+  @ApiOperation({
+    summary: 'Update a program',
+  })
+  async updateProgram(@Param('id') id: string, @Body() dto: UpdateProgramDto) {
+    return {
+      success: true,
+      message: 'Program updated successfully.',
+      data: await this.academicService.updateProgram(id, dto),
+    };
+  }
+
+  @Patch('programs/:id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate a program',
+  })
+  async deactivateProgram(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Program deactivated successfully.',
+      data: await this.academicService.deactivateProgram(id),
+    };
+  }
+
+  @Post('batches')
+  @ApiOperation({
+    summary: 'Create a batch',
+  })
+  async createBatch(@Body() dto: CreateBatchDto) {
+    return {
+      success: true,
+      message: 'Batch created successfully.',
+      data: await this.academicService.createBatch(dto),
+    };
+  }
+
+  @Get('batches')
+  @ApiOperation({
+    summary: 'Get all batches',
+  })
+  async getAllBatches() {
+    return {
+      success: true,
+      message: 'Batches fetched successfully.',
+      data: await this.academicService.getAllBatches(),
+    };
+  }
+
+  @Get('batches/:id')
+  @ApiOperation({
+    summary: 'Get batch by ID',
+  })
+  async getBatchById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Batch fetched successfully.',
+      data: await this.academicService.getBatchById(id),
+    };
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get department by ID',
@@ -111,27 +173,27 @@ export class AcademicController {
     };
   }
 
-  @Patch('programs/:id')
+  @Patch('batches/:id')
   @ApiOperation({
-    summary: 'Update a program',
+    summary: 'Update a batch',
   })
-  async updateProgram(@Param('id') id: string, @Body() dto: UpdateProgramDto) {
+  async updateBatch(@Param('id') id: string, @Body() dto: UpdateBatchDto) {
     return {
       success: true,
-      message: 'Program updated successfully.',
-      data: await this.academicService.updateProgram(id, dto),
+      message: 'Batch updated successfully.',
+      data: await this.academicService.updateBatch(id, dto),
     };
   }
-  
-  @Patch('programs/:id/deactivate')
+
+  @Patch('batches/:id/deactivate')
   @ApiOperation({
-    summary: 'Deactivate a program',
+    summary: 'Deactivate a batch',
   })
-  async deactivateProgram(@Param('id') id: string) {
+  async deactivateBatch(@Param('id') id: string) {
     return {
       success: true,
-      message: 'Program deactivated successfully.',
-      data: await this.academicService.deactivateProgram(id),
+      message: 'Batch deactivated successfully.',
+      data: await this.academicService.deactivateBatch(id),
     };
   }
 }
