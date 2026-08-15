@@ -9,6 +9,7 @@ import { BatchRepository } from './repositories/batch.repository';
 import { SemesterRepository } from './repositories/semester.repository';
 import { SectionRepository } from './repositories/section.repository';
 import { SubjectRepository } from './repositories/subject.repository';
+import { AcademicSessionRepository } from './repositories/academic-session.repository';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
@@ -21,6 +22,8 @@ import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
+import { CreateAcademicSessionDto } from './dto/create-academic-session.dto';
+import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
 
 @Injectable()
 export class AcademicService {
@@ -31,6 +34,7 @@ export class AcademicService {
     private readonly semesterRepository: SemesterRepository,
     private readonly sectionRepository: SectionRepository,
     private readonly subjectRepository: SubjectRepository,
+    private readonly academicSessionRepository: AcademicSessionRepository,
   ) {}
 
   async createDepartment(dto: CreateDepartmentDto) {
@@ -714,5 +718,119 @@ export class AcademicService {
     }
 
     return this.subjectRepository.deactivate(id);
+  }
+
+  async createAcademicSession(dto: CreateAcademicSessionDto) {
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
+
+    if (endDate <= startDate) {
+      throw new ConflictException('End date must be greater than start date.');
+    }
+
+    const existingSession = await this.academicSessionRepository.findByName(
+      dto.name,
+    );
+
+    if (existingSession) {
+      throw new ConflictException('Academic session already exists.');
+    }
+
+    const activeSession = await this.academicSessionRepository.findActive();
+
+    return this.academicSessionRepository.create({
+      name: dto.name,
+      startDate,
+      endDate,
+      isActive: !activeSession,
+    });
+  }
+
+  async getAllAcademicSessions() {
+    return this.academicSessionRepository.findAll();
+  }
+
+  async getAcademicSessionById(id: string) {
+    const session = await this.academicSessionRepository.findById(id);
+
+    if (!session) {
+      throw new NotFoundException('Academic session not found.');
+    }
+
+    return session;
+  }
+
+  async getActiveAcademicSession() {
+    const session = await this.academicSessionRepository.findActive();
+
+    if (!session) {
+      throw new NotFoundException('No active academic session found.');
+    }
+
+    return session;
+  }
+
+  async updateAcademicSession(id: string, dto: UpdateAcademicSessionDto) {
+    const session = await this.academicSessionRepository.findById(id);
+
+    if (!session) {
+      throw new NotFoundException('Academic session not found.');
+    }
+
+    const name = dto.name ?? session.name;
+
+    const startDate = dto.startDate
+      ? new Date(dto.startDate)
+      : session.startDate;
+
+    const endDate = dto.endDate ? new Date(dto.endDate) : session.endDate;
+
+    if (endDate <= startDate) {
+      throw new ConflictException('End date must be greater than start date.');
+    }
+
+    if (dto.name && dto.name !== session.name) {
+      const existingSession = await this.academicSessionRepository.findByName(
+        dto.name,
+      );
+
+      if (existingSession) {
+        throw new ConflictException('Academic session already exists.');
+      }
+    }
+
+    return this.academicSessionRepository.update(id, {
+      name,
+      startDate,
+      endDate,
+    });
+  }
+
+  async deactivateAcademicSession(id: string) {
+    const session = await this.academicSessionRepository.findById(id);
+
+    if (!session) {
+      throw new NotFoundException('Academic session not found.');
+    }
+
+    if (!session.isActive) {
+      throw new ConflictException('Academic session is already inactive.');
+    }
+
+    return this.academicSessionRepository.deactivate(id);
+  }
+
+  async activateAcademicSession(id: string) {
+    const session = await this.academicSessionRepository.findById(id);
+
+    if (!session) {
+      throw new NotFoundException('Academic session not found.');
+    }
+
+    if (session.isActive) {
+      throw new ConflictException('Academic session is already active.');
+    }
+
+    return this.academicSessionRepository.activate(id);
   }
 }

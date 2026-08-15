@@ -13,6 +13,8 @@ import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
+import { CreateAcademicSessionDto } from './dto/create-academic-session.dto';
+import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
 
 @ApiTags('Academic - Departments')
 @ApiBearerAuth('JWT-auth')
@@ -361,18 +363,6 @@ export class AcademicController {
     };
   }
 
-  @Get(':id')
-  @ApiOperation({
-    summary: 'Get department by ID',
-  })
-  async getDepartmentById(@Param('id') id: string) {
-    return {
-      success: true,
-      message: 'Department fetched successfully.',
-      data: await this.academicService.getDepartmentById(id),
-    };
-  }
-
   @Patch('subjects/:id/deactivate')
   @ApiOperation({
     summary: 'Deactivate a subject',
@@ -382,6 +372,105 @@ export class AcademicController {
       success: true,
       message: 'Subject deactivated successfully.',
       data: await this.academicService.deactivateSubject(id),
+    };
+  }
+
+  @Post('academic-sessions')
+  @ApiOperation({
+    summary: 'Create an academic session',
+  })
+  async createAcademicSession(@Body() dto: CreateAcademicSessionDto) {
+    return {
+      success: true,
+      message: 'Academic session created successfully.',
+      data: await this.academicService.createAcademicSession(dto),
+    };
+  }
+
+  @Get('academic-sessions')
+  @ApiOperation({
+    summary: 'Get all academic sessions',
+  })
+  async getAllAcademicSessions() {
+    return {
+      success: true,
+      message: 'Academic sessions fetched successfully.',
+      data: await this.academicService.getAllAcademicSessions(),
+    };
+  }
+
+  @Get('academic-sessions/active')
+  @ApiOperation({
+    summary: 'Get active academic session',
+  })
+  async getActiveAcademicSession() {
+    return {
+      success: true,
+      message: 'Active academic session fetched successfully.',
+      data: await this.academicService.getActiveAcademicSession(),
+    };
+  }
+
+  @Get('academic-sessions/:id')
+  @ApiOperation({
+    summary: 'Get academic session by ID',
+  })
+  async getAcademicSessionById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Academic session fetched successfully.',
+      data: await this.academicService.getAcademicSessionById(id),
+    };
+  }
+
+  @Patch('academic-sessions/:id')
+  @ApiOperation({
+    summary: 'Update an academic session',
+  })
+  async updateAcademicSession(
+    @Param('id') id: string,
+    @Body() dto: UpdateAcademicSessionDto,
+  ) {
+    return {
+      success: true,
+      message: 'Academic session updated successfully.',
+      data: await this.academicService.updateAcademicSession(id, dto),
+    };
+  }
+
+  @Patch('academic-sessions/:id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate an academic session',
+  })
+  async deactivateAcademicSession(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Academic session deactivated successfully.',
+      data: await this.academicService.deactivateAcademicSession(id),
+    };
+  }
+
+  @Patch('academic-sessions/:id/activate')
+  @ApiOperation({
+    summary: 'Activate an academic session',
+  })
+  async activateAcademicSession(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Academic session activated successfully.',
+      data: await this.academicService.activateAcademicSession(id),
+    };
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get department by ID',
+  })
+  async getDepartmentById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Department fetched successfully.',
+      data: await this.academicService.getDepartmentById(id),
     };
   }
 }

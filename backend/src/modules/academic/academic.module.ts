@@ -7,6 +7,7 @@ import { BatchRepository } from './repositories/batch.repository';
 import { SemesterRepository } from './repositories/semester.repository';
 import { SectionRepository } from './repositories/section.repository';
 import { SubjectRepository } from './repositories/subject.repository';
+import { AcademicSessionRepository } from './repositories/academic-session.repository';
 
 @Module({
   controllers: [AcademicController],
@@ -17,7 +18,8 @@ import { SubjectRepository } from './repositories/subject.repository';
     BatchRepository,
     SemesterRepository,
     SectionRepository,
-    SubjectRepository
+    SubjectRepository,
+    AcademicSessionRepository
   ],
 })
 export class AcademicModule {}
