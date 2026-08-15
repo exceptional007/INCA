@@ -8,6 +8,7 @@ import { ProgramRepository } from './repositories/program.repository';
 import { BatchRepository } from './repositories/batch.repository';
 import { SemesterRepository } from './repositories/semester.repository';
 import { SectionRepository } from './repositories/section.repository';
+import { SubjectRepository } from './repositories/subject.repository';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
@@ -18,6 +19,8 @@ import { CreateSemesterDto } from './dto/create-semester.dto';
 import { UpdateSemesterDto } from './dto/update-semester.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
+import { CreateSubjectDto } from './dto/create-subject.dto';
+import { UpdateSubjectDto } from './dto/update-subject.dto';
 
 @Injectable()
 export class AcademicService {
@@ -27,6 +30,7 @@ export class AcademicService {
     private readonly batchRepository: BatchRepository,
     private readonly semesterRepository: SemesterRepository,
     private readonly sectionRepository: SectionRepository,
+    private readonly subjectRepository: SubjectRepository,
   ) {}
 
   async createDepartment(dto: CreateDepartmentDto) {
@@ -557,5 +561,158 @@ export class AcademicService {
     }
 
     return this.sectionRepository.deactivate(id);
+  }
+
+  async createSubject(dto: CreateSubjectDto) {
+    const program = await this.programRepository.findById(dto.programId);
+
+    if (!program) {
+      throw new NotFoundException('Program not found.');
+    }
+
+    if (!program.isActive) {
+      throw new ConflictException(
+        'Cannot create a subject under an inactive program.',
+      );
+    }
+
+    const semester = await this.semesterRepository.findById(dto.semesterId);
+
+    if (!semester) {
+      throw new NotFoundException('Semester not found.');
+    }
+
+    if (!semester.isActive) {
+      throw new ConflictException(
+        'Cannot create a subject under an inactive semester.',
+      );
+    }
+
+    if (semester.programId !== dto.programId) {
+      throw new ConflictException(
+        'Semester does not belong to the selected program.',
+      );
+    }
+
+    const existingCode = await this.subjectRepository.findByCode(dto.code);
+
+    if (existingCode) {
+      throw new ConflictException('Subject code already exists.');
+    }
+
+    const existingSubject = await this.subjectRepository.findBySemesterAndName(
+      dto.programId,
+      dto.semesterId,
+      dto.name,
+    );
+
+    if (existingSubject) {
+      throw new ConflictException(
+        'Subject already exists for this program and semester.',
+      );
+    }
+
+    return this.subjectRepository.create({
+      programId: dto.programId,
+      semesterId: dto.semesterId,
+      code: dto.code,
+      name: dto.name,
+      credits: dto.credits,
+      isLab: dto.isLab,
+    });
+  }
+
+  async getAllSubjects() {
+    return this.subjectRepository.findAll();
+  }
+
+  async getSubjectById(id: string) {
+    const subject = await this.subjectRepository.findById(id);
+
+    if (!subject) {
+      throw new NotFoundException('Subject not found.');
+    }
+
+    return subject;
+  }
+
+  async updateSubject(id: string, dto: UpdateSubjectDto) {
+    const subject = await this.subjectRepository.findById(id);
+
+    if (!subject) {
+      throw new NotFoundException('Subject not found.');
+    }
+
+    const programId = dto.programId ?? subject.programId;
+
+    const semesterId = dto.semesterId ?? subject.semesterId;
+
+    const program = await this.programRepository.findById(programId);
+
+    if (!program) {
+      throw new NotFoundException('Program not found.');
+    }
+
+    if (!program.isActive) {
+      throw new ConflictException(
+        'Cannot assign subject to an inactive program.',
+      );
+    }
+
+    const semester = await this.semesterRepository.findById(semesterId);
+
+    if (!semester) {
+      throw new NotFoundException('Semester not found.');
+    }
+
+    if (!semester.isActive) {
+      throw new ConflictException(
+        'Cannot assign subject to an inactive semester.',
+      );
+    }
+
+    if (semester.programId !== programId) {
+      throw new ConflictException(
+        'Semester does not belong to the selected program.',
+      );
+    }
+
+    if (dto.code && dto.code !== subject.code) {
+      const existingCode = await this.subjectRepository.findByCode(dto.code);
+
+      if (existingCode) {
+        throw new ConflictException('Subject code already exists.');
+      }
+    }
+
+    const name = dto.name ?? subject.name;
+
+    const existingSubject = await this.subjectRepository.findBySemesterAndName(
+      programId,
+      semesterId,
+      name,
+    );
+
+    if (existingSubject && existingSubject.id !== id) {
+      throw new ConflictException(
+        'Subject already exists for this program and semester.',
+      );
+    }
+
+    return this.subjectRepository.update(id, dto);
+  }
+
+  async deactivateSubject(id: string) {
+    const subject = await this.subjectRepository.findById(id);
+
+    if (!subject) {
+      throw new NotFoundException('Subject not found.');
+    }
+
+    if (!subject.isActive) {
+      throw new ConflictException('Subject is already inactive.');
+    }
+
+    return this.subjectRepository.deactivate(id);
   }
 }

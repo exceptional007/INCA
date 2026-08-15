@@ -11,6 +11,8 @@ import { CreateSemesterDto } from './dto/create-semester.dto';
 import { UpdateSemesterDto } from './dto/update-semester.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
+import { CreateSubjectDto } from './dto/create-subject.dto';
+import { UpdateSubjectDto } from './dto/update-subject.dto';
 
 @ApiTags('Academic - Departments')
 @ApiBearerAuth('JWT-auth')
@@ -311,6 +313,54 @@ export class AcademicController {
     };
   }
 
+  @Post('subjects')
+  @ApiOperation({
+    summary: 'Create a subject',
+  })
+  async createSubject(@Body() dto: CreateSubjectDto) {
+    return {
+      success: true,
+      message: 'Subject created successfully.',
+      data: await this.academicService.createSubject(dto),
+    };
+  }
+
+  @Get('subjects')
+  @ApiOperation({
+    summary: 'Get all subjects',
+  })
+  async getAllSubjects() {
+    return {
+      success: true,
+      message: 'Subjects fetched successfully.',
+      data: await this.academicService.getAllSubjects(),
+    };
+  }
+
+  @Get('subjects/:id')
+  @ApiOperation({
+    summary: 'Get subject by ID',
+  })
+  async getSubjectById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Subject fetched successfully.',
+      data: await this.academicService.getSubjectById(id),
+    };
+  }
+
+  @Patch('subjects/:id')
+  @ApiOperation({
+    summary: 'Update a subject',
+  })
+  async updateSubject(@Param('id') id: string, @Body() dto: UpdateSubjectDto) {
+    return {
+      success: true,
+      message: 'Subject updated successfully.',
+      data: await this.academicService.updateSubject(id, dto),
+    };
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get department by ID',
@@ -320,6 +370,18 @@ export class AcademicController {
       success: true,
       message: 'Department fetched successfully.',
       data: await this.academicService.getDepartmentById(id),
+    };
+  }
+
+  @Patch('subjects/:id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate a subject',
+  })
+  async deactivateSubject(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Subject deactivated successfully.',
+      data: await this.academicService.deactivateSubject(id),
     };
   }
 }
