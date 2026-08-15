@@ -15,6 +15,8 @@ import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 import { CreateAcademicSessionDto } from './dto/create-academic-session.dto';
 import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
+import { CreateRoomDto } from './dto/create-room.dto';
+import { UpdateRoomDto } from './dto/update-room.dto';
 
 @ApiTags('Academic - Departments')
 @ApiBearerAuth('JWT-auth')
@@ -459,6 +461,66 @@ export class AcademicController {
       success: true,
       message: 'Academic session activated successfully.',
       data: await this.academicService.activateAcademicSession(id),
+    };
+  }
+
+  @Post('rooms')
+  @ApiOperation({
+    summary: 'Create a room',
+  })
+  async createRoom(@Body() dto: CreateRoomDto) {
+    return {
+      success: true,
+      message: 'Room created successfully.',
+      data: await this.academicService.createRoom(dto),
+    };
+  }
+
+  @Get('rooms')
+  @ApiOperation({
+    summary: 'Get all rooms',
+  })
+  async getAllRooms() {
+    return {
+      success: true,
+      message: 'Rooms fetched successfully.',
+      data: await this.academicService.getAllRooms(),
+    };
+  }
+
+  @Get('rooms/:id')
+  @ApiOperation({
+    summary: 'Get room by ID',
+  })
+  async getRoomById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Room fetched successfully.',
+      data: await this.academicService.getRoomById(id),
+    };
+  }
+
+  @Patch('rooms/:id')
+  @ApiOperation({
+    summary: 'Update a room',
+  })
+  async updateRoom(@Param('id') id: string, @Body() dto: UpdateRoomDto) {
+    return {
+      success: true,
+      message: 'Room updated successfully.',
+      data: await this.academicService.updateRoom(id, dto),
+    };
+  }
+
+  @Patch('rooms/:id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate a room',
+  })
+  async deactivateRoom(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Room deactivated successfully.',
+      data: await this.academicService.deactivateRoom(id),
     };
   }
 

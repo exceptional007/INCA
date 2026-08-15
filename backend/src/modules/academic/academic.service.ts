@@ -10,6 +10,7 @@ import { SemesterRepository } from './repositories/semester.repository';
 import { SectionRepository } from './repositories/section.repository';
 import { SubjectRepository } from './repositories/subject.repository';
 import { AcademicSessionRepository } from './repositories/academic-session.repository';
+import { RoomRepository } from './repositories/room.repository';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
@@ -24,6 +25,8 @@ import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 import { CreateAcademicSessionDto } from './dto/create-academic-session.dto';
 import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
+import { CreateRoomDto } from './dto/create-room.dto';
+import { UpdateRoomDto } from './dto/update-room.dto';
 
 @Injectable()
 export class AcademicService {
@@ -35,6 +38,7 @@ export class AcademicService {
     private readonly sectionRepository: SectionRepository,
     private readonly subjectRepository: SubjectRepository,
     private readonly academicSessionRepository: AcademicSessionRepository,
+    private readonly roomRepository: RoomRepository,
   ) {}
 
   async createDepartment(dto: CreateDepartmentDto) {
@@ -832,5 +836,76 @@ export class AcademicService {
     }
 
     return this.academicSessionRepository.activate(id);
+  }
+
+  async createRoom(dto: CreateRoomDto) {
+    const existingRoom = await this.roomRepository.findByCode(dto.code);
+
+    if (existingRoom) {
+      throw new ConflictException('Room code already exists.');
+    }
+
+    if (dto.capacity !== undefined && dto.capacity <= 0) {
+      throw new ConflictException('Room capacity must be greater than zero.');
+    }
+
+    return this.roomRepository.create({
+      code: dto.code,
+      name: dto.name,
+      building: dto.building,
+      floor: dto.floor,
+      capacity: dto.capacity,
+      isLab: dto.isLab,
+    });
+  }
+
+  async getAllRooms() {
+    return this.roomRepository.findAll();
+  }
+
+  async getRoomById(id: string) {
+    const room = await this.roomRepository.findById(id);
+
+    if (!room) {
+      throw new NotFoundException('Room not found.');
+    }
+
+    return room;
+  }
+
+  async updateRoom(id: string, dto: UpdateRoomDto) {
+    const room = await this.roomRepository.findById(id);
+
+    if (!room) {
+      throw new NotFoundException('Room not found.');
+    }
+
+    if (dto.code && dto.code !== room.code) {
+      const existingRoom = await this.roomRepository.findByCode(dto.code);
+
+      if (existingRoom) {
+        throw new ConflictException('Room code already exists.');
+      }
+    }
+
+    if (dto.capacity !== undefined && dto.capacity <= 0) {
+      throw new ConflictException('Room capacity must be greater than zero.');
+    }
+
+    return this.roomRepository.update(id, dto);
+  }
+
+  async deactivateRoom(id: string) {
+    const room = await this.roomRepository.findById(id);
+
+    if (!room) {
+      throw new NotFoundException('Room not found.');
+    }
+
+    if (!room.isActive) {
+      throw new ConflictException('Room is already inactive.');
+    }
+
+    return this.roomRepository.deactivate(id);
   }
 }
