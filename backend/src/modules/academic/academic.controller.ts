@@ -17,6 +17,8 @@ import { CreateAcademicSessionDto } from './dto/create-academic-session.dto';
 import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
+import { CreateTimeSlotDto } from './dto/create-time-slot.dto';
+import { UpdateTimeSlotDto } from './dto/update-time-slot.dto';
 
 @ApiTags('Academic - Departments')
 @ApiBearerAuth('JWT-auth')
@@ -521,6 +523,69 @@ export class AcademicController {
       success: true,
       message: 'Room deactivated successfully.',
       data: await this.academicService.deactivateRoom(id),
+    };
+  }
+
+  @Post('time-slots')
+  @ApiOperation({
+    summary: 'Create a time slot',
+  })
+  async createTimeSlot(@Body() dto: CreateTimeSlotDto) {
+    return {
+      success: true,
+      message: 'Time slot created successfully.',
+      data: await this.academicService.createTimeSlot(dto),
+    };
+  }
+
+  @Get('time-slots')
+  @ApiOperation({
+    summary: 'Get all time slots',
+  })
+  async getAllTimeSlots() {
+    return {
+      success: true,
+      message: 'Time slots fetched successfully.',
+      data: await this.academicService.getAllTimeSlots(),
+    };
+  }
+
+  @Get('time-slots/:id')
+  @ApiOperation({
+    summary: 'Get time slot by ID',
+  })
+  async getTimeSlotById(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Time slot fetched successfully.',
+      data: await this.academicService.getTimeSlotById(id),
+    };
+  }
+
+  @Patch('time-slots/:id')
+  @ApiOperation({
+    summary: 'Update a time slot',
+  })
+  async updateTimeSlot(
+    @Param('id') id: string,
+    @Body() dto: UpdateTimeSlotDto,
+  ) {
+    return {
+      success: true,
+      message: 'Time slot updated successfully.',
+      data: await this.academicService.updateTimeSlot(id, dto),
+    };
+  }
+
+  @Patch('time-slots/:id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate a time slot',
+  })
+  async deactivateTimeSlot(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Time slot deactivated successfully.',
+      data: await this.academicService.deactivateTimeSlot(id),
     };
   }
 

@@ -9,6 +9,7 @@ import { SectionRepository } from './repositories/section.repository';
 import { SubjectRepository } from './repositories/subject.repository';
 import { AcademicSessionRepository } from './repositories/academic-session.repository';
 import { RoomRepository } from './repositories/room.repository';
+import { TimeSlotRepository } from './repositories/time-slot.repository';
 
 @Module({
   controllers: [AcademicController],
@@ -22,6 +23,7 @@ import { RoomRepository } from './repositories/room.repository';
     SubjectRepository,
     AcademicSessionRepository,
     RoomRepository,
+    TimeSlotRepository
   ],
 })
 export class AcademicModule {}

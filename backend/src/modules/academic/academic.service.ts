@@ -11,6 +11,7 @@ import { SectionRepository } from './repositories/section.repository';
 import { SubjectRepository } from './repositories/subject.repository';
 import { AcademicSessionRepository } from './repositories/academic-session.repository';
 import { RoomRepository } from './repositories/room.repository';
+import { TimeSlotRepository } from './repositories/time-slot.repository';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
@@ -27,6 +28,8 @@ import { CreateAcademicSessionDto } from './dto/create-academic-session.dto';
 import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
+import { CreateTimeSlotDto } from './dto/create-time-slot.dto';
+import { UpdateTimeSlotDto } from './dto/update-time-slot.dto';
 
 @Injectable()
 export class AcademicService {
@@ -39,6 +42,7 @@ export class AcademicService {
     private readonly subjectRepository: SubjectRepository,
     private readonly academicSessionRepository: AcademicSessionRepository,
     private readonly roomRepository: RoomRepository,
+    private readonly timeSlotRepository: TimeSlotRepository,
   ) {}
 
   async createDepartment(dto: CreateDepartmentDto) {
@@ -907,5 +911,86 @@ export class AcademicService {
     }
 
     return this.roomRepository.deactivate(id);
+  }
+
+  async createTimeSlot(dto: CreateTimeSlotDto) {
+    if (dto.startTime >= dto.endTime) {
+      throw new ConflictException('End time must be greater than start time.');
+    }
+
+    const existingTimeSlot = await this.timeSlotRepository.findByTimeRange(
+      dto.startTime,
+      dto.endTime,
+    );
+
+    if (existingTimeSlot) {
+      throw new ConflictException('Time slot already exists.');
+    }
+
+    return this.timeSlotRepository.create({
+      name: dto.name,
+      startTime: dto.startTime,
+      endTime: dto.endTime,
+    });
+  }
+
+  async getAllTimeSlots() {
+    return this.timeSlotRepository.findAll();
+  }
+
+  async getTimeSlotById(id: string) {
+    const timeSlot = await this.timeSlotRepository.findById(id);
+
+    if (!timeSlot) {
+      throw new NotFoundException('Time slot not found.');
+    }
+
+    return timeSlot;
+  }
+
+  async updateTimeSlot(id: string, dto: UpdateTimeSlotDto) {
+    const timeSlot = await this.timeSlotRepository.findById(id);
+
+    if (!timeSlot) {
+      throw new NotFoundException('Time slot not found.');
+    }
+
+    const startTime = dto.startTime ?? timeSlot.startTime;
+
+    const endTime = dto.endTime ?? timeSlot.endTime;
+
+    if (startTime >= endTime) {
+      throw new ConflictException('End time must be greater than start time.');
+    }
+
+    if (
+      (dto.startTime || dto.endTime) &&
+      (startTime !== timeSlot.startTime || endTime !== timeSlot.endTime)
+    ) {
+      const existingTimeSlot = await this.timeSlotRepository.findByTimeRange(
+        startTime,
+        endTime,
+      );
+
+      if (existingTimeSlot && existingTimeSlot.id !== id) {
+        throw new ConflictException('Time slot already exists.');
+      }
+    }
+
+    return this.timeSlotRepository.update(id, dto);
+  }
+
+  async deactivateTimeSlot(id: string) {
+    const timeSlot = await this.timeSlotRepository.findById(id);
+
+    if (!timeSlot) {
+      throw new NotFoundException('Time slot not found.');
+    }
+
+    if (!timeSlot.isActive) {
+      throw new ConflictException('Time slot is already inactive.');
+    }
+
+    return this.timeSlotRepository.deactivate(id);
   }
 }
