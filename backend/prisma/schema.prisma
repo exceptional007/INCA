@@ -103,3 +103,186 @@ model Student {
 
   @@map("students")
 }
+
+model Department {
+  id String @id @default(uuid())
+
+  code      String  @unique
+  name      String  @unique
+  shortName String?
+
+  description String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  programs Program[]
+
+  @@map("departments")
+}
+
+model Program {
+  id String @id @default(uuid())
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  code      String  @unique
+  name      String
+  shortName String?
+
+  batches       Batch[]
+  semesters     Semester[]
+  subjects      Subject[]
+  durationYears Int        @default(4)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, name])
+  @@map("programs")
+}
+
+model AcademicSession {
+  id String @id @default(uuid())
+
+  name      String   @unique
+  startDate DateTime
+  endDate   DateTime
+
+  isActive Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("academic_sessions")
+}
+
+model Batch {
+  id String @id @default(uuid())
+
+  programId String
+  program   Program @relation(fields: [programId], references: [id], onDelete: Restrict)
+
+  name      String
+  startYear Int
+  endYear   Int
+
+  isActive Boolean @default(true)
+
+  sections  Section[]
+  semesters Semester[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([programId, startYear])
+  @@map("batches")
+}
+
+model Semester {
+  id String @id @default(uuid())
+
+  programId String
+  program   Program @relation(fields: [programId], references: [id], onDelete: Restrict)
+
+  batchId String
+  batch   Batch  @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  number Int
+  name   String
+
+  isActive Boolean @default(true)
+
+  subjects Subject[]
+  sections Section[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([batchId, number])
+  @@map("semesters")
+}
+
+model Section {
+  id String @id @default(uuid())
+
+  batchId String
+  batch   Batch  @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+
+  name String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([batchId, semesterId, name])
+  @@map("sections")
+}
+
+model Subject {
+  id String @id @default(uuid())
+
+  programId String
+  program   Program @relation(fields: [programId], references: [id], onDelete: Restrict)
+
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+
+  code String @unique
+  name String
+
+  credits Int
+  isLab   Boolean @default(false)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([programId, semesterId, name])
+  @@map("subjects")
+}
+
+model Room {
+  id String @id @default(uuid())
+
+  code String @unique
+  name String
+
+  building String?
+  floor    Int?
+  capacity Int?
+
+  isLab    Boolean @default(false)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("rooms")
+}
+
+model TimeSlot {
+  id String @id @default(uuid())
+
+  name      String
+  startTime String
+  endTime   String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([startTime, endTime])
+  @@map("time_slots")
+}
