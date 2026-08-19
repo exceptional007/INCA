@@ -20,7 +20,7 @@ import { UpdateRoomDto } from './dto/update-room.dto';
 import { CreateTimeSlotDto } from './dto/create-time-slot.dto';
 import { UpdateTimeSlotDto } from './dto/update-time-slot.dto';
 
-@ApiTags('Academic - Departments')
+@ApiTags('Academic')
 @ApiBearerAuth('JWT-auth')
 @Controller('academic/departments')
 export class AcademicController {

@@ -50,4 +50,28 @@ export class AuthRepository {
       },
     });
   }
+
+  async findRoleById(roleId: string) {
+    return this.prisma.role.findUnique({
+      where: { id: roleId },
+    });
+  }
+
+  async findUserById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        role: true,
+      },
+    });
+  }
+
+  async createUser(data: { email: string; password: string; roleId: string }) {
+    return this.prisma.user.create({
+      data,
+      include: {
+        role: true,
+      },
+    });
+  }
 }
