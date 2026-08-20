@@ -3,6 +3,8 @@ import { ConfigModule } from "@nestjs/config";
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AcademicModule } from './modules/academic/academic.module';
+import { StudentModule } from "./modules/student/student.module";
+import { FacultyModule } from './modules/faculty/faculty.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { AcademicModule } from './modules/academic/academic.module';
     PrismaModule,
     AuthModule,
     AcademicModule,
+    StudentModule,
+    FacultyModule
   ],
 })
 export class AppModule {}
