@@ -68,6 +68,8 @@ model Faculty {
 
   designation String
 
+  isActive Boolean @default(true)
+
   phone String?
 
   photoKey String?
