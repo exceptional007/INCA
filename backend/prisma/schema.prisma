@@ -49,6 +49,7 @@ model User {
 
   faculty Faculty?
   student Student?
+  attendanceAudits AttendanceAudit[]
 
   @@map("users")
 }
@@ -77,6 +78,11 @@ model Faculty {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  scheduleTemplates  ScheduleTemplate[]
+  scheduleExceptions ScheduleException[]
+  activities         Activity[]
+  attendanceSessions AttendanceSession[]
+
   @@map("faculty")
 }
 
@@ -104,6 +110,8 @@ model Student {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  attendanceRecords AttendanceRecord[]
 
   @@map("students")
 }
@@ -228,6 +236,8 @@ model Section {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  scheduleTemplates ScheduleTemplate[]
+
   @@unique([batchId, semesterId, name])
   @@map("sections")
 }
@@ -252,6 +262,8 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  scheduleTemplates ScheduleTemplate[]
+
   @@unique([programId, semesterId, name])
   @@map("subjects")
 }
@@ -272,6 +284,10 @@ model Room {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  scheduleTemplates  ScheduleTemplate[]
+  scheduleExceptions ScheduleException[]
+  activities         Activity[]
+
   @@map("rooms")
 }
 
@@ -289,4 +305,198 @@ model TimeSlot {
 
   @@unique([startTime, endTime])
   @@map("time_slots")
+}
+
+enum ScheduleStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model ScheduleTemplate {
+  id String @id @default(uuid())
+
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  facultyId String
+  faculty   Faculty @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  dayOfWeek Int
+  startTime String 
+  endTime   String 
+
+  effectiveFrom DateTime @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schedules Schedule[]
+
+  @@map("schedule_templates")
+}
+
+model Schedule {
+  id String @id @default(uuid())
+
+  templateId String
+  template   ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  lectureDate DateTime @db.Date
+  status      ScheduleStatus @default(SCHEDULED)
+  remarks     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exceptions         ScheduleException[]
+  attendanceSessions AttendanceSession[]
+
+  @@map("schedules")
+}
+
+model ScheduleException {
+  id String @id @default(uuid())
+
+  scheduleId String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  exceptionType String
+  reason        String?
+
+  newFacultyId String?
+  newFaculty   Faculty? @relation(fields: [newFacultyId], references: [id], onDelete: SetNull)
+
+  newRoomId String?
+  newRoom   Room?   @relation(fields: [newRoomId], references: [id], onDelete: SetNull)
+
+  newStartTime String?
+  newEndTime   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("schedule_exceptions")
+}
+
+model ActivityType {
+  id String @id @default(uuid())
+
+  name        String
+  description String?
+
+  activities Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("activity_types")
+}
+
+model Activity {
+  id String @id @default(uuid())
+
+  activityTypeId String
+  activityType   ActivityType @relation(fields: [activityTypeId], references: [id], onDelete: Restrict)
+
+  title       String
+  description String?
+
+  facultyId String
+  faculty   Faculty @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+
+  roomId String?
+  room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  startTime DateTime
+  endTime   DateTime
+
+  attendanceRequired Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendanceSessions AttendanceSession[]
+
+  @@map("activities")
+}
+
+model AttendanceSession {
+  id String @id @default(uuid())
+
+  scheduleId String?
+  schedule   Schedule? @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  activityId String?
+  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  takenById String
+  takenBy   Faculty @relation(fields: [takenById], references: [id], onDelete: Restrict)
+
+  attendanceDate DateTime @db.Date
+  
+  status String @default("OPEN") 
+
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  records AttendanceRecord[]
+
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id String @id @default(uuid())
+
+  attendanceSessionId String
+  attendanceSession   AttendanceSession @relation(fields: [attendanceSessionId], references: [id], onDelete: Cascade)
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  status  AttendanceStatus
+  remarks String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  audits AttendanceAudit[]
+
+  @@unique([attendanceSessionId, studentId])
+  @@map("attendance_records")
+}
+
+model AttendanceAudit {
+  id String @id @default(uuid())
+
+  attendanceRecordId String
+  attendanceRecord   AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+
+  oldStatus String
+  newStatus String
+
+  editedById String
+  editedBy   User   @relation(fields: [editedById], references: [id], onDelete: Restrict)
+
+  editedAt DateTime @default(now())
+  reason   String?
+
+  @@map("attendance_audits")
 }
