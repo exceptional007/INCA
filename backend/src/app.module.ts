@@ -6,6 +6,9 @@ import { AcademicModule } from './modules/academic/academic.module';
 import { StudentModule } from "./modules/student/student.module";
 import { FacultyModule } from './modules/faculty/faculty.module';
 import { SchedulingModule } from './modules/scheduling/scheduling.module';
+import { ActivitiesModule } from './modules/activities/activities.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -18,7 +21,10 @@ import { SchedulingModule } from './modules/scheduling/scheduling.module';
     AcademicModule,
     StudentModule,
     FacultyModule,
-    SchedulingModule
+    SchedulingModule,
+    ActivitiesModule,
+    AttendanceModule,
+    ReportsModule
   ],
 })
 export class AppModule {}
