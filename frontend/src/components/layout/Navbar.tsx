@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Badge } from '../ui/Badge';
+import { Badge } from '../ui/badge';
 import { LogOut, User as UserIcon, ShieldCheck } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -52,7 +52,7 @@ export const Navbar: React.FC = () => {
                 {user.email}
               </span>
               <div className="mt-0.5">
-                <Badge variant={getRoleVariant(user.role?.code)} dot={false}>
+                 <Badge variant={getRoleVariant(user.role?.code) as any}>
                   {user.role?.name || user.role?.code}
                 </Badge>
               </div>

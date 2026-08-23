@@ -1,46 +1,22 @@
-import React, { forwardRef } from 'react';
-import { clsx } from 'clsx';
+import * as React from "react"
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string;
-  icon?: React.ReactNode;
-}
+import { cn } from "@/lib/utils"
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, icon, className, ...props }, ref) => {
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => {
     return (
-      <div className="w-full flex flex-col gap-1.5">
-        {label && (
-          <label className="text-xs font-medium text-slate-300 tracking-wide">
-            {label}
-          </label>
+      <input
+        type={type}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          className
         )}
-        <div className="relative flex items-center">
-          {icon && (
-            <div className="absolute left-3 text-slate-400 pointer-events-none">
-              {icon}
-            </div>
-          )}
-          <input
-            ref={ref}
-            className={clsx(
-              'glass-input w-full rounded-xl py-2.5 px-3.5 text-sm placeholder:text-slate-500 focus:outline-none',
-              icon && 'pl-10',
-              error && 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/20',
-              className
-            )}
-            {...props}
-          />
-        </div>
-        {error && (
-          <span className="text-xs text-rose-400 mt-0.5 animate-fadeIn">
-            {error}
-          </span>
-        )}
-      </div>
-    );
+        ref={ref}
+        {...props}
+      />
+    )
   }
-);
+)
+Input.displayName = "Input"
 
-Input.displayName = 'Input';
+export { Input }

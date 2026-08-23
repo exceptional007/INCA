@@ -1,18 +1,25 @@
-import React from 'react';
-import { Outlet } from 'react-router-dom';
-import { Navbar } from './Navbar';
-import { Sidebar } from './Sidebar';
+import { Outlet } from "react-router-dom"
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { AppSidebar } from "./AppSidebar"
 
-export const AppLayout: React.FC = () => {
+export function AppLayout() {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      <Navbar />
-      <div className="flex flex-1">
-        <Sidebar />
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full overflow-x-hidden">
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="bg-background">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-background z-10 sticky top-0">
+          <SidebarTrigger className="-ml-1" />
+          <div className="w-full flex justify-between items-center">
+            {/* We could add Breadcrumbs here later if needed */}
+            <div className="font-medium text-sm text-muted-foreground ml-2">
+              Welcome to INCA Assistant
+            </div>
+          </div>
+        </header>
+        <main className="flex flex-1 flex-col gap-4 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           <Outlet />
         </main>
-      </div>
-    </div>
-  );
-};
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}

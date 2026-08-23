@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { BarChart3, AlertTriangle, Search } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { DataTable } from '@/components/ui/data-table';
+import { BarChart3, AlertTriangle, Search, Target } from 'lucide-react';
 import api from '../../api/axios';
+import { type ColumnDef } from '@tanstack/react-table';
 
 export const ReportsPage: React.FC = () => {
   const [reportType, setReportType] = useState<'student' | 'section' | 'subject' | 'faculty'>('subject');
@@ -41,156 +43,210 @@ export const ReportsPage: React.FC = () => {
     }
   };
 
+  const columns: ColumnDef<any>[] = [
+    {
+      accessorKey: 'rollNumber',
+      header: 'Roll Number',
+      cell: ({ row }) => (
+        <span className="font-mono text-xs font-semibold">
+          {row.original.student?.rollNumber || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'name',
+      header: 'Student Name',
+      cell: ({ row }) => <span className="font-medium">{row.original.student?.name || 'Student'}</span>,
+    },
+    {
+      id: 'attended',
+      header: 'Attended / Total',
+      cell: ({ row }) => {
+        const st = row.original;
+        const attended = st.attended ?? st.overall?.attended;
+        const total = st.totalClasses ?? st.overall?.totalClasses;
+        return <span className="text-muted-foreground">{attended} / {total}</span>;
+      },
+    },
+    {
+      id: 'percentage',
+      header: 'Percentage',
+      cell: ({ row }) => {
+        const st = row.original;
+        const pct = st.percentage ?? st.overall?.percentage ?? 0;
+        return (
+          <span className={`font-bold ${pct < 75 ? 'text-destructive' : 'text-success'}`}>
+            {pct}%
+          </span>
+        );
+      },
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const st = row.original;
+        const pct = st.percentage ?? st.overall?.percentage ?? 0;
+        const isShortfall = st.isShortfall || pct < 75;
+        return (
+          <Badge variant={isShortfall ? 'destructive' : 'outline'} className={!isShortfall ? 'text-success border-success' : ''}>
+            {isShortfall ? 'Shortfall (<75%)' : 'Eligible'}
+          </Badge>
+        );
+      },
+    },
+  ];
+
   return (
-    <div className="space-y-6 animate-fadeIn">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Reports & Shortfall Analytics</h1>
-        <p className="text-sm text-slate-400">Generate student, subject, section, and faculty attendance summaries</p>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Reports & Shortfall Analytics</h1>
+          <p className="text-sm text-muted-foreground">Generate student, subject, section, and faculty attendance summaries</p>
+        </div>
       </div>
 
       {/* Controls & Filter Form */}
-      <Card className="p-6">
-        <form onSubmit={fetchReport} className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {(['subject', 'student', 'section', 'faculty'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setReportType(t);
-                  setTargetId('');
-                  setReportData(null);
-                }}
-                className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all capitalize cursor-pointer ${
-                  reportType === t
-                    ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {t} Report
-              </button>
-            ))}
-          </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Report Parameters</CardTitle>
+          <CardDescription>Select report type and target entity.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={fetchReport} className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 p-1 bg-muted rounded-xl max-w-fit">
+              {(['subject', 'student', 'section', 'faculty'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setReportType(t);
+                    setTargetId('');
+                    setReportData(null);
+                  }}
+                  className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all capitalize cursor-pointer ${
+                    reportType === t
+                      ? 'bg-background shadow-sm text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label={`${reportType.toUpperCase()} ID`}
-              placeholder={`Enter ${reportType} UUID...`}
-              value={targetId}
-              onChange={(e) => setTargetId(e.target.value)}
-              icon={<Search className="w-4 h-4" />}
-              required
-            />
-            <Input
-              label="Start Date (Optional)"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-            <Input
-              label="End Date (Optional)"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              <div className="space-y-2">
+                <Label>{reportType.toUpperCase()} ID</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={`Enter ${reportType} UUID...`}
+                    value={targetId}
+                    onChange={(e) => setTargetId(e.target.value)}
+                    className="pl-9"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Start Date (Optional)</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>End Date (Optional)</Label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
 
-          <div className="flex justify-end">
-            <Button type="submit" variant="primary" isLoading={isLoading} icon={<BarChart3 className="w-4 h-4" />}>
-              Generate Report
-            </Button>
-          </div>
-        </form>
+            <div className="flex justify-end pt-2">
+              <Button type="submit" disabled={isLoading} className="gap-2">
+                {isLoading ? "Generating..." : <><BarChart3 className="w-4 h-4" /> Generate Report</>}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
       </Card>
 
       {errorMsg && (
-        <Card className="p-4 bg-rose-500/10 border-rose-500/20 text-rose-400 text-sm font-medium">
+        <Card className="p-4 bg-destructive/10 border-destructive/20 text-destructive text-sm font-medium">
           {errorMsg}
         </Card>
       )}
 
       {/* Report Data Views */}
-      {isLoading ? (
-        <LoadingSpinner label="Generating report analytics..." />
-      ) : reportData ? (
+      {reportData && !isLoading && (
         <div className="space-y-6">
           {/* Header summary */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="p-5">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Target Entity</span>
-              <div className="text-xl font-bold text-white mt-1">
-                {reportData.subject?.name || reportData.student?.name || reportData.section?.name || reportData.faculty?.name || 'Target'}
-              </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-2">
+                  <Target className="w-4 h-4" /> Target Entity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {reportData.subject?.name || reportData.student?.name || reportData.section?.name || reportData.faculty?.name || 'Target'}
+                </div>
+              </CardContent>
             </Card>
 
             {reportData.shortfallCount !== undefined && (
-              <Card className="p-5">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Shortfall Warning (&lt; 75%)</span>
-                <div className="text-xl font-bold text-amber-400 mt-1 flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-400" />
-                  {reportData.shortfallCount} Students
-                </div>
+              <Card className="border-l-4 border-l-destructive">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-destructive" /> Shortfall Warning (&lt; 75%)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">
+                    {reportData.shortfallCount} Students
+                  </div>
+                </CardContent>
               </Card>
             )}
 
             {reportData.totalSessions !== undefined && (
-              <Card className="p-5">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Sessions</span>
-                <div className="text-xl font-bold text-indigo-400 mt-1">
-                  {reportData.totalSessions} Conducted
-                </div>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground font-semibold uppercase tracking-wider">
+                    Total Sessions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">
+                    {reportData.totalSessions} Conducted
+                  </div>
+                </CardContent>
               </Card>
             )}
           </div>
 
-          {/* Detailed Student List with Shortfall Warning Badges */}
+          {/* Detailed Student List */}
           {reportData.students && (
-            <Card className="p-0 overflow-hidden">
-              <div className="p-4 bg-slate-900/40 border-b border-slate-800 text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Student Attendance Breakdowns
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 bg-slate-900/50 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      <th className="p-4">Roll Number</th>
-                      <th className="p-4">Student Name</th>
-                      <th className="p-4">Attended / Total</th>
-                      <th className="p-4">Percentage</th>
-                      <th className="p-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {reportData.students.map((st: any, idx: number) => {
-                      const isShortfall = st.isShortfall || (st.overall?.percentage < 75);
-                      const pct = st.percentage ?? st.overall?.percentage ?? 0;
-                      return (
-                        <tr key={idx} className="hover:bg-slate-800/30">
-                          <td className="p-4 font-mono text-xs text-indigo-400 font-semibold">{st.student?.rollNumber || '—'}</td>
-                          <td className="p-4 font-medium text-slate-100">{st.student?.name || 'Student'}</td>
-                          <td className="p-4 text-xs text-slate-300">
-                            {st.attended ?? st.overall?.attended} / {st.totalClasses ?? st.overall?.totalClasses}
-                          </td>
-                          <td className="p-4 font-bold text-sm">
-                            <span className={pct < 75 ? 'text-amber-400' : 'text-emerald-400'}>
-                              {pct}%
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <Badge variant={isShortfall ? 'warning' : 'success'}>
-                              {isShortfall ? 'Shortfall (<75%)' : 'Eligible'}
-                            </Badge>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Student Attendance Breakdowns</CardTitle>
+                <CardDescription>Individual attendance records for the target entity.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DataTable columns={columns} data={reportData.students} searchKey="name" />
+              </CardContent>
             </Card>
           )}
         </div>
-      ) : null}
+      )}
     </div>
   );
 };

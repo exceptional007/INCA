@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 
+import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { AcademicPage } from './pages/academic/AcademicPage';
@@ -12,6 +13,7 @@ import { SchedulingPage } from './pages/scheduling/SchedulingPage';
 import { ActivitiesPage } from './pages/activities/ActivitiesPage';
 import { MarkAttendancePage } from './pages/attendance/MarkAttendancePage';
 import { ReportsPage } from './pages/reports/ReportsPage';
+import { TimetableImportPage } from './pages/academic/import/TimetableImportPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,6 +31,7 @@ export const App: React.FC = () => {
         <BrowserRouter>
           <Routes>
             {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
 
             {/* Protected Routes inside AppLayout */}
@@ -47,6 +50,7 @@ export const App: React.FC = () => {
                   }
                 >
                   <Route path="/academic" element={<AcademicPage />} />
+                  <Route path="/academic/timetable-imports" element={<TimetableImportPage />} />
                 </Route>
               </Route>
             </Route>

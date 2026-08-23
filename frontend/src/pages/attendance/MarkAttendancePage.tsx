@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { Modal } from '../../components/ui/Modal';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from '../../context/AuthContext';
 import {
   CheckCircle2,
@@ -168,21 +175,21 @@ export const MarkAttendancePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Smart Attendance Marking</h1>
-        <p className="text-sm text-slate-400">Mobile-optimised automatic lecture detection & attendance marking</p>
+        <h1 className="text-2xl font-bold tracking-tight">Smart Attendance Marking</h1>
+        <p className="text-sm text-muted-foreground">Mobile-optimised automatic lecture detection & attendance marking</p>
       </div>
 
       {/* Today's Detected Lectures */}
       <div>
-        <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Today's Scheduled Lectures
         </h2>
         {isLoading && !activeSession ? (
-          <LoadingSpinner />
+          <div className="text-sm text-muted-foreground">Loading schedules...</div>
         ) : schedules.length === 0 ? (
-          <Card className="p-6 text-center text-slate-400 text-sm">
+          <Card className="p-6 text-center text-muted-foreground text-sm bg-muted/50">
             No classes scheduled for today. You can also generate test schedules in Timetables page.
           </Card>
         ) : (
@@ -190,29 +197,33 @@ export const MarkAttendancePage: React.FC = () => {
             {schedules.map((sch) => (
               <Card
                 key={sch.id}
-                hoverable
-                className={`space-y-3 cursor-pointer ${
-                  selectedSchedule?.id === sch.id ? 'border-indigo-500 bg-indigo-500/10' : ''
+                className={`cursor-pointer transition-colors ${
+                  selectedSchedule?.id === sch.id ? 'border-primary ring-1 ring-primary' : 'hover:border-border'
                 }`}
                 onClick={() => handleOpenSession(sch)}
               >
-                <div className="flex items-center justify-between">
-                  <Badge variant="indigo">
-                    {sch.template?.subject?.code || 'CLASS'}
-                  </Badge>
-                  <span className="text-xs text-slate-400 font-mono">
-                    {sch.template?.startTime || '09:00'} - {sch.template?.endTime || '10:00'}
-                  </span>
-                </div>
-                <h3 className="font-bold text-white text-base">
-                  {sch.template?.subject?.name || 'Lecture'}
-                </h3>
-                <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-2">
-                  <span>Section {sch.template?.section?.name || 'A'} • Room {sch.template?.room?.code || '101'}</span>
-                  <Button size="sm" variant="primary" icon={<Sparkles className="w-3.5 h-3.5" />}>
-                    Open Session
-                  </Button>
-                </div>
+                <CardHeader className="pb-2 pt-4 px-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline">
+                      {sch.template?.subject?.code || 'CLASS'}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground font-mono">
+                      {sch.template?.startTime || '09:00'} - {sch.template?.endTime || '10:00'}
+                    </span>
+                  </div>
+                  <CardTitle className="text-base leading-tight">
+                    {sch.template?.subject?.name || 'Lecture'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3 mt-1">
+                    <span>Section {sch.template?.section?.name || 'A'} • Room {sch.template?.room?.code || '101'}</span>
+                    <Button size="sm" variant="default" className="h-7 text-xs">
+                      <Sparkles className="w-3.5 h-3.5 mr-1" />
+                      Open Session
+                    </Button>
+                  </div>
+                </CardContent>
               </Card>
             ))}
           </div>
@@ -221,212 +232,214 @@ export const MarkAttendancePage: React.FC = () => {
 
       {/* Active Session & Student Attendance Card */}
       {selectedSchedule && (
-        <Card className="p-6 space-y-6 border-indigo-500/30">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge variant={activeSession?.status === 'SUBMITTED' ? 'danger' : 'success'}>
-                  {activeSession?.status === 'SUBMITTED' ? 'Locked (Submitted)' : 'Open Session'}
-                </Badge>
-                <span className="text-xs text-slate-400">
-                  {new Date().toLocaleDateString()}
-                </span>
+        <Card className="border-border">
+          <CardHeader className="border-b bg-muted/20 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant={activeSession?.status === 'SUBMITTED' ? 'destructive' : 'default'}>
+                    {activeSession?.status === 'SUBMITTED' ? 'Locked (Submitted)' : 'Open Session'}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date().toLocaleDateString()}
+                  </span>
+                </div>
+                <CardTitle className="text-xl">
+                  {selectedSchedule.template?.subject?.name || 'Selected Lecture'}
+                </CardTitle>
               </div>
-              <h2 className="text-xl font-bold text-white mt-1">
-                {selectedSchedule.template?.subject?.name || 'Selected Lecture'}
-              </h2>
-            </div>
 
-            {/* Quick Bulk Action Buttons */}
-            {activeSession?.status !== 'SUBMITTED' && (
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="success" onClick={() => bulkMarkAll('PRESENT')}>
-                  Mark All Present
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => bulkMarkAll('ABSENT')}>
-                  Mark All Absent
-                </Button>
+              {/* Quick Bulk Action Buttons */}
+              {activeSession?.status !== 'SUBMITTED' && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => bulkMarkAll('PRESENT')} className="border-success text-success hover:bg-success hover:text-success-foreground">
+                    Mark All Present
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => bulkMarkAll('ABSENT')} className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground">
+                    Mark All Absent
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          
+          <CardContent className="pt-6 space-y-4">
+            {statusMsg && (
+              <div className="p-3 rounded-md bg-secondary text-secondary-foreground text-sm font-medium">
+                {statusMsg}
               </div>
             )}
-          </div>
 
-          {statusMsg && (
-            <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium">
-              {statusMsg}
-            </div>
-          )}
+            {/* Student List */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Student List ({studentList.length})
+              </h3>
 
-          {/* Student List */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Student List ({studentList.length})
-            </h3>
-
-            <div className="grid grid-cols-1 gap-2.5">
-              {studentList.map((student) => {
-                const currentStatus = attendanceMap[student.id] || 'PRESENT';
-                return (
-                  <div
-                    key={student.id}
-                    className="p-3.5 rounded-xl glass-panel flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-700 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-300 text-sm">
-                        {student.firstName[0]}
+              <div className="grid grid-cols-1 gap-3">
+                {studentList.map((student) => {
+                  const currentStatus = attendanceMap[student.id] || 'PRESENT';
+                  return (
+                    <div
+                      key={student.id}
+                      className="p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center font-bold text-muted-foreground text-sm">
+                          {student.firstName[0]}
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-sm">
+                            {student.firstName} {student.lastName}
+                          </h4>
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                            Roll: {student.rollNumber}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-slate-100 text-sm">
-                          {student.firstName} {student.lastName}
-                        </h4>
-                        <p className="text-xs text-slate-400 font-mono">
-                          Roll: {student.rollNumber}
-                        </p>
-                      </div>
+
+                      {/* Quick Status Buttons */}
+                      {activeSession?.status !== 'SUBMITTED' ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setStudentStatus(student.id, 'PRESENT')}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                              currentStatus === 'PRESENT'
+                                ? 'bg-success text-success-foreground border-success'
+                                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                            }`}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Present
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStudentStatus(student.id, 'ABSENT')}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                              currentStatus === 'ABSENT'
+                                ? 'bg-destructive text-destructive-foreground border-destructive'
+                                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                            }`}
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> Absent
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStudentStatus(student.id, 'LATE')}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                              currentStatus === 'LATE'
+                                ? 'bg-warning text-warning-foreground border-warning'
+                                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                            }`}
+                          >
+                            <Clock className="w-3.5 h-3.5" /> Late
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <Badge
+                            variant={
+                              currentStatus === 'PRESENT'
+                                ? 'outline'
+                                : currentStatus === 'ABSENT'
+                                ? 'destructive'
+                                : 'secondary'
+                            }
+                            className={currentStatus === 'PRESENT' ? 'text-success border-success' : ''}
+                          >
+                            {currentStatus}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingRecord({ id: `rec-${student.id}`, student });
+                              setAuditModalOpen(true);
+                            }}
+                            className="h-7 px-2 text-xs"
+                          >
+                            <History className="w-3.5 h-3.5 mr-1.5" /> Edit (24h)
+                          </Button>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Quick Status Buttons */}
-                    {activeSession?.status !== 'SUBMITTED' ? (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setStudentStatus(student.id, 'PRESENT')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
-                            currentStatus === 'PRESENT'
-                              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20 font-bold'
-                              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Present
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setStudentStatus(student.id, 'ABSENT')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
-                            currentStatus === 'ABSENT'
-                              ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20 font-bold'
-                              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          <XCircle className="w-3.5 h-3.5" /> Absent
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setStudentStatus(student.id, 'LATE')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
-                            currentStatus === 'LATE'
-                              ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20 font-bold'
-                              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          <Clock className="w-3.5 h-3.5" /> Late
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            currentStatus === 'PRESENT'
-                              ? 'success'
-                              : currentStatus === 'ABSENT'
-                              ? 'danger'
-                              : 'warning'
-                          }
-                        >
-                          {currentStatus}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingRecord({ id: `rec-${student.id}`, student });
-                            setAuditModalOpen(true);
-                          }}
-                          icon={<History className="w-3.5 h-3.5" />}
-                        >
-                          Edit (24h)
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </CardContent>
 
           {/* Submit Attendance Button */}
           {activeSession?.status !== 'SUBMITTED' && (
-            <div className="pt-4 border-t border-slate-800 flex justify-end">
+            <CardFooter className="pt-4 border-t bg-muted/10 justify-end">
               <Button
-                variant="primary"
                 size="lg"
                 onClick={handleSubmitAttendance}
-                isLoading={isSubmitting}
-                icon={<Send className="w-4 h-4" />}
+                disabled={isSubmitting}
               >
-                Submit & Lock Attendance
+                <Send className="w-4 h-4 mr-2" />
+                {isSubmitting ? "Submitting..." : "Submit & Lock Attendance"}
               </Button>
-            </div>
+            </CardFooter>
           )}
         </Card>
       )}
 
       {/* 24-Hour Audit Edit Modal */}
-      <Modal
-        isOpen={auditModalOpen}
-        onClose={() => setAuditModalOpen(false)}
-        title="Edit Submitted Attendance (24-Hour Audit Window)"
-      >
-        <form onSubmit={handleEditSubmittedRecord} className="space-y-4">
-          <p className="text-xs text-slate-400">
-            Modifying attendance for{' '}
-            <span className="text-indigo-300 font-semibold">
-              {editingRecord?.student?.firstName} {editingRecord?.student?.lastName}
-            </span>
-            . All changes are immutably logged with your User ID and reason.
-          </p>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300">New Status</label>
-            <div className="grid grid-cols-4 gap-2">
-              {(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'] as const).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setEditStatus(st)}
-                  className={`py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
-                    editStatus === st
-                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {st}
-                </button>
-              ))}
+      <Dialog open={auditModalOpen} onOpenChange={setAuditModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Submitted Attendance</DialogTitle>
+            <DialogDescription>
+              Modifying attendance for <span className="font-semibold text-foreground">{editingRecord?.student?.firstName} {editingRecord?.student?.lastName}</span>. All changes are immutably logged with your User ID and reason.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleEditSubmittedRecord} className="space-y-6 pt-2">
+            <div className="space-y-2">
+              <Label>New Status</Label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setEditStatus(st)}
+                    className={`py-2 text-xs font-medium rounded-md border transition-all ${
+                      editStatus === st
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300">Reason for Correction</label>
-            <textarea
-              required
-              rows={3}
-              placeholder="e.g. Student arrived late due to bus delay..."
-              value={editReason}
-              onChange={(e) => setEditReason(e.target.value)}
-              className="w-full glass-input rounded-xl p-3 text-sm focus:outline-none"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="reason">Reason for Correction</Label>
+              <textarea
+                id="reason"
+                required
+                rows={3}
+                placeholder="e.g. Student arrived late due to bus delay..."
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                className="w-full flex min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={() => setAuditModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmitting}>
-              Save & Log Audit
-            </Button>
-          </div>
-        </form>
-      </Modal>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAuditModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Saving..." : "Save & Log Audit"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
