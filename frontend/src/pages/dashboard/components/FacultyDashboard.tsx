@@ -1,143 +1,292 @@
-import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Calendar, CheckCircle2, Clock, MapPin, Play, AlertCircle, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Clock, Check, X, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
+interface StudentRoster {
+  id: string;
+  name: string;
+  roll: string;
+  isPresent: boolean;
+}
+
+interface LectureSession {
+  id: string;
+  course: string;
+  code: string;
+  timeSlot: string;
+  room: string;
+  completed: boolean;
+}
 
 export const FacultyDashboard: React.FC = () => {
-  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'schedule' | 'mark' | 'logs'>('schedule');
+
+  // Faculty Lecture Sessions Today
+  const [sessions, setSessions] = useState<LectureSession[]>([
+    { id: 'sess1', course: 'Computer Networks', code: 'CS-301', timeSlot: '10:00 AM - 11:30 AM', room: 'Room-304', completed: false },
+    { id: 'sess2', course: 'Advanced Networks Lab', code: 'CS-391', timeSlot: '02:00 PM - 04:00 PM', room: 'Lab-2', completed: false },
+  ]);
+
+  // Selected session to mark attendance for
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('sess1');
+
+  // Student roster for selected class
+  const [roster, setRoster] = useState<StudentRoster[]>([
+    { id: 's1', name: 'Prabin Barua', roll: 'CSB23010', isPresent: true },
+    { id: 's2', name: 'Nayanika Saikia', roll: 'CSB23018', isPresent: true },
+    { id: 's3', name: 'Himanshu Bora', roll: 'MEB23045', isPresent: true },
+    { id: 's4', name: 'Rohan Sen', roll: 'CSB23011', isPresent: false },
+    { id: 's5', name: 'Kabir Bora', roll: 'CSB23015', isPresent: true },
+  ]);
+
+  // Saved Logs State
+  const [logs, setLogs] = useState([
+    { id: 'log101', course: 'Computer Networks', code: 'CS-301', date: 'Aug 24, 2026', present: 41, total: 45 },
+    { id: 'log102', course: 'Advanced Networks Lab', code: 'CS-391', date: 'Aug 21, 2026', present: 43, total: 45 },
+  ]);
+
+  // Handle present/absent toggle
+  const toggleAttendance = (studentId: string) => {
+    setRoster(roster.map(student => 
+      student.id === studentId ? { ...student, isPresent: !student.isPresent } : student
+    ));
+  };
+
+  // Mark all present / absent helpers
+  const markAllPresent = () => {
+    setRoster(roster.map(s => ({ ...s, isPresent: true })));
+    toast.success('Marked all students as present.');
+  };
+
+  const markAllAbsent = () => {
+    setRoster(roster.map(s => ({ ...s, isPresent: false })));
+    toast.success('Marked all students as absent.');
+  };
+
+  // Submit attendance list
+  const handleSubmitAttendance = () => {
+    const presentCount = roster.filter(s => s.isPresent).length;
+    const totalCount = roster.length;
+    const targetSession = sessions.find(s => s.id === selectedSessionId);
+
+    if (!targetSession) return;
+
+    // Add log
+    const newLog = {
+      id: Date.now().toString(),
+      course: targetSession.course,
+      code: targetSession.code,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      present: presentCount,
+      total: totalCount
+    };
+
+    setLogs([newLog, ...logs]);
+    setSessions(sessions.map(s => s.id === selectedSessionId ? { ...s, completed: true } : s));
+    toast.success(`Attendance compiled. Roster ratio: ${presentCount} / ${totalCount} saved successfully.`);
+    setActiveTab('schedule');
+  };
+
+  const startMarking = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setActiveTab('mark');
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
+      {/* Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Today's Overview</h2>
-          <p className="text-sm text-muted-foreground">Welcome back! Here's your schedule for today.</p>
+          <span className="text-xs uppercase text-action-blue tracking-widest font-semibold">ASSAM Faculty Interface</span>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink mt-0.5">Faculty Member Desk</h2>
+          <p className="text-xs text-ink-muted-80">Mark student checklists, edit session records, and audit logs.</p>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex bg-canvas-parchment p-1 rounded-full border">
+          <button
+            onClick={() => setActiveTab('schedule')}
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              activeTab === 'schedule' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
+            }`}
+          >
+            My Schedule
+          </button>
+          <button
+            onClick={() => setActiveTab('mark')}
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              activeTab === 'mark' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
+            }`}
+          >
+            Mark Attendance
+          </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              activeTab === 'logs' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
+            }`}
+          >
+            Past Roster Logs
+          </button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Classes Today</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">Scheduled lectures</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Sessions Completed</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">1</div>
-            <p className="text-xs text-muted-foreground">Attendance submitted</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Pending Corrections</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">2</div>
-            <p className="text-xs text-muted-foreground">Requires review</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-primary text-primary-foreground">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-primary-foreground">Up Next</CardTitle>
-            <Clock className="h-4 w-4 text-primary-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">11:00 AM</div>
-            <p className="text-xs text-primary-foreground/80">Data Structures - Room 204</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="col-span-2">
-          <CardHeader>
-            <CardTitle>Today's Schedule</CardTitle>
-            <CardDescription>Your upcoming lectures and sessions.</CardDescription>
-          </CardHeader>
-          <CardContent>
+      {/* --- Tab Content: My Schedule --- */}
+      {activeTab === 'schedule' && (
+        <div className="space-y-6">
+          <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
+            <h3 className="text-base font-semibold text-ink pb-4 border-b mb-6">Today's Class Schedule</h3>
             <div className="space-y-4">
-              <div className="flex border rounded-lg overflow-hidden">
-                <div className="w-2 bg-success" />
-                <div className="p-4 flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-lg">09:00 AM - 10:30 AM</span>
-                      <span className="px-2 py-0.5 rounded-full bg-success/10 text-success text-xs font-medium border border-success/20">Completed</span>
-                    </div>
-                    <p className="font-medium">Database Management Systems</p>
-                    <div className="flex items-center text-sm text-muted-foreground mt-1 gap-4">
-                      <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> CS Batch 2024 A</span>
-                      <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Room 101</span>
+              {sessions.map((sess) => (
+                <div key={sess.id} className="flex justify-between items-center p-4 bg-canvas-parchment/40 rounded-xl border border-[#e0e0e0]">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-action-blue shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-ink">{sess.course} ({sess.code})</h4>
+                      <p className="text-xs text-ink-muted-80 mt-1">{sess.timeSlot} &bull; Room {sess.room}</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" disabled>Submitted</Button>
+                  {sess.completed ? (
+                    <Badge className="bg-emerald-100 text-emerald-800 border-none text-[10px] px-3.5 py-1 rounded-full">
+                      Logged Success
+                    </Badge>
+                  ) : (
+                    <Button onClick={() => startMarking(sess.id)} className="bg-action-blue hover:opacity-95 text-white text-xs rounded-full h-9">
+                      Mark Attendance
+                    </Button>
+                  )}
                 </div>
-              </div>
-
-              <div className="flex border rounded-lg overflow-hidden ring-1 ring-ring">
-                <div className="w-2 bg-primary" />
-                <div className="p-4 flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-lg">11:00 AM - 12:30 PM</span>
-                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20">Up Next</span>
-                    </div>
-                    <p className="font-medium">Data Structures</p>
-                    <div className="flex items-center text-sm text-muted-foreground mt-1 gap-4">
-                      <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> CS Batch 2024 B</span>
-                      <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Room 204</span>
-                    </div>
-                  </div>
-                  <Button onClick={() => navigate('/attendance/mark')} className="gap-2">
-                    <Play className="w-4 h-4" /> Start Session
-                  </Button>
-                </div>
-              </div>
+              ))}
             </div>
-          </CardContent>
-        </Card>
+          </Card>
+        </div>
+      )}
 
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>Correction Requests</CardTitle>
-            <CardDescription>Student appeals for attendance correction.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="border rounded-md p-3">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-sm font-medium">John Doe (1042)</span>
-                  <span className="text-xs text-muted-foreground">Yesterday</span>
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
-                  "I was marked absent in DBMS but I was present in the back row."
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="default" size="sm" className="w-full">Approve</Button>
-                  <Button variant="outline" size="sm" className="w-full">Reject</Button>
-                </div>
-              </div>
+      {/* --- Tab Content: Mark Attendance --- */}
+      {activeTab === 'mark' && (
+        <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b mb-6">
+            <div>
+              <h3 className="text-base font-semibold text-ink">
+                Class Attendance Roster
+              </h3>
+              <select 
+                value={selectedSessionId}
+                onChange={(e) => setSelectedSessionId(e.target.value)}
+                className="mt-2 text-xs rounded-full border px-3.5 py-1.5 bg-white text-ink font-semibold focus-visible:outline-none"
+              >
+                {sessions.map(s => (
+                  <option key={s.id} value={s.id} disabled={s.completed}>{s.course} ({s.code}) {s.completed ? '[Completed]' : ''}</option>
+                ))}
+              </select>
             </div>
-          </CardContent>
-          <CardFooter>
-            <Button variant="ghost" className="w-full text-sm">View All Requests</Button>
-          </CardFooter>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="outline" size="sm" onClick={markAllPresent} className="rounded-full text-xs h-8">
+                Mark All Present
+              </Button>
+              <Button variant="outline" size="sm" onClick={markAllAbsent} className="rounded-full text-xs h-8">
+                Mark All Absent
+              </Button>
+            </div>
+          </div>
+
+          {/* Roster Table List */}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[100px] text-xs font-bold text-ink-muted-80">Roster Check</TableHead>
+                  <TableHead className="text-xs font-bold text-ink-muted-80">Student Name</TableHead>
+                  <TableHead className="text-xs font-bold text-ink-muted-80">Roll Number</TableHead>
+                  <TableHead className="text-right text-xs font-bold text-ink-muted-80">Indicator Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {roster.map((student) => (
+                  <TableRow key={student.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={student.isPresent}
+                        onChange={() => toggleAttendance(student.id)}
+                        className="h-4 w-4 rounded border-[#e0e0e0] text-action-blue focus:ring-action-blue cursor-pointer"
+                      />
+                    </TableCell>
+                    <TableCell className="font-semibold text-xs text-ink">{student.name}</TableCell>
+                    <TableCell className="text-xs font-mono">{student.roll}</TableCell>
+                    <TableCell className="text-right">
+                      {student.isPresent ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                          <Check className="h-2 w-2" /> Present
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-rose-100 text-rose-800 border-none text-[9px] px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                          <X className="h-2 w-2" /> Absent
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="mt-8 pt-4 border-t flex justify-between items-center">
+            <div className="flex gap-2 items-center text-xs text-ink-muted-80">
+              <ShieldAlert className="h-4 w-4 text-amber-500" />
+              <span>Submit within 24 hours edit threshold rule.</span>
+            </div>
+            <Button onClick={handleSubmitAttendance} className="bg-action-blue hover:opacity-95 text-white rounded-full">
+              Submit Attendance Roster
+            </Button>
+          </div>
         </Card>
-      </div>
+      )}
+
+      {/* --- Tab Content: Past Roster Logs --- */}
+      {activeTab === 'logs' && (
+        <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
+          <h3 className="text-base font-semibold text-ink pb-4 border-b mb-6">Attendance Submission History</h3>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs font-bold text-ink-muted-80">Course Subject</TableHead>
+                  <TableHead className="text-xs font-bold text-ink-muted-80">Code</TableHead>
+                  <TableHead className="text-xs font-bold text-ink-muted-80">Date Logged</TableHead>
+                  <TableHead className="text-right text-xs font-bold text-ink-muted-80">Checked Present Ratio</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => (
+                  <TableRow key={log.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
+                    <TableCell className="font-semibold text-xs text-ink">{log.course}</TableCell>
+                    <TableCell className="text-xs font-mono">{log.code}</TableCell>
+                    <TableCell className="text-xs text-ink-muted-80">{log.date}</TableCell>
+                    <TableCell className="text-right font-semibold text-xs text-ink">
+                      <Badge className="bg-action-blue/10 text-action-blue border-none text-[10px] px-2.5 py-0.5 rounded-full">
+                        {log.present} / {log.total} present
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };
+export default FacultyDashboard;

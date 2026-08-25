@@ -26,7 +26,7 @@ export const LoginPage: React.FC = () => {
       const response = await api.post('/auth/login', { email, password });
       const { accessToken, user } = response.data.data;
       login(accessToken, user);
-      navigate('/dashboard');
+      navigate('/hub');
     } catch (err: any) {
       setError(
         err.response?.data?.message || 'Invalid credentials or connection error.'

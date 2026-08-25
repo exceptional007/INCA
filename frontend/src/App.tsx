@@ -14,6 +14,7 @@ import { ActivitiesPage } from './pages/activities/ActivitiesPage';
 import { MarkAttendancePage } from './pages/attendance/MarkAttendancePage';
 import { ReportsPage } from './pages/reports/ReportsPage';
 import { TimetableImportPage } from './pages/academic/import/TimetableImportPage';
+import { FeatureHub } from './pages/dashboard/FeatureHub';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,8 +35,11 @@ export const App: React.FC = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
 
-            {/* Protected Routes inside AppLayout */}
+            {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
+              <Route path="/hub" element={<FeatureHub />} />
+
+              {/* ASSAM Module routes inside AppLayout */}
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/schedules" element={<SchedulingPage />} />
@@ -56,7 +60,7 @@ export const App: React.FC = () => {
             </Route>
 
             {/* Fallback */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/hub" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
