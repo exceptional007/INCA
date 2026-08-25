@@ -123,26 +123,26 @@ export function AppSidebar() {
   )
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="h-16 flex justify-center border-b px-4">
+    <Sidebar collapsible="icon" className="border-r border-[#e0e0e0] bg-white">
+      <SidebarHeader className="h-16 flex justify-center border-b border-[#e0e0e0] px-4 bg-white">
         <div className="flex items-center gap-2 overflow-hidden">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <ShieldCheck className="size-5" />
+          <div className="flex aspect-square size-8 items-center justify-center rounded-full bg-action-blue text-white shrink-0">
+            <ShieldCheck className="size-4.5" />
           </div>
           {state === "expanded" && (
-            <div className="flex flex-col gap-0.5 leading-none">
-              <span className="font-bold tracking-tight">INCA ASSAM</span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+            <div className="flex flex-col leading-none">
+              <span className="font-semibold text-ink text-[14px] tracking-tight">INCA</span>
+              <span className="text-[9px] text-action-blue font-bold uppercase tracking-wider mt-0.5">
                 Campus Automation
               </span>
             </div>
           )}
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="bg-white">
         {filteredGroups.map((group) => (
           <SidebarGroup key={group.title}>
-            <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] uppercase font-bold text-ink-muted-48 tracking-widest px-2">{group.title}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => (
@@ -152,8 +152,8 @@ export function AppSidebar() {
                         to={item.url}
                         className={({ isActive }) =>
                           isActive
-                            ? "bg-secondary font-medium text-foreground"
-                            : "text-muted-foreground"
+                            ? "bg-secondary font-semibold text-action-blue flex items-center gap-2 px-3 py-2 w-full rounded-[8px]"
+                            : "text-[#86868b] hover:text-ink hover:bg-canvas-parchment/60 flex items-center gap-2 px-3 py-2 w-full rounded-[8px] transition-colors"
                         }
                       >
                         <item.icon />
