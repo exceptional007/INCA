@@ -50,6 +50,7 @@ model User {
   faculty Faculty?
   student Student?
   attendanceAudits AttendanceAudit[]
+  timetableImportBatches TimetableImportBatch[]
 
   @@map("users")
 }
@@ -82,6 +83,8 @@ model Faculty {
   scheduleExceptions ScheduleException[]
   activities         Activity[]
   attendanceSessions AttendanceSession[]
+  timetableSlots     TimetableSlot[]
+  timetableSlotDrafts TimetableSlotDraft[]
 
   @@map("faculty")
 }
@@ -237,6 +240,8 @@ model Section {
   updatedAt DateTime @updatedAt
 
   scheduleTemplates ScheduleTemplate[]
+  timetableVersions   TimetableVersion[]
+  timetableSlotDrafts TimetableSlotDraft[]
 
   @@unique([batchId, semesterId, name])
   @@map("sections")
@@ -263,6 +268,8 @@ model Subject {
   updatedAt DateTime @updatedAt
 
   scheduleTemplates ScheduleTemplate[]
+  timetableSlots      TimetableSlot[]
+  timetableSlotDrafts TimetableSlotDraft[]
 
   @@unique([programId, semesterId, name])
   @@map("subjects")
@@ -287,6 +294,8 @@ model Room {
   scheduleTemplates  ScheduleTemplate[]
   scheduleExceptions ScheduleException[]
   activities         Activity[]
+  timetableSlots     TimetableSlot[]
+  timetableSlotDrafts TimetableSlotDraft[]
 
   @@map("rooms")
 }
@@ -499,4 +508,91 @@ model AttendanceAudit {
   reason   String?
 
   @@map("attendance_audits")
+}
+
+enum ImportBatchStatus {
+  UPLOADED
+  EXTRACTED
+  PENDING_REVIEW
+  COMMITTED
+  ROLLED_BACK
+  EXTRACTION_FAILED
+  DISCARDED
+}
+
+model TimetableImportBatch {
+  id                 String              @id @default(uuid())
+  uploadedByUserId   String
+  uploadedByUser     User                @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  sourceFileR2Key    String
+  status             ImportBatchStatus   @default(UPLOADED)
+  pagesJson          Json?               // Stores page numbers, PNG keys, and extracted raw text metadata
+  createdAt          DateTime            @default(now())
+  committedAt        DateTime?
+  notes              String?
+  slots              TimetableSlotDraft[]
+  timetableVersions  TimetableVersion[]
+
+  @@map("timetable_import_batches")
+}
+
+model TimetableSlotDraft {
+  id                 String              @id @default(uuid())
+  batchId            String
+  batch              TimetableImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  gridId             String
+  day                String
+  timeSlotStart      String
+  timeSlotEnd        String
+  isMergedSlot       Boolean             @default(false)
+  sectionCodes       String[]            // Scalar list of sections mapped (e.g., ["C1", "C2"])
+  subjectRaw         String
+  facultyRaw         String
+  room               String
+  category           String              // "academic" | "skill_development" | "placement" | "self_learning"
+  matchedSubjectId   String?
+  matchedSubject     Subject?            @relation(fields: [matchedSubjectId], references: [id], onDelete: SetNull)
+  matchedFacultyId   String?
+  matchedFaculty     Faculty?            @relation(fields: [matchedFacultyId], references: [id], onDelete: SetNull)
+  matchedRoomId      String?
+  matchedRoom        Room?               @relation(fields: [matchedRoomId], references: [id], onDelete: SetNull)
+  matchedSectionId   String?
+  matchedSection     Section?            @relation(fields: [matchedSectionId], references: [id], onDelete: SetNull)
+  matchConfidence    Float               @default(0.0)
+  rawCellText        String
+  adminEdited        Boolean             @default(false)
+
+  @@map("timetable_slot_drafts")
+}
+
+model TimetableVersion {
+  id                 String              @id @default(uuid())
+  sectionId          String
+  section            Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  effectiveFrom      DateTime            @db.Date
+  isActive           Boolean             @default(true)
+  importBatchId      String?
+  importBatch        TimetableImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdAt          DateTime            @default(now())
+  slots              TimetableSlot[]
+
+  @@map("timetable_versions")
+}
+
+model TimetableSlot {
+  id                 String              @id @default(uuid())
+  versionId          String
+  version            TimetableVersion    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  day                String
+  timeSlotStart      String
+  timeSlotEnd        String
+  subjectId          String
+  subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  facultyId          String
+  faculty            Faculty             @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  roomId             String
+  room               Room                @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  category           String
+
+  @@map("timetable_slots")
 }

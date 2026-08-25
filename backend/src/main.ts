@@ -1,3 +1,15 @@
+const rootCanvas = require(require('path').join(process.cwd(), 'node_modules/pdf-to-png-converter/node_modules/@napi-rs/canvas'));
+for (const className of ['Path2D', 'DOMMatrix', 'ImageData']) {
+  Object.defineProperty(globalThis, className, {
+    get() {
+      return rootCanvas[className];
+    },
+    set(val) {
+      // Ignore setting to prevent older module versions from overwriting
+    },
+    configurable: false,
+  });
+}
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
