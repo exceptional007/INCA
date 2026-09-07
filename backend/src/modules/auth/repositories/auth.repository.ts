@@ -24,6 +24,11 @@ export class AuthRepository {
             name: true,
           },
         },
+        adminProfile: {
+          include: {
+            department: true,
+          },
+        },
       },
     });
   }
@@ -57,6 +62,12 @@ export class AuthRepository {
     });
   }
 
+  async findRoleByCode(code: string) {
+    return this.prisma.role.findUnique({
+      where: { code },
+    });
+  }
+
   async findUserById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
@@ -74,4 +85,134 @@ export class AuthRepository {
       },
     });
   }
+
+  async findCoordinators() {
+    return this.prisma.user.findMany({
+      where: {
+        role: {
+          code: 'COORDINATOR',
+        },
+      },
+      include: {
+        role: true,
+      },
+      orderBy: {
+        email: 'asc',
+      },
+    });
+  }
+
+  async updateUser(id: string, data: { email?: string; password?: string; isActive?: boolean }) {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      include: {
+        role: true,
+      },
+    });
+  }
+
+  async deleteUser(id: string) {
+    return this.prisma.user.delete({
+      where: { id },
+    });
+  }
+
+  async findDepartmentById(id: string) {
+    return this.prisma.department.findUnique({
+      where: { id },
+    });
+  }
+
+  async findAdmins() {
+    return this.prisma.user.findMany({
+      where: {
+        role: {
+          code: 'ADMIN',
+        },
+      },
+      include: {
+        role: true,
+        adminProfile: {
+          include: {
+            department: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async findAdminById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        role: true,
+        adminProfile: {
+          include: {
+            department: true,
+          },
+        },
+      },
+    });
+  }
+
+  async createAdminUser(data: {
+    email: string;
+    password: string;
+    roleId: string;
+    name: string;
+    departmentId: string;
+  }) {
+    return this.prisma.user.create({
+      data: {
+        email: data.email,
+        password: data.password,
+        roleId: data.roleId,
+        isActive: true,
+        mustChangePassword: true,
+        adminProfile: {
+          create: {
+            name: data.name,
+            departmentId: data.departmentId,
+          },
+        },
+      },
+      include: {
+        role: true,
+        adminProfile: {
+          include: {
+            department: true,
+          },
+        },
+      },
+    });
+  }
+
+  async updateAdminProfile(
+    userId: string,
+    data: { name?: string; departmentId?: string },
+  ) {
+    return this.prisma.adminProfile.upsert({
+      where: { userId },
+      create: {
+        userId,
+        name: data.name || 'Admin',
+        departmentId: data.departmentId || '',
+      },
+      update: data,
+      include: {
+        department: true,
+      },
+    });
+  }
+
+  async createAuditLog(data: { event: string; details: string }) {
+    return this.prisma.systemAuditLog.create({
+      data,
+    });
+  }
 }
+

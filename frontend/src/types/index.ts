@@ -39,6 +39,10 @@ export interface Student {
   gender: string;
   phone?: string;
   photoKey?: string;
+  bloodGroup?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  address?: string;
   user?: User;
 }
 
@@ -62,23 +66,32 @@ export interface Program {
   department?: Department;
 }
 
+export interface Semester {
+  id: string;
+  programId: string;
+  number: number;
+  name?: string;
+  isActive: boolean;
+  program?: Program;
+}
+
 export interface Section {
   id: string;
-  batchId: string;
   semesterId: string;
   name: string;
   isActive: boolean;
+  semester?: Semester;
 }
 
 export interface Subject {
   id: string;
-  programId: string;
+  year: number;
   semesterId: string;
   code: string;
   name: string;
-  credits: number;
   isLab: boolean;
   isActive: boolean;
+  semester?: Semester;
 }
 
 export interface Room {

@@ -22,8 +22,31 @@ export class SchedulesService {
     };
   }
 
-  async findAll(): Promise<ApiResponse<any>> {
-    const schedules = await this.scheduleRepository.findAll();
+  async findAll(userId?: string, userRole?: string, queryFacultyId?: string): Promise<ApiResponse<any>> {
+    let facultyId = queryFacultyId;
+    let sectionIds: string[] | undefined = undefined;
+    if (userRole === 'FACULTY') {
+      const resolved = userId ? await this.scheduleRepository.getFacultyIdForUser(userId) : null;
+      if (!resolved) {
+        return {
+          success: true,
+          message: 'No schedules assigned for this faculty.',
+          data: [],
+        };
+      }
+      facultyId = resolved;
+    } else if (userRole === 'STUDENT') {
+      const resolvedSectionIds = userId ? await this.scheduleRepository.getStudentSectionIdsForUser(userId) : [];
+      if (!resolvedSectionIds || resolvedSectionIds.length === 0) {
+        return {
+          success: true,
+          message: 'No section assigned for this student.',
+          data: [],
+        };
+      }
+      sectionIds = resolvedSectionIds;
+    }
+    const schedules = await this.scheduleRepository.findAll(facultyId, sectionIds);
     return {
       success: true,
       message: 'Schedules retrieved successfully.',
@@ -43,13 +66,52 @@ export class SchedulesService {
     };
   }
 
-  async getTodaySchedules(): Promise<ApiResponse<any>> {
+  async getTodaySchedules(userId?: string, userRole?: string, queryFacultyId?: string): Promise<ApiResponse<any>> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const schedules = await this.scheduleRepository.findByDateRange(today, tomorrow);
+    let facultyId = queryFacultyId;
+    let sectionIds: string[] | undefined = undefined;
+    if (userRole === 'FACULTY') {
+      const resolved = userId ? await this.scheduleRepository.getFacultyIdForUser(userId) : null;
+      if (!resolved) {
+        return {
+          success: true,
+          message: 'No schedules assigned for this faculty.',
+          data: [],
+        };
+      }
+      facultyId = resolved;
+    } else if (userRole === 'STUDENT') {
+      const resolvedSectionIds = userId ? await this.scheduleRepository.getStudentSectionIdsForUser(userId) : [];
+      if (!resolvedSectionIds || resolvedSectionIds.length === 0) {
+        return {
+          success: true,
+          message: 'No section assigned for this student.',
+          data: [],
+        };
+      }
+      sectionIds = resolvedSectionIds;
+    }
+
+    let schedules = await this.scheduleRepository.findByDateRange(today, tomorrow, facultyId, sectionIds);
+    
+    // If empty on local date boundary, try UTC day boundary
+    if (schedules.length === 0) {
+      const utcToday = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+      const utcTomorrow = new Date(utcToday);
+      utcTomorrow.setUTCDate(utcTomorrow.getUTCDate() + 1);
+      schedules = await this.scheduleRepository.findByDateRange(utcToday, utcTomorrow, facultyId, sectionIds);
+    }
+
+    // If still empty (e.g. weekend, holiday or no schedule on exact today), fall back to active schedules for this section/faculty
+    if (schedules.length === 0) {
+      const allSchedules = await this.scheduleRepository.findAll(facultyId, sectionIds);
+      schedules = allSchedules.slice(0, 10);
+    }
+
     return {
       success: true,
       message: 'Today\'s schedules retrieved successfully.',

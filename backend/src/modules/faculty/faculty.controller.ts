@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { FacultyService } from './faculty.service';
@@ -14,14 +14,14 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateFacultyAccountDto } from './dto/create-faculty-account.dto';
 
 @ApiTags('Faculty')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('faculty')
 export class FacultyController {
   constructor(private readonly facultyService: FacultyService) {}
 
   @Post('accounts')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN')
-  @ApiBearerAuth('JWT-auth')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiOperation({
     summary: 'Create a faculty account',
   })
@@ -34,6 +34,7 @@ export class FacultyController {
   }
 
   @Post()
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiOperation({
     summary: 'Create a faculty profile',
   })
@@ -46,18 +47,21 @@ export class FacultyController {
   }
 
   @Get()
+  @Roles('ADMIN', 'SUPER_ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Get all faculty',
   })
-  async getAllFaculty() {
+  async getAllFaculty(@Query('includeInactive') includeInactive?: string) {
+    const shouldInclude = includeInactive === 'true';
     return {
       success: true,
       message: 'Faculty fetched successfully.',
-      data: await this.facultyService.getAllFaculty(),
+      data: await this.facultyService.getAllFaculty(shouldInclude),
     };
   }
 
   @Get('employee-code/:employeeCode')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Get faculty by employee code',
   })
@@ -70,6 +74,7 @@ export class FacultyController {
   }
 
   @Patch(':id')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiOperation({
     summary: 'Update a faculty member',
   })
@@ -82,6 +87,7 @@ export class FacultyController {
   }
 
   @Patch(':id/deactivate')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiOperation({
     summary: 'Deactivate a faculty member',
   })
@@ -93,7 +99,21 @@ export class FacultyController {
     };
   }
 
+  @Patch(':id/activate')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Activate a faculty member',
+  })
+  async activateFaculty(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Faculty activated successfully.',
+      data: await this.facultyService.activateFaculty(id),
+    };
+  }
+
   @Get(':id')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Get faculty by ID',
   })

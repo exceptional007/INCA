@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { SessionsService } from './sessions.service';
@@ -38,6 +39,13 @@ export class SessionsController {
   @ApiOperation({ summary: "Get today's attendance sessions" })
   findToday() {
     return this.sessionsService.findToday();
+  }
+
+  @Get('my-sessions')
+  @ApiOperation({ summary: "Get current authenticated faculty's attendance sessions" })
+  findMySessions(@Req() req: any) {
+    const userRole = req.user?.role?.code || req.user?.role;
+    return this.sessionsService.findForUser(req.user?.id, userRole);
   }
 
   @Get('faculty/:facultyId')

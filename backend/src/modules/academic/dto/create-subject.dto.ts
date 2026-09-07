@@ -12,15 +12,16 @@ import {
 
 export class CreateSubjectDto {
   @ApiProperty({
-    example: 'uuid-of-ds-program',
-    description: 'Program ID',
+    example: 1,
+    description: 'Academic year (1: 1st Year, 2: 2nd Year, 3: 3rd Year, 4: 4th Year)',
   })
-  @IsUUID()
-  @IsNotEmpty()
-  programId!: string;
+  @IsInt()
+  @Min(1)
+  @Max(4)
+  year!: number;
 
   @ApiProperty({
-    example: 'uuid-of-semester-7',
+    example: 'uuid-of-semester-1',
     description: 'Semester ID',
   })
   @IsUUID()
@@ -28,7 +29,7 @@ export class CreateSubjectDto {
   semesterId!: string;
 
   @ApiProperty({
-    example: 'DS701',
+    example: 'CS101',
     description: 'Unique subject code',
   })
   @IsString()
@@ -37,22 +38,13 @@ export class CreateSubjectDto {
   code!: string;
 
   @ApiProperty({
-    example: 'Machine Learning',
+    example: 'Compiler Design',
     description: 'Subject name',
   })
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
   name!: string;
-
-  @ApiProperty({
-    example: 4,
-    description: 'Subject credits',
-  })
-  @IsInt()
-  @Min(1)
-  @Max(10)
-  credits!: number;
 
   @ApiProperty({
     example: false,

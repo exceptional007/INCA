@@ -13,13 +13,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DataTable } from '@/components/ui/data-table';
-import { Calendar, Play, Clock, Sparkles } from 'lucide-react';
+import { Play, Sparkles, UserCheck, RefreshCw } from 'lucide-react';
+import { TimetableViewer } from '@/components/timetable/TimetableViewer';
+import { DemoAttendanceModal } from '@/components/timetable/DemoAttendanceModal';
 import api from '../../api/axios';
 import { type ColumnDef } from '@tanstack/react-table';
+import { useAuth } from '@/context/AuthContext';
 
 export const SchedulingPage: React.FC = () => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role?.code === 'SUPER_ADMIN';
+
   const [schedules, setSchedules] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
@@ -28,6 +33,11 @@ export const SchedulingPage: React.FC = () => {
   const [endDate, setEndDate] = useState('2026-08-27');
   const [msg, setMsg] = useState<string | null>(null);
 
+  // Demo Attendance Modal states
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+  const [demoSchedule, setDemoSchedule] = useState<any | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -35,16 +45,24 @@ export const SchedulingPage: React.FC = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [schedRes, tempRes] = await Promise.all([
-        api.get('/schedules'),
-        api.get('/schedule-templates'),
-      ]);
+      const schedRes = await api.get('/schedules');
       setSchedules(schedRes.data.data || []);
-      setTemplates(tempRes.data.data || []);
     } catch (err) {
       console.error('Error fetching schedules', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSyncTimetables = async () => {
+    setIsSyncing(true);
+    try {
+      await api.post('/admin/timetable-imports/sync-schedules');
+      await fetchData();
+    } catch (e) {
+      console.error('Failed to sync timetables:', e);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -62,11 +80,6 @@ export const SchedulingPage: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const getDayName = (day: number) => {
-    const days = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    return days[day] || `Day ${day}`;
   };
 
   const columns: ColumnDef<any>[] = [
@@ -120,67 +133,78 @@ export const SchedulingPage: React.FC = () => {
         );
       },
     },
+    {
+      id: 'actions',
+      header: 'Attendance Demo',
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/30 font-medium flex items-center gap-1.5"
+          onClick={() => {
+            setDemoSchedule(row.original);
+            setIsDemoModalOpen(true);
+          }}
+        >
+          <UserCheck className="w-3.5 h-3.5" />
+          Test Attendance
+        </Button>
+      ),
+    },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Timetables & Schedules</h1>
-          <p className="text-sm text-muted-foreground">Weekly recurring templates and auto-generated daily lectures</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Timetables & Schedules</h1>
+          <p className="text-xs text-muted-foreground">Academic configuration timetable management and daily lecture schedule generator</p>
         </div>
 
-        <Button onClick={() => setIsGenerateModalOpen(true)}>
-          <Play className="w-4 h-4 mr-2" />
-          Generate Semester Schedule
-        </Button>
-      </div>
-
-      {/* Templates Summary Grid */}
-      <div>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
-          <Calendar className="w-4 h-4" /> Weekly Templates ({templates.length})
-        </h2>
-        
-        {templates.length === 0 && !isLoading ? (
-          <Card className="p-6 text-center text-muted-foreground text-sm bg-muted/50">
-            No weekly templates created yet.
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {templates.map((t) => (
-              <Card key={t.id}>
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="font-semibold">{getDayName(t.dayOfWeek)}</Badge>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
-                      <Clock className="w-3.5 h-3.5" /> {t.startTime} - {t.endTime}
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <div>
-                    <h3 className="font-semibold">{t.subject?.name || 'Subject'}</h3>
-                    <p className="text-xs text-muted-foreground">Section: {t.section?.name || 'A'}</p>
-                  </div>
-                  <div className="pt-3 mt-3 border-t text-xs text-muted-foreground flex justify-between">
-                    <span>Room: {t.room?.code || '101'}</span>
-                    <span>Faculty: {t.faculty?.firstName || 'Faculty'}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+        {!isSuperAdmin && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button
+              size="sm"
+              onClick={() => {
+                setDemoSchedule(null);
+                setIsDemoModalOpen(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5"
+            >
+              <Sparkles className="w-4 h-4" />
+              Demo: Test Student Attendance
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncTimetables}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-primary' : ''}`} />
+              Sync Daily Sessions
+            </Button>
+            <Button size="sm" onClick={() => setIsGenerateModalOpen(true)}>
+              <Play className="w-4 h-4 mr-2" />
+              Generate Semester Schedule
+            </Button>
           </div>
         )}
       </div>
 
-      {/* Generated Schedules List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" /> Generated Daily Schedules
+      {/* Main Timetable Management System (AttendEase Style) */}
+      <section>
+        <TimetableViewer />
+      </section>
+
+      {/* Generated Daily Schedules List */}
+      <Card className="bg-card border-border shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" /> Generated Daily Lecture Sessions
           </CardTitle>
-          <CardDescription>View upcoming generated sessions.</CardDescription>
+          <CardDescription className="text-xs">View upcoming daily sessions generated from weekly timetable templates.</CardDescription>
         </CardHeader>
         <CardContent>
           <DataTable columns={columns} data={schedules.slice(0, 50)} isLoading={isLoading} />
@@ -193,50 +217,69 @@ export const SchedulingPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Generate Semester Schedules</DialogTitle>
             <DialogDescription>
-              Select a date range to automatically generate lecture schedule rows from active weekly templates.
+              Select a date range to automatically generate daily lecture sessions from active weekly timetable templates.
             </DialogDescription>
           </DialogHeader>
-          
-          <form onSubmit={handleGenerate} className="space-y-4 pt-4">
+
+          <form onSubmit={handleGenerate} className="space-y-4 pt-2">
             {msg && (
-              <div className="p-3 rounded-md bg-secondary text-secondary-foreground text-sm font-medium">
+              <div className="p-3 rounded-md bg-secondary text-secondary-foreground text-xs font-medium">
                 {msg}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Start Date</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="startDate" className="text-xs">Start Date</Label>
               <Input
                 id="startDate"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                className="h-9 text-xs"
                 required
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="endDate">End Date</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="endDate" className="text-xs">End Date</Label>
               <Input
                 id="endDate"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                className="h-9 text-xs"
                 required
               />
             </div>
 
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsGenerateModalOpen(false)}>
+            <DialogFooter className="pt-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsGenerateModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isGenerating}>
+              <Button type="submit" size="sm" disabled={isGenerating}>
                 {isGenerating ? "Generating..." : "Run Generator"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Demo Attendance Modal */}
+      <DemoAttendanceModal
+        open={isDemoModalOpen}
+        onOpenChange={setIsDemoModalOpen}
+        scheduleId={demoSchedule?.id}
+        lectureDetails={demoSchedule ? {
+          subjectName: demoSchedule.template?.subject?.name,
+          subjectCode: demoSchedule.template?.subject?.code,
+          facultyName: `${demoSchedule.template?.faculty?.firstName || ''} ${demoSchedule.template?.faculty?.lastName || ''}`.trim(),
+          roomNumber: demoSchedule.template?.room?.code,
+          sectionName: demoSchedule.template?.section?.name,
+          startTime: demoSchedule.template?.startTime,
+          endTime: demoSchedule.template?.endTime,
+        } : undefined}
+        onSuccess={() => fetchData()}
+      />
     </div>
   );
 };

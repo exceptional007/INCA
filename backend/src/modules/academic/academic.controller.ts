@@ -1,12 +1,24 @@
-import { Body, Controller, Get, Param, Post, Patch } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Patch,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { AcademicService } from './academic.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
-import { CreateBatchDto } from './dto/create-batch.dto';
-import { UpdateBatchDto } from './dto/update-batch.dto';
 import { CreateSemesterDto } from './dto/create-semester.dto';
 import { UpdateSemesterDto } from './dto/update-semester.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
@@ -22,11 +34,13 @@ import { UpdateTimeSlotDto } from './dto/update-time-slot.dto';
 
 @ApiTags('Academic')
 @ApiBearerAuth('JWT-auth')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('academic/departments')
 export class AcademicController {
   constructor(private readonly academicService: AcademicService) {}
 
   @Post()
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Create a department',
   })
@@ -39,18 +53,21 @@ export class AcademicController {
   }
 
   @Get()
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
     summary: 'Get all departments',
   })
-  async getAllDepartments() {
+  async getAllDepartments(@Query('includeInactive') includeInactive?: string) {
+    const shouldInclude = includeInactive === 'true';
     return {
       success: true,
       message: 'Departments fetched successfully.',
-      data: await this.academicService.getAllDepartments(),
+      data: await this.academicService.getAllDepartments(shouldInclude),
     };
   }
 
   @Patch(':id')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Update a department',
   })
@@ -66,6 +83,7 @@ export class AcademicController {
   }
 
   @Patch(':id/deactivate')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Deactivate a department',
   })
@@ -77,104 +95,147 @@ export class AcademicController {
     };
   }
 
+  @Patch(':id/activate')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Activate a department',
+  })
+  async activateDepartment(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Department activated successfully.',
+      data: await this.academicService.activateDepartment(id),
+    };
+  }
+
   @Post('programs')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Create a program',
   })
-  async createProgram(@Body() dto: CreateProgramDto) {
+  async createProgram(@Req() req: any, @Body() dto: CreateProgramDto) {
     return {
       success: true,
       message: 'Program created successfully.',
-      data: await this.academicService.createProgram(dto),
+      data: await this.academicService.createProgram(
+        dto,
+        req.user?.role,
+        req.user?.id,
+      ),
     };
   }
 
   @Get('programs')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
     summary: 'Get all programs',
   })
-  async getAllPrograms() {
+  async getAllPrograms(
+    @Req() req: any,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    const shouldInclude = includeInactive === 'true';
     return {
       success: true,
       message: 'Programs fetched successfully.',
-      data: await this.academicService.getAllPrograms(),
+      data: await this.academicService.getAllPrograms(
+        shouldInclude,
+        req.user?.role,
+        req.user?.id,
+      ),
     };
   }
 
   @Get('programs/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get program by ID',
   })
-  async getProgramById(@Param('id') id: string) {
+  async getProgramById(@Req() req: any, @Param('id') id: string) {
     return {
       success: true,
       message: 'Program fetched successfully.',
-      data: await this.academicService.getProgramById(id),
+      data: await this.academicService.getProgramById(
+        id,
+        req.user?.role,
+        req.user?.id,
+      ),
     };
   }
 
   @Patch('programs/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Update a program',
   })
-  async updateProgram(@Param('id') id: string, @Body() dto: UpdateProgramDto) {
+  async updateProgram(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateProgramDto,
+  ) {
     return {
       success: true,
       message: 'Program updated successfully.',
-      data: await this.academicService.updateProgram(id, dto),
+      data: await this.academicService.updateProgram(
+        id,
+        dto,
+        req.user?.role,
+        req.user?.id,
+      ),
     };
   }
 
   @Patch('programs/:id/deactivate')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Deactivate a program',
   })
-  async deactivateProgram(@Param('id') id: string) {
+  async deactivateProgram(@Req() req: any, @Param('id') id: string) {
     return {
       success: true,
       message: 'Program deactivated successfully.',
-      data: await this.academicService.deactivateProgram(id),
+      data: await this.academicService.deactivateProgram(
+        id,
+        req.user?.role,
+        req.user?.id,
+      ),
     };
   }
 
-  @Post('batches')
+  @Patch('programs/:id/activate')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD')
   @ApiOperation({
-    summary: 'Create a batch',
+    summary: 'Activate a program',
   })
-  async createBatch(@Body() dto: CreateBatchDto) {
+  async activateProgram(@Req() req: any, @Param('id') id: string) {
     return {
       success: true,
-      message: 'Batch created successfully.',
-      data: await this.academicService.createBatch(dto),
+      message: 'Program activated successfully.',
+      data: await this.academicService.activateProgram(
+        id,
+        req.user?.role,
+        req.user?.id,
+      ),
     };
   }
 
-  @Get('batches')
+  @Delete('programs/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD')
   @ApiOperation({
-    summary: 'Get all batches',
+    summary: 'Delete or deactivate a program',
   })
-  async getAllBatches() {
+  async deleteProgram(@Param('id') id: string) {
     return {
       success: true,
-      message: 'Batches fetched successfully.',
-      data: await this.academicService.getAllBatches(),
+      message: 'Program deleted successfully.',
+      data: await this.academicService.deleteProgram(id),
     };
   }
 
-  @Get('batches/:id')
-  @ApiOperation({
-    summary: 'Get batch by ID',
-  })
-  async getBatchById(@Param('id') id: string) {
-    return {
-      success: true,
-      message: 'Batch fetched successfully.',
-      data: await this.academicService.getBatchById(id),
-    };
-  }
   @Post('semesters')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
-    summary: 'Create a semester',
+    summary: 'Create a semester (Disabled - auto-generated with programs)',
   })
   async createSemester(@Body() dto: CreateSemesterDto) {
     return {
@@ -185,18 +246,26 @@ export class AcademicController {
   }
 
   @Get('semesters')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get all semesters',
   })
-  async getAllSemesters() {
+  async getAllSemesters(
+    @Query('includeInactive') includeInactive?: string,
+    @Query('programId') programId?: string,
+  ) {
     return {
       success: true,
       message: 'Semesters fetched successfully.',
-      data: await this.academicService.getAllSemesters(),
+      data: await this.academicService.getAllSemesters(
+        includeInactive === 'true',
+        programId,
+      ),
     };
   }
 
   @Get('semesters/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get semester by ID',
   })
@@ -208,33 +277,10 @@ export class AcademicController {
     };
   }
 
-  @Patch('batches/:id')
-  @ApiOperation({
-    summary: 'Update a batch',
-  })
-  async updateBatch(@Param('id') id: string, @Body() dto: UpdateBatchDto) {
-    return {
-      success: true,
-      message: 'Batch updated successfully.',
-      data: await this.academicService.updateBatch(id, dto),
-    };
-  }
-
-  @Patch('batches/:id/deactivate')
-  @ApiOperation({
-    summary: 'Deactivate a batch',
-  })
-  async deactivateBatch(@Param('id') id: string) {
-    return {
-      success: true,
-      message: 'Batch deactivated successfully.',
-      data: await this.academicService.deactivateBatch(id),
-    };
-  }
-
   @Patch('semesters/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
-    summary: 'Update a semester',
+    summary: 'Update a semester (Disabled)',
   })
   async updateSemester(
     @Param('id') id: string,
@@ -248,8 +294,9 @@ export class AcademicController {
   }
 
   @Patch('semesters/:id/deactivate')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
-    summary: 'Deactivate a semester',
+    summary: 'Deactivate a semester (Disabled)',
   })
   async deactivateSemester(@Param('id') id: string) {
     return {
@@ -260,6 +307,7 @@ export class AcademicController {
   }
 
   @Post('sections')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Create a section',
   })
@@ -272,18 +320,26 @@ export class AcademicController {
   }
 
   @Get('sections')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get all sections',
   })
-  async getAllSections() {
+  async getAllSections(
+    @Query('includeInactive') includeInactive?: string,
+    @Query('semesterId') semesterId?: string,
+  ) {
     return {
       success: true,
       message: 'Sections fetched successfully.',
-      data: await this.academicService.getAllSections(),
+      data: await this.academicService.getAllSections(
+        includeInactive === 'true',
+        semesterId,
+      ),
     };
   }
 
   @Get('sections/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get section by ID',
   })
@@ -296,6 +352,7 @@ export class AcademicController {
   }
 
   @Patch('sections/:id')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Update a section',
   })
@@ -308,6 +365,7 @@ export class AcademicController {
   }
 
   @Patch('sections/:id/deactivate')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Deactivate a section',
   })
@@ -320,6 +378,7 @@ export class AcademicController {
   }
 
   @Post('subjects')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Create a subject',
   })
@@ -332,18 +391,21 @@ export class AcademicController {
   }
 
   @Get('subjects')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
     summary: 'Get all subjects',
   })
-  async getAllSubjects() {
+  async getAllSubjects(@Query('includeInactive') includeInactive?: string) {
+    const shouldInclude = includeInactive === 'true';
     return {
       success: true,
       message: 'Subjects fetched successfully.',
-      data: await this.academicService.getAllSubjects(),
+      data: await this.academicService.getAllSubjects(shouldInclude),
     };
   }
 
   @Get('subjects/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
     summary: 'Get subject by ID',
   })
@@ -356,6 +418,7 @@ export class AcademicController {
   }
 
   @Patch('subjects/:id')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Update a subject',
   })
@@ -368,6 +431,7 @@ export class AcademicController {
   }
 
   @Patch('subjects/:id/deactivate')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Deactivate a subject',
   })
@@ -379,7 +443,34 @@ export class AcademicController {
     };
   }
 
+  @Patch('subjects/:id/activate')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Activate a subject',
+  })
+  async activateSubject(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Subject activated successfully.',
+      data: await this.academicService.activateSubject(id),
+    };
+  }
+
+  @Delete('subjects/:id')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Delete a subject',
+  })
+  async deleteSubject(@Param('id') id: string) {
+    return {
+      success: true,
+      message: 'Subject deactivated successfully.',
+      data: await this.academicService.deactivateSubject(id),
+    };
+  }
+
   @Post('academic-sessions')
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Create an academic session',
   })
@@ -392,6 +483,7 @@ export class AcademicController {
   }
 
   @Get('academic-sessions')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get all academic sessions',
   })
@@ -404,6 +496,7 @@ export class AcademicController {
   }
 
   @Get('academic-sessions/active')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
     summary: 'Get active academic session',
   })
@@ -416,6 +509,7 @@ export class AcademicController {
   }
 
   @Get('academic-sessions/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get academic session by ID',
   })
@@ -428,6 +522,7 @@ export class AcademicController {
   }
 
   @Patch('academic-sessions/:id')
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Update an academic session',
   })
@@ -443,6 +538,7 @@ export class AcademicController {
   }
 
   @Patch('academic-sessions/:id/deactivate')
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Deactivate an academic session',
   })
@@ -455,6 +551,7 @@ export class AcademicController {
   }
 
   @Patch('academic-sessions/:id/activate')
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Activate an academic session',
   })
@@ -467,6 +564,7 @@ export class AcademicController {
   }
 
   @Post('rooms')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Create a room',
   })
@@ -479,6 +577,7 @@ export class AcademicController {
   }
 
   @Get('rooms')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get all rooms',
   })
@@ -491,6 +590,7 @@ export class AcademicController {
   }
 
   @Get('rooms/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get room by ID',
   })
@@ -503,6 +603,7 @@ export class AcademicController {
   }
 
   @Patch('rooms/:id')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Update a room',
   })
@@ -515,6 +616,7 @@ export class AcademicController {
   }
 
   @Patch('rooms/:id/deactivate')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Deactivate a room',
   })
@@ -527,6 +629,7 @@ export class AcademicController {
   }
 
   @Post('time-slots')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Create a time slot',
   })
@@ -539,6 +642,7 @@ export class AcademicController {
   }
 
   @Get('time-slots')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get all time slots',
   })
@@ -551,6 +655,7 @@ export class AcademicController {
   }
 
   @Get('time-slots/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR')
   @ApiOperation({
     summary: 'Get time slot by ID',
   })
@@ -563,6 +668,7 @@ export class AcademicController {
   }
 
   @Patch('time-slots/:id')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Update a time slot',
   })
@@ -578,6 +684,7 @@ export class AcademicController {
   }
 
   @Patch('time-slots/:id/deactivate')
+  @Roles('ADMIN', 'HOD')
   @ApiOperation({
     summary: 'Deactivate a time slot',
   })
@@ -590,6 +697,7 @@ export class AcademicController {
   }
 
   @Get(':id')
+  @Roles('SUPER_ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
     summary: 'Get department by ID',
   })

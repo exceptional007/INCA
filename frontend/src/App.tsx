@@ -44,8 +44,16 @@ export const App: React.FC = () => {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/schedules" element={<SchedulingPage />} />
                 <Route path="/activities" element={<ActivitiesPage />} />
-                <Route path="/attendance/mark" element={<MarkAttendancePage />} />
                 <Route path="/reports" element={<ReportsPage />} />
+
+                {/* Take Attendance - FACULTY, HOD, COORDINATOR, ADMIN only (SUPER_ADMIN blocked) */}
+                <Route
+                  element={
+                    <ProtectedRoute allowedRoles={['FACULTY', 'HOD', 'COORDINATOR', 'ADMIN']} />
+                  }
+                >
+                  <Route path="/attendance/mark" element={<MarkAttendancePage />} />
+                </Route>
 
                 {/* Role Protected Master Data Route */}
                 <Route
@@ -54,6 +62,14 @@ export const App: React.FC = () => {
                   }
                 >
                   <Route path="/academic" element={<AcademicPage />} />
+                </Route>
+
+                {/* Timetable PDF Import - ADMIN and HOD only (SUPER_ADMIN blocked) */}
+                <Route
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN', 'HOD']} />
+                  }
+                >
                   <Route path="/academic/timetable-imports" element={<TimetableImportPage />} />
                 </Route>
               </Route>

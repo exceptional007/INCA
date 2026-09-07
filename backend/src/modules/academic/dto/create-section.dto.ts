@@ -2,13 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateSectionDto {
-  @ApiProperty({
-    example: 'uuid-of-2023-2027-batch',
-    description: 'Batch ID',
-  })
-  @IsUUID()
-  @IsNotEmpty()
-  batchId!: string;
 
   @ApiProperty({
     example: 'uuid-of-semester-7',

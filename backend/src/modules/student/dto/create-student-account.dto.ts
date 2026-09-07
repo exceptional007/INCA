@@ -10,7 +10,7 @@ import {
   MinLength,
   Matches
 } from 'class-validator';
-import { Gender } from '@prisma/client';
+import { Gender, BloodGroup } from '@prisma/client';
 
 export class CreateStudentAccountDto {
   @ApiProperty({
@@ -105,4 +105,29 @@ export class CreateStudentAccountDto {
   @IsString()
   @MaxLength(255)
   photoKey?: string;
+
+  @ApiPropertyOptional({
+    enum: BloodGroup,
+  })
+  @IsOptional()
+  @IsEnum(BloodGroup)
+  bloodGroup?: BloodGroup;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  emergencyContactName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  emergencyContactPhone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  address?: string;
 }

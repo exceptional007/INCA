@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, UseGuards, Req, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { SchedulesService } from './schedules.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
@@ -35,23 +35,25 @@ export class SchedulesController {
 
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'FACULTY')
+  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT')
   @ApiOperation({ summary: 'Get all schedules' })
-  findAll() {
-    return this.schedulesService.findAll();
+  findAll(@Req() req: any, @Query('facultyId') facultyIdQuery?: string) {
+    const userRole = req.user?.role?.code || req.user?.role;
+    return this.schedulesService.findAll(req.user?.id, userRole, facultyIdQuery);
   }
 
   @Get('today')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'FACULTY')
+  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT')
   @ApiOperation({ summary: 'Get today\'s schedules' })
-  getTodaySchedules() {
-    return this.schedulesService.getTodaySchedules();
+  getTodaySchedules(@Req() req: any, @Query('facultyId') facultyIdQuery?: string) {
+    const userRole = req.user?.role?.code || req.user?.role;
+    return this.schedulesService.getTodaySchedules(req.user?.id, userRole, facultyIdQuery);
   }
 
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'FACULTY')
+  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT')
   @ApiOperation({ summary: 'Get schedule by ID' })
   findOne(@Param('id') id: string) {
     return this.schedulesService.findOne(id);

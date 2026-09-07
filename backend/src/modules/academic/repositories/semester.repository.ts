@@ -5,19 +5,33 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class SemesterRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(includeInactive: boolean = false, programId?: string) {
     return this.prisma.semester.findMany({
+      where: {
+        ...(programId ? { programId } : {}),
+        ...(includeInactive
+          ? {}
+          : {
+              isActive: true,
+              program: {
+                isActive: true,
+                department: {
+                  isActive: true,
+                },
+              },
+            }),
+      },
       include: {
         program: {
           include: {
             department: true,
           },
         },
-        batch: true,
       },
-      orderBy: {
-        number: 'asc',
-      },
+      orderBy: [
+        { program: { name: 'asc' } },
+        { number: 'asc' },
+      ],
     });
   }
 
@@ -30,16 +44,15 @@ export class SemesterRepository {
             department: true,
           },
         },
-        batch: true,
       },
     });
   }
 
-  async findByBatchAndNumber(batchId: string, number: number) {
+  async findByProgramAndNumber(programId: string, number: number) {
     return this.prisma.semester.findUnique({
       where: {
-        batchId_number: {
-          batchId,
+        programId_number: {
+          programId,
           number,
         },
       },
@@ -48,7 +61,6 @@ export class SemesterRepository {
 
   async create(data: {
     programId: string;
-    batchId: string;
     number: number;
     name: string;
   }) {
@@ -60,7 +72,6 @@ export class SemesterRepository {
             department: true,
           },
         },
-        batch: true,
       },
     });
   }
@@ -69,7 +80,6 @@ export class SemesterRepository {
     id: string,
     data: {
       programId?: string;
-      batchId?: string;
       number?: number;
       name?: string;
     },
@@ -83,7 +93,6 @@ export class SemesterRepository {
             department: true,
           },
         },
-        batch: true,
       },
     });
   }
@@ -100,7 +109,6 @@ export class SemesterRepository {
             department: true,
           },
         },
-        batch: true,
       },
     });
   }

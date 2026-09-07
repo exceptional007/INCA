@@ -5,19 +5,24 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class SubjectRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(includeInactive: boolean = false) {
     return this.prisma.subject.findMany({
+      where: includeInactive ? undefined : { isActive: true },
       include: {
-        program: {
+        semester: {
           include: {
-            department: true,
+            program: {
+              include: {
+                department: true,
+              },
+            },
           },
         },
-        semester: true,
       },
-      orderBy: {
-        name: 'asc',
-      },
+      orderBy: [
+        { year: 'asc' },
+        { name: 'asc' },
+      ],
     });
   }
 
@@ -25,12 +30,15 @@ export class SubjectRepository {
     return this.prisma.subject.findUnique({
       where: { id },
       include: {
-        program: {
+        semester: {
           include: {
-            department: true,
+            program: {
+              include: {
+                department: true,
+              },
+            },
           },
         },
-        semester: true,
       },
     });
   }
@@ -41,15 +49,10 @@ export class SubjectRepository {
     });
   }
 
-  async findBySemesterAndName(
-    programId: string,
-    semesterId: string,
-    name: string,
-  ) {
+  async findBySemesterAndName(semesterId: string, name: string) {
     return this.prisma.subject.findUnique({
       where: {
-        programId_semesterId_name: {
-          programId,
+        semesterId_name: {
           semesterId,
           name,
         },
@@ -58,22 +61,24 @@ export class SubjectRepository {
   }
 
   async create(data: {
-    programId: string;
+    year: number;
     semesterId: string;
     code: string;
     name: string;
-    credits: number;
     isLab: boolean;
   }) {
     return this.prisma.subject.create({
       data,
       include: {
-        program: {
+        semester: {
           include: {
-            department: true,
+            program: {
+              include: {
+                department: true,
+              },
+            },
           },
         },
-        semester: true,
       },
     });
   }
@@ -81,11 +86,10 @@ export class SubjectRepository {
   async update(
     id: string,
     data: {
-      programId?: string;
+      year?: number;
       semesterId?: string;
       code?: string;
       name?: string;
-      credits?: number;
       isLab?: boolean;
     },
   ) {
@@ -93,12 +97,15 @@ export class SubjectRepository {
       where: { id },
       data,
       include: {
-        program: {
+        semester: {
           include: {
-            department: true,
+            program: {
+              include: {
+                department: true,
+              },
+            },
           },
         },
-        semester: true,
       },
     });
   }
@@ -110,12 +117,35 @@ export class SubjectRepository {
         isActive: false,
       },
       include: {
-        program: {
+        semester: {
           include: {
-            department: true,
+            program: {
+              include: {
+                department: true,
+              },
+            },
           },
         },
-        semester: true,
+      },
+    });
+  }
+
+  async activate(id: string) {
+    return this.prisma.subject.update({
+      where: { id },
+      data: {
+        isActive: true,
+      },
+      include: {
+        semester: {
+          include: {
+            program: {
+              include: {
+                department: true,
+              },
+            },
+          },
+        },
       },
     });
   }
