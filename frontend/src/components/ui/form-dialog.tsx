@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
+import { cn } from '@/lib/utils'
 
 interface FormDialogProps<TSchema extends z.ZodTypeAny> {
   /** Controls dialog open state */
@@ -34,29 +35,12 @@ interface FormDialogProps<TSchema extends z.ZodTypeAny> {
   submitLabel?: string
   /** Override cancel button label */
   cancelLabel?: string
+  /** Optional custom class for dialog sizing/styling */
+  className?: string
 }
 
 /**
  * Reusable FormDialog — wraps a shadcn Dialog with react-hook-form + zod.
- *
- * Usage:
- * ```tsx
- * <FormDialog
- *   open={open}
- *   onOpenChange={setOpen}
- *   title="Create Department"
- *   schema={departmentSchema}
- *   defaultValues={{ name: '', code: '' }}
- *   onSubmit={async (values) => { await api.post('/academic/departments', values) }}
- * >
- *   {(form) => (
- *     <>
- *       <FormField control={form.control} name="name" render={...} />
- *       <FormField control={form.control} name="code" render={...} />
- *     </>
- *   )}
- * </FormDialog>
- * ```
  */
 export function FormDialog<TSchema extends z.ZodTypeAny>({
   open,
@@ -69,6 +53,7 @@ export function FormDialog<TSchema extends z.ZodTypeAny>({
   children,
   submitLabel = 'Save',
   cancelLabel = 'Cancel',
+  className,
 }: FormDialogProps<TSchema>) {
   const form = useForm<any>({
     resolver: zodResolver(schema as any),
@@ -104,24 +89,26 @@ export function FormDialog<TSchema extends z.ZodTypeAny>({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
+      <DialogContent className={cn("sm:max-w-[520px] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0", className)}>
+        <DialogHeader className="p-6 pb-4 border-b border-border/50 shrink-0">
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5 pt-2">
-            {children(form as any)}
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 overflow-hidden min-h-0">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {children(form as any)}
 
-            {/* API-level error message */}
-            {apiError && (
-              <p className="text-sm font-medium text-destructive rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
-                {apiError}
-              </p>
-            )}
+              {/* API-level error message */}
+              {apiError && (
+                <p className="text-sm font-medium text-destructive rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
+                  {apiError}
+                </p>
+              )}
+            </div>
 
-            <DialogFooter className="pt-2">
+            <DialogFooter className="p-4 px-6 border-t border-border/50 bg-muted/20 shrink-0">
               <Button
                 type="button"
                 variant="outline"
@@ -140,3 +127,4 @@ export function FormDialog<TSchema extends z.ZodTypeAny>({
     </Dialog>
   )
 }
+

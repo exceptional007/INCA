@@ -5,8 +5,36 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class ProgramRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(includeInactive: boolean = false) {
     return this.prisma.program.findMany({
+      where: includeInactive
+        ? undefined
+        : {
+            isActive: true,
+            department: {
+              isActive: true,
+            },
+          },
+      include: {
+        department: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
+
+  async findByDepartmentId(departmentId: string, includeInactive: boolean = false) {
+    return this.prisma.program.findMany({
+      where: includeInactive
+        ? { departmentId }
+        : {
+            departmentId,
+            isActive: true,
+            department: {
+              isActive: true,
+            },
+          },
       include: {
         department: true,
       },
@@ -49,11 +77,40 @@ export class ProgramRepository {
     shortName?: string;
     durationYears?: number;
   }) {
-    return this.prisma.program.create({
-      data,
-      include: {
-        department: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const program = await tx.program.create({
+        data,
+        include: {
+          department: true,
+        },
+      });
+
+      const totalSemesters =
+        data.durationYears && data.durationYears > 0
+          ? data.durationYears * 2
+          : 8;
+
+      const semestersData: Array<{
+        programId: string;
+        number: number;
+        name: string;
+        isActive: boolean;
+      }> = [];
+
+      for (let i = 1; i <= totalSemesters; i++) {
+        semestersData.push({
+          programId: program.id,
+          number: i,
+          name: `Semester ${i}`,
+          isActive: true,
+        });
+      }
+
+      await tx.semester.createMany({
+        data: semestersData,
+      });
+
+      return program;
     });
   }
 
@@ -77,6 +134,30 @@ export class ProgramRepository {
   }
   
   async deactivate(id: string) {
+    return this.prisma.program.update({
+      where: { id },
+      data: {
+        isActive: false,
+      },
+      include: {
+        department: true,
+      },
+    });
+  }
+
+  async activate(id: string) {
+    return this.prisma.program.update({
+      where: { id },
+      data: {
+        isActive: true,
+      },
+      include: {
+        department: true,
+      },
+    });
+  }
+
+  async delete(id: string) {
     return this.prisma.program.update({
       where: { id },
       data: {

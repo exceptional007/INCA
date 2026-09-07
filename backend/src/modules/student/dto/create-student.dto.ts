@@ -8,7 +8,7 @@ import {
   IsUUID,
   MaxLength,
 } from 'class-validator';
-import { Gender } from '@prisma/client';
+import { Gender, BloodGroup } from '@prisma/client';
 
 export class CreateStudentDto {
   @ApiProperty({
@@ -97,4 +97,36 @@ export class CreateStudentDto {
   @IsString()
   @MaxLength(255)
   photoKey?: string;
+
+  @ApiPropertyOptional({
+    enum: BloodGroup,
+    example: BloodGroup.B_POSITIVE,
+  })
+  @IsOptional()
+  @IsEnum(BloodGroup)
+  bloodGroup?: BloodGroup;
+
+  @ApiPropertyOptional({
+    example: 'Rajesh Srivastava',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  emergencyContactName?: string;
+
+  @ApiPropertyOptional({
+    example: '9876543210',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  emergencyContactPhone?: string;
+
+  @ApiPropertyOptional({
+    example: '123 Main Street, City',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  address?: string;
 }

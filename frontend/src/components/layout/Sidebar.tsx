@@ -56,7 +56,7 @@ export const Sidebar: React.FC = () => {
       label: 'Take Attendance',
       path: '/attendance/mark',
       icon: <CheckSquare className="w-4 h-4" />,
-      roles: ['SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY', 'COORDINATOR'],
+      roles: ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR'],
     },
     {
       label: 'Reports & Analytics',

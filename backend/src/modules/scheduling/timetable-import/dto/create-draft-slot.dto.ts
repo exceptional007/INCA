@@ -23,7 +23,7 @@ export class CreateDraftSlotDto {
 
   @IsString()
   @IsOptional()
-  mergedTimeSlotEnd?: string;
+  mergedTimeSlotEnd?: string | null;
 
   @IsArray()
   @IsString({ each: true })
@@ -48,4 +48,24 @@ export class CreateDraftSlotDto {
   @IsString()
   @IsOptional()
   rawCellText?: string;
+
+  @IsString()
+  @IsOptional()
+  matchedSubjectId?: string | null;
+
+  @IsString()
+  @IsOptional()
+  matchedFacultyId?: string | null;
+
+  @IsString()
+  @IsOptional()
+  matchedRoomId?: string | null;
+
+  @IsString()
+  @IsOptional()
+  matchedSectionId?: string | null;
+
+  @IsNumber()
+  @IsOptional()
+  matchConfidence?: number;
 }

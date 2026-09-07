@@ -56,40 +56,46 @@ export class FacultyService {
 
     const dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined;
 
-    return this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: dto.email,
-          password: hashedPassword,
-          roleId: facultyRole.id,
-          mustChangePassword: true,
-        },
-      });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email: dto.email,
+            password: hashedPassword,
+            roleId: facultyRole.id,
+            mustChangePassword: true,
+          },
+        });
 
-      const faculty = await tx.faculty.create({
-        data: {
-          userId: user.id,
-          employeeCode: dto.employeeCode,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          gender: dto.gender,
-          dateOfBirth,
-          designation: dto.designation,
-          phone: dto.phone,
-          photoKey: dto.photoKey,
-        },
-      });
+        const faculty = await tx.faculty.create({
+          data: {
+            userId: user.id,
+            employeeCode: dto.employeeCode,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            gender: dto.gender,
+            dateOfBirth,
+            designation: dto.designation,
+            phone: dto.phone,
+            photoKey: dto.photoKey,
+          },
+        });
 
-      return {
-        user: {
-          id: user.id,
-          email: user.email,
-          roleId: user.roleId,
-          mustChangePassword: user.mustChangePassword,
-        },
-        faculty,
-      };
-    });
+        return {
+          user: {
+            id: user.id,
+            email: user.email,
+            roleId: user.roleId,
+            mustChangePassword: user.mustChangePassword,
+          },
+          faculty,
+        };
+      },
+      {
+        maxWait: 10000,
+        timeout: 15000,
+      },
+    );
   }
   
   async createFaculty(dto: CreateFacultyDto) {
@@ -123,8 +129,8 @@ export class FacultyService {
     });
   }
 
-  async getAllFaculty() {
-    return this.facultyRepository.findAll();
+  async getAllFaculty(includeInactive: boolean = false) {
+    return this.facultyRepository.findAll(includeInactive);
   }
 
   async getFacultyById(id: string) {
@@ -195,5 +201,15 @@ export class FacultyService {
     }
 
     return this.facultyRepository.deactivate(id);
+  }
+
+  async activateFaculty(id: string) {
+    const faculty = await this.facultyRepository.findById(id);
+
+    if (!faculty) {
+      throw new NotFoundException('Faculty not found.');
+    }
+
+    return this.facultyRepository.activate(id);
   }
 }

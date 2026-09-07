@@ -5,10 +5,27 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class SectionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(includeInactive: boolean = false, semesterId?: string) {
     return this.prisma.section.findMany({
+      where: {
+        ...(semesterId ? { semesterId } : {}),
+        ...(includeInactive
+          ? {}
+          : {
+              isActive: true,
+              semester: {
+                isActive: true,
+                program: {
+                  isActive: true,
+                  department: {
+                    isActive: true,
+                  },
+                },
+              },
+            }),
+      },
       include: {
-        batch: {
+        semester: {
           include: {
             program: {
               include: {
@@ -17,7 +34,6 @@ export class SectionRepository {
             },
           },
         },
-        semester: true,
       },
       orderBy: {
         name: 'asc',
@@ -29,7 +45,7 @@ export class SectionRepository {
     return this.prisma.section.findUnique({
       where: { id },
       include: {
-        batch: {
+        semester: {
           include: {
             program: {
               include: {
@@ -38,20 +54,14 @@ export class SectionRepository {
             },
           },
         },
-        semester: true,
       },
     });
   }
 
-  async findByBatchSemesterAndName(
-    batchId: string,
-    semesterId: string,
-    name: string,
-  ) {
+  async findBySemesterAndName(semesterId: string, name: string) {
     return this.prisma.section.findUnique({
       where: {
-        batchId_semesterId_name: {
-          batchId,
+        semesterId_name: {
           semesterId,
           name,
         },
@@ -59,11 +69,11 @@ export class SectionRepository {
     });
   }
 
-  async create(data: { batchId: string; semesterId: string; name: string }) {
+  async create(data: { semesterId: string; name: string }) {
     return this.prisma.section.create({
       data,
       include: {
-        batch: {
+        semester: {
           include: {
             program: {
               include: {
@@ -72,7 +82,6 @@ export class SectionRepository {
             },
           },
         },
-        semester: true,
       },
     });
   }
@@ -80,7 +89,6 @@ export class SectionRepository {
   async update(
     id: string,
     data: {
-      batchId?: string;
       semesterId?: string;
       name?: string;
     },
@@ -89,7 +97,7 @@ export class SectionRepository {
       where: { id },
       data,
       include: {
-        batch: {
+        semester: {
           include: {
             program: {
               include: {
@@ -98,7 +106,6 @@ export class SectionRepository {
             },
           },
         },
-        semester: true,
       },
     });
   }
@@ -110,7 +117,7 @@ export class SectionRepository {
         isActive: false,
       },
       include: {
-        batch: {
+        semester: {
           include: {
             program: {
               include: {
@@ -119,7 +126,6 @@ export class SectionRepository {
             },
           },
         },
-        semester: true,
       },
     });
   }

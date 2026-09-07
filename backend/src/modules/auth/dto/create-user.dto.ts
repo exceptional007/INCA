@@ -37,4 +37,20 @@ export class CreateUserDto {
   @IsUUID()
   @IsNotEmpty()
   roleId!: string;
+
+  @ApiPropertyOptional({
+    example: 'Dr. Ramesh Sarma',
+    description: 'Full name (required if role is ADMIN)',
+  })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional({
+    example: 'faed3e96-4166-4a8d-86ac-25b800c33377',
+    description: 'Active Department UUID (required if role is ADMIN)',
+  })
+  @IsUUID()
+  @IsOptional()
+  departmentId?: string;
 }

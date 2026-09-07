@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Upload, History, ArrowLeft, RefreshCw, AlertTriangle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { AlertCircle, Upload, History, ArrowLeft, RefreshCw, AlertTriangle, CheckCircle, GraduationCap } from 'lucide-react';
 import api from '@/api/axios';
 import { TimetableBatchList } from './components/TimetableBatchList';
 import { TimetableReviewGrid } from './components/TimetableReviewGrid';
@@ -11,6 +27,9 @@ export const TimetableImportPage: React.FC = () => {
   const [view, setView] = useState<'list' | 'upload' | 'review' | 'history'>('list');
   const [batches, setBatches] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
+  const [programs, setPrograms] = useState<any[]>([]);
+  const [selectedProgramId, setSelectedProgramId] = useState<string>('');
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
   // Selection / Review Batch state
@@ -33,6 +52,7 @@ export const TimetableImportPage: React.FC = () => {
   useEffect(() => {
     fetchBatches();
     fetchSections();
+    fetchPrograms();
   }, []);
 
   // Polling effect
@@ -88,6 +108,19 @@ export const TimetableImportPage: React.FC = () => {
       setSections(response.data.data || []);
     } catch (error) {
       console.error('Failed to load sections', error);
+    }
+  };
+
+  const fetchPrograms = async () => {
+    try {
+      const response = await api.get('/academic/departments/programs');
+      const progs = response.data.data || [];
+      setPrograms(progs);
+      if (progs.length > 0) {
+        setSelectedProgramId((prev) => prev || progs[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to load programs', error);
     }
   };
 
@@ -148,8 +181,7 @@ export const TimetableImportPage: React.FC = () => {
     if (!selectedBatchId) return;
     try {
       await api.patch(`/admin/timetable-imports/${selectedBatchId}/slots/${slotId}`, data);
-      // Reload slots
-      handleSelectBatch(selectedBatchId);
+      await handleSelectBatch(selectedBatchId);
     } catch (err) {
       console.error('Failed to update slot', err);
     }
@@ -159,7 +191,7 @@ export const TimetableImportPage: React.FC = () => {
     if (!selectedBatchId) return;
     try {
       await api.post(`/admin/timetable-imports/${selectedBatchId}/slots`, data);
-      handleSelectBatch(selectedBatchId);
+      await handleSelectBatch(selectedBatchId);
     } catch (err) {
       console.error('Failed to add slot', err);
     }
@@ -169,7 +201,7 @@ export const TimetableImportPage: React.FC = () => {
     if (!selectedBatchId) return;
     try {
       await api.delete(`/admin/timetable-imports/${selectedBatchId}/slots/${slotId}`);
-      handleSelectBatch(selectedBatchId);
+      await handleSelectBatch(selectedBatchId);
     } catch (err) {
       console.error('Failed to delete slot', err);
     }
@@ -177,14 +209,27 @@ export const TimetableImportPage: React.FC = () => {
 
   const handleApproveBatch = async () => {
     if (!selectedBatchId) return;
+    setIsApproveModalOpen(true);
+  };
+
+  const handleConfirmApprove = async () => {
+    if (!selectedBatchId) return;
+    if (!selectedProgramId) {
+      alert('Please select an academic program to link this timetable to.');
+      return;
+    }
     setIsCommitLoading(true);
     setConflicts([]);
     try {
-      const res = await api.post(`/admin/timetable-imports/${selectedBatchId}/approve`);
+      const res = await api.post(`/admin/timetable-imports/${selectedBatchId}/approve`, {
+        programId: selectedProgramId,
+      });
       if (res.data.success === false) {
         setConflicts(res.data.conflicts || []);
+        setIsApproveModalOpen(false);
       } else {
-        alert('Timetable batch successfully approved and scheduled!');
+        alert('Timetable batch successfully approved, linked to program, and scheduled!');
+        setIsApproveModalOpen(false);
         setView('list');
         fetchBatches();
       }
@@ -392,6 +437,121 @@ export const TimetableImportPage: React.FC = () => {
           onBack={() => setView('list')}
         />
       )}
+
+      {/* Approval & Program Linking Dialog */}
+      <Dialog open={isApproveModalOpen} onOpenChange={setIsApproveModalOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <GraduationCap className="w-5 h-5 text-primary" />
+              Approve & Link Timetable to Program
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Select the academic program to link this timetable's sections, and review scheduling readiness.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Program Selection Dropdown */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">
+                Target Academic Program <span className="text-destructive">*</span>
+              </Label>
+              <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+                <SelectTrigger className="h-10 text-xs">
+                  <SelectValue placeholder="Select program to link..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {programs.map((prog) => (
+                    <SelectItem key={prog.id} value={prog.id} className="text-xs">
+                      <span className="font-mono font-bold text-primary mr-1.5">[{prog.code}]</span>
+                      <span className="font-medium">{prog.name}</span>
+                      {prog.department?.shortName && (
+                        <span className="text-muted-foreground text-[10px] ml-1.5">
+                          ({prog.department.shortName})
+                        </span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Sections and versions will be registered under this program's semester structure.
+              </p>
+            </div>
+
+            {/* Pre-Approval Audit Summary */}
+            {(() => {
+              const currentSlots = selectedBatch?.slots || [];
+              const unassignedTeacherCount = currentSlots.filter(
+                (s: any) => !s.facultyRaw || s.facultyRaw.trim() === '' || s.facultyRaw.toLowerCase().includes('unassigned') || !s.matchedFacultyId,
+              ).length;
+              const unassignedSubjectCount = currentSlots.filter(
+                (s: any) => !s.subjectRaw || s.subjectRaw.trim() === '' || s.subjectRaw.toLowerCase().includes('unassigned') || !s.matchedSubjectId,
+              ).length;
+
+              return (
+                <div className="border border-border/80 rounded-lg p-3 bg-muted/20 space-y-2.5 text-xs">
+                  <div className="font-semibold text-foreground flex items-center justify-between">
+                    <span>Timetable Readiness Summary</span>
+                    <span className="text-muted-foreground font-mono">{currentSlots.length} Total Slots</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {unassignedTeacherCount > 0 ? (
+                      <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400 bg-amber-500/10 p-2.5 rounded border border-amber-500/30">
+                        <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
+                        <div>
+                          <span className="font-bold">{unassignedTeacherCount} lecture slot(s) have unassigned teachers.</span>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            They will be auto-assigned an auto-generated faculty profile, or you can cancel and assign teachers using the pencil icon on each card.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 p-2 rounded border border-emerald-500/20">
+                        <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" />
+                        <span>All {currentSlots.length} lecture slots have registered teachers assigned.</span>
+                      </div>
+                    )}
+
+                    {unassignedSubjectCount > 0 ? (
+                      <div className="flex items-start gap-2 text-rose-700 dark:text-rose-400 bg-rose-500/10 p-2.5 rounded border border-rose-500/30">
+                        <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                        <div>
+                          <span className="font-bold">{unassignedSubjectCount} lecture slot(s) have unmatched subjects.</span>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            These subjects will be auto-created under this program upon approval.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 p-2 rounded border border-emerald-500/20">
+                        <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" />
+                        <span>All subjects are verified and matched in the curriculum.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" size="sm" onClick={() => setIsApproveModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleConfirmApprove}
+              disabled={!selectedProgramId || isCommitLoading}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white"
+            >
+              {isCommitLoading ? 'Committing Schedule...' : 'Confirm & Schedule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

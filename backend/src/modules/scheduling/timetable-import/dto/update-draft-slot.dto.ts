@@ -65,4 +65,8 @@ export class UpdateDraftSlotDto {
   @IsBoolean()
   @IsOptional()
   adminEdited?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  applyToSimilar?: boolean;
 }

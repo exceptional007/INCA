@@ -35,15 +35,47 @@ export class MatchingService {
   private cleanString(str: string): string {
     return str
       .toLowerCase()
-      .replace(/^(mr|mrs|ms|dr|prof)\.?\s+/i, '') // remove prefix titles
+      .replace(/^(mr|mrs|ms|dr|prof|er|shri|smt)\.?\s+/gi, '') // remove prefix titles
+      .replace(/\s+(sir|mam|madam)$/gi, '') // remove suffix honorifics
       .replace(/[^a-z0-9]/g, '') // remove special chars/spaces
       .trim();
+  }
+
+  private extractTokens(str: string): string[] {
+    return str
+      .toLowerCase()
+      .replace(/^(mr|mrs|ms|dr|prof|er|shri|smt)\.?\s+/gi, '')
+      .replace(/\s+(sir|mam|madam)$/gi, '')
+      .split(/[^a-z0-9]+/i)
+      .filter((t) => t.length >= 2);
+  }
+
+  private normalizeCode(code: string): string {
+    return (code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  private extractInitials(str: string): string {
+    const trimmed = (str || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+    // If the input is already a short uppercase token without spaces (e.g., "RS", "DP", "SVM"), it represents initials
+    if (trimmed.length >= 2 && trimmed.length <= 4 && !str.trim().includes(' ')) {
+      return trimmed;
+    }
+    const tokens = this.extractTokens(str);
+    if (tokens.length >= 2) {
+      return tokens.map((t) => t[0].toUpperCase()).join('');
+    }
+    return trimmed.length <= 4 ? trimmed : '';
+  }
+
+  private extractParenthesesAcronym(str: string): string | null {
+    const match = str.match(/\(([^)]+)\)/);
+    return match ? match[1].trim().toUpperCase() : null;
   }
 
   calculateSimilarity(s1: string, s2: string): number {
     const norm1 = this.cleanString(s1);
     const norm2 = this.cleanString(s2);
-    if (norm1 === norm2) return 1.0;
+    if (norm1 === norm2 && norm1.length > 0) return 1.0;
     if (!norm1 || !norm2) return 0.0;
     const distance = this.getLevenshteinDistance(norm1, norm2);
     const maxLength = Math.max(norm1.length, norm2.length);
@@ -51,69 +83,146 @@ export class MatchingService {
   }
 
   async matchSubject(code: string, name: string): Promise<MatchResult> {
-    const cleanCode = code.trim().toUpperCase();
-    
-    // 1. Exact match on code
-    const exactCode = await this.prisma.subject.findUnique({
-      where: { code: cleanCode },
-    });
-    if (exactCode) return { matchedId: exactCode.id, confidence: 1.0 };
+    const cleanCode = (code || '').trim().toUpperCase();
+    const cleanName = (name || '').trim();
+    const normCode = this.normalizeCode(cleanCode);
 
-    // 2. Query all subjects to perform fuzzy matching
+    // 1. Exact match on database code or normalized code
+    if (cleanCode) {
+      const exactCode = await this.prisma.subject.findUnique({
+        where: { code: cleanCode },
+      });
+      if (exactCode) return { matchedId: exactCode.id, confidence: 1.0 };
+    }
+
     const subjects = await this.prisma.subject.findMany();
     let bestMatch: { id: string; confidence: number } | null = null;
 
+    const queryTokens = this.extractTokens(`${cleanCode} ${cleanName}`);
+    const queryAcronym = this.extractParenthesesAcronym(cleanName) || (cleanCode.length <= 6 ? cleanCode : null);
+
     for (const sub of subjects) {
-      const codeSimilarity = this.calculateSimilarity(code, sub.code);
-      const nameSimilarity = this.calculateSimilarity(name, sub.name);
-      const score = Math.max(codeSimilarity, nameSimilarity);
+      const subNormCode = this.normalizeCode(sub.code);
+      const subAcronym = this.extractParenthesesAcronym(sub.name);
+      const subTokens = this.extractTokens(`${sub.code} ${sub.name}`);
+
+      let score = 0;
+
+      // Strategy A: Normalized code exact match (e.g. "BAI 701" == "BAI-701" == "BAI701")
+      if (normCode && normCode === subNormCode) {
+        score = 1.0;
+      }
+      // Strategy B: Acronym match (e.g. cell has "DL" and subject name is "Deep Learning (DL)")
+      else if (
+        (queryAcronym && subAcronym && queryAcronym === subAcronym) ||
+        (queryAcronym && this.normalizeCode(sub.code) === queryAcronym) ||
+        (cleanCode && subAcronym && cleanCode === subAcronym)
+      ) {
+        score = 0.92;
+      }
+      // Strategy C: Multi-token keyword overlap (e.g. "Placement Preparation", "Deep Learning Lab")
+      else if (queryTokens.length > 0 && subTokens.length > 0) {
+        const matchingTokens = queryTokens.filter((qt) =>
+          subTokens.some((st) => st === qt || (st.length >= 4 && qt.length >= 4 && (st.includes(qt) || qt.includes(st))))
+        );
+        const tokenOverlapRatio = matchingTokens.length / Math.min(queryTokens.length, subTokens.length);
+        if (matchingTokens.length >= 2 || (matchingTokens.length === 1 && matchingTokens[0].length >= 5)) {
+          score = Math.max(score, Math.min(0.95, 0.75 + tokenOverlapRatio * 0.2));
+        }
+      }
+
+      // Strategy D: Fuzzy Levenshtein similarity on cleaned name and code
+      const codeSim = this.calculateSimilarity(cleanCode, sub.code);
+      const nameSim = this.calculateSimilarity(cleanName, sub.name);
+      const fuzzyScore = Math.max(codeSim, nameSim);
+      score = Math.max(score, fuzzyScore);
 
       if (!bestMatch || score > bestMatch.confidence) {
         bestMatch = { id: sub.id, confidence: score };
       }
     }
 
-    if (bestMatch && bestMatch.confidence >= 0.5) {
+    if (bestMatch && bestMatch.confidence >= 0.70) {
       return {
-        matchedId: bestMatch.confidence >= 0.85 ? bestMatch.id : null, // mid-range flags are not auto-linked
+        matchedId: bestMatch.id,
         confidence: bestMatch.confidence,
       };
     }
 
-    return { matchedId: null, confidence: 0.0 };
+    return { matchedId: null, confidence: bestMatch ? bestMatch.confidence : 0.0 };
   }
 
   async matchFaculty(fullName: string, shortCode: string): Promise<MatchResult> {
-    // 1. Exact match on employeeCode = shortCode
-    const exactCode = await this.prisma.faculty.findUnique({
-      where: { employeeCode: shortCode.trim().toUpperCase() },
-    });
-    if (exactCode) return { matchedId: exactCode.id, confidence: 1.0 };
+    const cleanShort = (shortCode || '').trim().toUpperCase();
+    const cleanFull = (fullName || '').trim();
+    const normShort = this.normalizeCode(cleanShort);
 
-    // 2. Query all faculty
+    // 1. Exact match on employeeCode
+    if (cleanShort) {
+      const exactCode = await this.prisma.faculty.findUnique({
+        where: { employeeCode: cleanShort },
+      });
+      if (exactCode) return { matchedId: exactCode.id, confidence: 1.0 };
+    }
+
     const faculties = await this.prisma.faculty.findMany();
     let bestMatch: { id: string; confidence: number } | null = null;
 
-    const queryName = fullName.trim();
+    const queryTokens = this.extractTokens(`${cleanShort} ${cleanFull}`);
+    const queryInitials = this.extractInitials(cleanFull) || (cleanShort.length <= 4 ? cleanShort : '');
+
     for (const fac of faculties) {
       const facFullName = `${fac.firstName} ${fac.lastName || ''}`.trim();
-      const nameSimilarity = this.calculateSimilarity(queryName, facFullName);
-      const codeSimilarity = this.calculateSimilarity(shortCode, fac.employeeCode);
-      const score = Math.max(nameSimilarity, codeSimilarity);
+      const facInitials = this.extractInitials(facFullName);
+      const facTokens = this.extractTokens(facFullName);
+      const facNormCode = this.normalizeCode(fac.employeeCode);
+
+      let score = 0;
+
+      // Strategy A: Normalized employeeCode exact match
+      if (normShort && normShort === facNormCode) {
+        score = 1.0;
+      }
+      // Strategy B: Exact cleaned full name match
+      else if (this.cleanString(cleanFull) === this.cleanString(facFullName)) {
+        score = 0.98;
+      }
+      // Strategy C: Initials match (e.g. "DP" for "Dharamveer Patel", "RS" for "Ranjeet Singh")
+      else if (queryInitials && facInitials && queryInitials === facInitials) {
+        score = 0.90;
+      }
+      // Strategy D: Keyword / Token overlap (e.g. "Dharamveer Patel", "Dr. Shashank")
+      else if (queryTokens.length > 0 && facTokens.length > 0) {
+        const matchingTokens = queryTokens.filter((qt) =>
+          facTokens.some((ft) => ft === qt || (ft.length >= 4 && qt.length >= 4 && (ft.includes(qt) || qt.includes(ft))))
+        );
+        const tokenOverlapRatio = matchingTokens.length / Math.min(queryTokens.length, facTokens.length);
+        if (matchingTokens.length >= 2) {
+          score = 0.92;
+        } else if (matchingTokens.length === 1 && matchingTokens[0].length >= 4) {
+          score = Math.max(score, 0.85);
+        }
+      }
+
+      // Strategy E: Fuzzy Levenshtein similarity
+      const nameSim = this.calculateSimilarity(cleanFull, facFullName);
+      const codeSim = this.calculateSimilarity(cleanShort, fac.employeeCode);
+      const fuzzyScore = Math.max(nameSim, codeSim);
+      score = Math.max(score, fuzzyScore);
 
       if (!bestMatch || score > bestMatch.confidence) {
         bestMatch = { id: fac.id, confidence: score };
       }
     }
 
-    if (bestMatch && bestMatch.confidence >= 0.5) {
+    if (bestMatch && bestMatch.confidence >= 0.70) {
       return {
-        matchedId: bestMatch.confidence >= 0.85 ? bestMatch.id : null,
+        matchedId: bestMatch.id,
         confidence: bestMatch.confidence,
       };
     }
 
-    return { matchedId: null, confidence: 0.0 };
+    return { matchedId: null, confidence: bestMatch ? bestMatch.confidence : 0.0 };
   }
 
   async matchRoom(roomCode: string): Promise<MatchResult> {
@@ -156,19 +265,19 @@ export class MatchingService {
           name: cleanCode,
           semester: {
             number: semesterNum,
-          },
-          batch: deptCode
-            ? {
-                program: {
-                  department: {
-                    code: {
-                      contains: deptCode,
-                      mode: 'insensitive',
+            ...(deptCode
+              ? {
+                  program: {
+                    department: {
+                      code: {
+                        contains: deptCode,
+                        mode: 'insensitive',
+                      },
                     },
                   },
-                },
-              }
-            : undefined,
+                }
+              : {}),
+          },
         },
       });
       if (matched) {

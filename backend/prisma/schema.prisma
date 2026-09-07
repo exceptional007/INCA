@@ -49,6 +49,7 @@ model User {
 
   faculty Faculty?
   student Student?
+  adminProfile AdminProfile?
   attendanceAudits AttendanceAudit[]
   timetableImportBatches TimetableImportBatch[]
 
@@ -89,6 +90,17 @@ model Faculty {
   @@map("faculty")
 }
 
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
 model Student {
   id String @id @default(uuid())
 
@@ -108,6 +120,11 @@ model Student {
   phone String?
 
   photoKey String?
+
+  bloodGroup            BloodGroup?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  address               String?
 
   isActive Boolean @default(true)
 
@@ -134,6 +151,7 @@ model Department {
   updatedAt DateTime @updatedAt
 
   programs Program[]
+  adminProfiles AdminProfile[]
 
   @@map("departments")
 }
@@ -148,9 +166,7 @@ model Program {
   name      String
   shortName String?
 
-  batches       Batch[]
   semesters     Semester[]
-  subjects      Subject[]
   durationYears Int        @default(4)
 
   isActive Boolean @default(true)
@@ -177,36 +193,11 @@ model AcademicSession {
   @@map("academic_sessions")
 }
 
-model Batch {
-  id String @id @default(uuid())
-
-  programId String
-  program   Program @relation(fields: [programId], references: [id], onDelete: Restrict)
-
-  name      String
-  startYear Int
-  endYear   Int
-
-  isActive Boolean @default(true)
-
-  sections  Section[]
-  semesters Semester[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([programId, startYear])
-  @@map("batches")
-}
-
 model Semester {
   id String @id @default(uuid())
 
   programId String
   program   Program @relation(fields: [programId], references: [id], onDelete: Restrict)
-
-  batchId String
-  batch   Batch  @relation(fields: [batchId], references: [id], onDelete: Restrict)
 
   number Int
   name   String
@@ -219,15 +210,12 @@ model Semester {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([batchId, number])
+  @@unique([programId, number])
   @@map("semesters")
 }
 
 model Section {
   id String @id @default(uuid())
-
-  batchId String
-  batch   Batch  @relation(fields: [batchId], references: [id], onDelete: Restrict)
 
   semesterId String
   semester   Semester @relation(fields: [semesterId], references: [id], onDelete: Restrict)
@@ -243,23 +231,21 @@ model Section {
   timetableVersions   TimetableVersion[]
   timetableSlotDrafts TimetableSlotDraft[]
 
-  @@unique([batchId, semesterId, name])
+  @@unique([semesterId, name])
   @@map("sections")
 }
 
 model Subject {
   id String @id @default(uuid())
 
-  programId String
-  program   Program @relation(fields: [programId], references: [id], onDelete: Restrict)
-
   semesterId String
   semester   Semester @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+
+  year Int
 
   code String @unique
   name String
 
-  credits Int
   isLab   Boolean @default(false)
 
   isActive Boolean @default(true)
@@ -271,7 +257,7 @@ model Subject {
   timetableSlots      TimetableSlot[]
   timetableSlotDrafts TimetableSlotDraft[]
 
-  @@unique([programId, semesterId, name])
+  @@unique([semesterId, name])
   @@map("subjects")
 }
 
@@ -584,6 +570,7 @@ model TimetableSlot {
   versionId          String
   version            TimetableVersion    @relation(fields: [versionId], references: [id], onDelete: Cascade)
   day                String
+  lectureNumber      Int                 @default(1)
   timeSlotStart      String
   timeSlotEnd        String
   subjectId          String
@@ -593,6 +580,72 @@ model TimetableSlot {
   roomId             String
   room               Room                @relation(fields: [roomId], references: [id], onDelete: Restrict)
   category           String
+  isLab              Boolean             @default(false)
+  batchSection       String?
 
   @@map("timetable_slots")
 }
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Request {
+  id        String        @id @default(uuid())
+  title     String
+  details   String
+  requester String
+  status    RequestStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("requests")
+}
+
+model AdminAccount {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  institution String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("admin_accounts")
+}
+
+model SystemAuditLog {
+  id        String   @id @default(uuid())
+  event     String
+  details   String
+  createdAt DateTime @default(now())
+
+  @@map("system_audit_logs")
+}
+
+model SystemSetting {
+  id                   String   @id @default(uuid())
+  academicPeriod       String   @default("Autumn Semester 2026")
+  minAttendance        Int      @default(75)
+  editWindow           Int      @default(24)
+  allowFacultyOverride Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model AdminProfile {
+  id           String     @id @default(uuid())
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("admin_profiles")
+}
+

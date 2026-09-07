@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
+import { cn } from "@/lib/utils"
 import {
   Sidebar,
   SidebarContent,
@@ -55,7 +56,7 @@ export function AppSidebar() {
     },
     {
       title: "Management",
-      roles: ["SUPER_ADMIN", "ADMIN", "HOD"],
+      roles: ["SUPER_ADMIN", "HOD"],
       items: [
         {
           title: "Academic Master",
@@ -66,11 +67,34 @@ export function AppSidebar() {
           title: "Timetables & Schedules",
           url: "/schedules",
           icon: Calendar,
+          roles: ["ADMIN", "HOD"],
         },
         {
           title: "Timetable PDF Import",
           url: "/academic/timetable-imports",
           icon: Upload,
+          roles: ["ADMIN", "HOD"],
+        },
+      ],
+    },
+    {
+      title: "ASSAM",
+      roles: ["SUPER_ADMIN"],
+      items: [
+        {
+          title: "Activities",
+          url: "/activities",
+          icon: Sparkles,
+        },
+        {
+          title: "Reports & Analytics",
+          url: "/reports",
+          icon: BarChart3,
+        },
+        {
+          title: "Timetables & Schedules",
+          url: "/schedules",
+          icon: Calendar,
         },
       ],
     },
@@ -87,6 +111,7 @@ export function AppSidebar() {
     },
     {
       title: "Activities & Events",
+      roles: ["ADMIN", "HOD", "FACULTY", "STUDENT", "COORDINATOR"],
       items: [
         {
           title: "Activities",
@@ -97,7 +122,7 @@ export function AppSidebar() {
     },
     {
       title: "Attendance",
-      roles: ["SUPER_ADMIN", "ADMIN", "HOD", "FACULTY", "COORDINATOR"],
+      roles: ["HOD", "FACULTY", "COORDINATOR"],
       items: [
         {
           title: "Take Attendance",
@@ -108,6 +133,7 @@ export function AppSidebar() {
     },
     {
       title: "Analytics",
+      roles: ["ADMIN", "HOD", "FACULTY", "STUDENT", "COORDINATOR"],
       items: [
         {
           title: "Reports & Analytics",
@@ -118,14 +144,104 @@ export function AppSidebar() {
     },
   ]
 
-  const filteredGroups = navItems.filter(
-    (group) => !group.roles || (role && group.roles.includes(role))
-  )
+  const adminNavItems = [
+    {
+      title: "ASSAM",
+      items: [
+        {
+          title: "Dashboard",
+          url: "/dashboard",
+          icon: LayoutDashboard,
+        },
+        {
+          title: "Academic Master",
+          url: "/academic",
+          icon: Building2,
+        },
+        {
+          title: "Timetables & Schedules",
+          url: "/schedules",
+          icon: Calendar,
+        },
+        {
+          title: "Timetable PDF Import",
+          url: "/academic/timetable-imports",
+          icon: Upload,
+        },
+        {
+          title: "Attendance Operations",
+          url: "/attendance/mark",
+          icon: CheckSquare,
+        },
+        {
+          title: "Campus Activities",
+          url: "/activities",
+          icon: Sparkles,
+        },
+        {
+          title: "Reports & Analytics",
+          url: "/reports",
+          icon: BarChart3,
+        },
+      ],
+    },
+  ]
+
+  const facultyNavItems = [
+    {
+      title: "ASSAM",
+      items: [
+        {
+          title: "Faculty Dashboard",
+          url: "/dashboard",
+          icon: LayoutDashboard,
+        },
+        {
+          title: "Take Attendance",
+          url: "/attendance/mark",
+          icon: CheckSquare,
+        },
+        {
+          title: "Campus Activities",
+          url: "/activities",
+          icon: Sparkles,
+        },
+        {
+          title: "Reports & Analytics",
+          url: "/reports",
+          icon: BarChart3,
+        },
+      ],
+    },
+  ]
+
+  const baseGroups =
+    role === "ADMIN"
+      ? adminNavItems
+      : role === "FACULTY"
+      ? facultyNavItems
+      : navItems;
+
+  const filteredGroups = baseGroups
+    .filter((group: any) => !group.roles || (role && group.roles.includes(role)))
+    .map((group: any) => ({
+      ...group,
+      items: group.items.filter(
+        (item: any) => !item.roles || (role && item.roles.includes(role))
+      ),
+    }))
+    .filter((group: any) => group.items.length > 0);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-[#e0e0e0] bg-white">
-      <SidebarHeader className="h-16 flex justify-center border-b border-[#e0e0e0] px-4 bg-white">
-        <div className="flex items-center gap-2 overflow-hidden">
+      <SidebarHeader className={cn(
+        "h-16 flex border-b border-[#e0e0e0] bg-white",
+        state === "expanded" ? "justify-center px-4" : "justify-center items-center px-0"
+      )}>
+        <div className={cn(
+          "flex items-center overflow-hidden",
+          state === "expanded" ? "gap-2" : "justify-center w-full"
+        )}>
           <div className="flex aspect-square size-8 items-center justify-center rounded-full bg-action-blue text-white shrink-0">
             <ShieldCheck className="size-4.5" />
           </div>
@@ -140,12 +256,12 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent className="bg-white">
-        {filteredGroups.map((group) => (
+        {filteredGroups.map((group: any) => (
           <SidebarGroup key={group.title}>
             <SidebarGroupLabel className="text-[10px] uppercase font-bold text-ink-muted-48 tracking-widest px-2">{group.title}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => (
+                {group.items.map((item: any) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild tooltip={item.title}>
                       <NavLink

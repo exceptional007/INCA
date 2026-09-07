@@ -5,8 +5,16 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class FacultyRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(includeInactive: boolean = false) {
     return this.prisma.faculty.findMany({
+      where: includeInactive ? undefined : { isActive: true },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
       orderBy: {
         employeeCode: 'asc',
       },
@@ -16,6 +24,13 @@ export class FacultyRepository {
   async findById(id: string) {
     return this.prisma.faculty.findUnique({
       where: { id },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
     });
   }
 
@@ -72,6 +87,15 @@ export class FacultyRepository {
       where: { id },
       data: {
         isActive: false,
+      },
+    });
+  }
+
+  async activate(id: string) {
+    return this.prisma.faculty.update({
+      where: { id },
+      data: {
+        isActive: true,
       },
     });
   }

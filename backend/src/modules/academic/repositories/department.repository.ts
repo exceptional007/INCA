@@ -5,8 +5,9 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class DepartmentRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(includeInactive: boolean = false) {
     return this.prisma.department.findMany({
+      where: includeInactive ? undefined : { isActive: true },
       orderBy: {
         name: 'asc',
       },
@@ -50,11 +51,21 @@ export class DepartmentRepository {
       data,
     });
   }
+
   async deactivate(id: string) {
     return this.prisma.department.update({
       where: { id },
       data: {
         isActive: false,
+      },
+    });
+  }
+
+  async activate(id: string) {
+    return this.prisma.department.update({
+      where: { id },
+      data: {
+        isActive: true,
       },
     });
   }

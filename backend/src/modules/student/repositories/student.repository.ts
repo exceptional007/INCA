@@ -5,8 +5,16 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class StudentRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(includeInactive: boolean = false) {
     return this.prisma.student.findMany({
+      where: includeInactive ? undefined : { isActive: true },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
       orderBy: {
         rollNumber: 'asc',
       },
@@ -16,6 +24,13 @@ export class StudentRepository {
   async findById(id: string) {
     return this.prisma.student.findUnique({
       where: { id },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
     });
   }
 
@@ -54,6 +69,10 @@ export class StudentRepository {
     dateOfBirth?: Date;
     phone?: string;
     photoKey?: string;
+    bloodGroup?: any;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+    address?: string;
   }) {
     return this.prisma.student.create({
       data,
@@ -73,6 +92,10 @@ export class StudentRepository {
       dateOfBirth?: Date;
       phone?: string;
       photoKey?: string;
+      bloodGroup?: any;
+      emergencyContactName?: string;
+      emergencyContactPhone?: string;
+      address?: string;
     },
   ) {
     return this.prisma.student.update({
@@ -86,6 +109,15 @@ export class StudentRepository {
       where: { id },
       data: {
         isActive: false,
+      },
+    });
+  }
+
+  async activate(id: string) {
+    return this.prisma.student.update({
+      where: { id },
+      data: {
+        isActive: true,
       },
     });
   }

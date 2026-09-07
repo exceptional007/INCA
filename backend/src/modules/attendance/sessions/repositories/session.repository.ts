@@ -60,21 +60,33 @@ export class SessionRepository {
   async findBySchedule(scheduleId: string) {
     return this.prisma.attendanceSession.findFirst({
       where: { scheduleId },
+      include: this.include,
     });
   }
 
   async findByActivity(activityId: string) {
     return this.prisma.attendanceSession.findFirst({
       where: { activityId },
+      include: this.include,
     });
   }
 
   async findByFaculty(facultyId: string) {
     return this.prisma.attendanceSession.findMany({
-      where: { takenById: facultyId },
+      where: {
+        OR: [
+          { takenById: facultyId },
+          { schedule: { template: { facultyId } } },
+        ],
+      },
       include: this.include,
       orderBy: { attendanceDate: 'desc' },
     });
+  }
+
+  async getFacultyIdForUser(userId: string): Promise<string | null> {
+    const fac = await this.prisma.faculty.findUnique({ where: { userId } });
+    return fac ? fac.id : null;
   }
 
   async create(data: CreateSessionDto) {

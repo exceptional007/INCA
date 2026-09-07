@@ -19,11 +19,12 @@ import { Roles } from '../../../common/decorators/roles.decorator';
 import { TimetableImportService } from './timetable-import.service';
 import { CreateDraftSlotDto } from './dto/create-draft-slot.dto';
 import { UpdateDraftSlotDto } from './dto/update-draft-slot.dto';
+import { ApproveBatchDto } from './dto/approve-batch.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 
 @Controller('admin/timetable-imports')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
+@Roles('ADMIN', 'SUPER_ADMIN')
 export class TimetableImportController {
   constructor(private readonly importService: TimetableImportService) {}
 
@@ -37,7 +38,19 @@ export class TimetableImportController {
     };
   }
 
+  @Get('active-configurations')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'FACULTY')
+  async getActiveConfigurations() {
+    const data = await this.importService.getActiveConfigurations();
+    return {
+      success: true,
+      message: 'Active timetable configurations retrieved successfully.',
+      data,
+    };
+  }
+
   @Post()
+  @Roles('ADMIN')
   @UseInterceptors(FileInterceptor('file'))
   async uploadTimetable(
     @UploadedFile() file: Express.Multer.File,
@@ -65,6 +78,7 @@ export class TimetableImportController {
   }
 
   @Patch(':id/slots/:slotId')
+  @Roles('ADMIN')
   async updateDraftSlot(
     @Param('id') id: string,
     @Param('slotId') slotId: string,
@@ -79,6 +93,7 @@ export class TimetableImportController {
   }
 
   @Post(':id/slots')
+  @Roles('ADMIN')
   async addDraftSlot(
     @Param('id') id: string,
     @Body() dto: CreateDraftSlotDto,
@@ -92,6 +107,7 @@ export class TimetableImportController {
   }
 
   @Delete(':id/slots/:slotId')
+  @Roles('ADMIN')
   async removeDraftSlot(
     @Param('id') id: string,
     @Param('slotId') slotId: string,
@@ -104,12 +120,17 @@ export class TimetableImportController {
   }
 
   @Post(':id/approve')
-  async approveAndCommit(@Param('id') id: string) {
-    const result = await this.importService.approveAndCommit(id);
+  @Roles('ADMIN')
+  async approveAndCommit(
+    @Param('id') id: string,
+    @Body() dto?: ApproveBatchDto,
+  ) {
+    const result = await this.importService.approveAndCommit(id, dto?.programId);
     return result;
   }
 
   @Post(':id/discard')
+  @Roles('ADMIN')
   async discardBatch(@Param('id') id: string) {
     await this.importService.discardBatch(id);
     return {
@@ -129,12 +150,93 @@ export class TimetableImportController {
   }
 
   @Post('versions/:versionId/rollback')
+  @Roles('ADMIN')
   async rollbackVersion(@Param('versionId') versionId: string) {
     const result = await this.importService.rollbackVersion(versionId);
     return {
       success: true,
       message: 'Timetable version successfully rolled back.',
       data: result,
+    };
+  }
+
+  @Post('sync-schedules')
+  @Roles('ADMIN')
+  async syncTimetableSchedules(
+    @Body() body?: { versionId?: string; startDate?: string; endDate?: string },
+  ) {
+    const result = await this.importService.syncTimetableToSchedules(
+      body?.versionId,
+      body?.startDate,
+      body?.endDate,
+    );
+    return result;
+  }
+
+  @Post('test-lecture-session')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'FACULTY')
+  async createTestLectureSession(
+    @Body() body: { slotId?: string; scheduleId?: string; sectionId?: string },
+  ) {
+    const result = await this.importService.createTestLectureSession(body);
+    return result;
+  }
+
+  @Get('check-section/:sectionId')
+  @Get('sections/:sectionId/check')
+  async checkSectionTimetable(@Param('sectionId') sectionId: string) {
+    const result = await this.importService.checkSectionTimetable(sectionId);
+    return {
+      success: true,
+      ...result,
+    };
+  }
+
+  @Get('active-section/:sectionId')
+  async getActiveSectionTimetable(@Param('sectionId') sectionId: string) {
+    const data = await this.importService.getActiveSectionTimetable(sectionId);
+    return {
+      success: true,
+      message: 'Active section timetable retrieved successfully.',
+      data,
+    };
+  }
+
+  @Post('active-versions/:versionId/slots')
+  @Roles('ADMIN')
+  async addActiveSlot(
+    @Param('versionId') versionId: string,
+    @Body() dto: any,
+  ) {
+    const slot = await this.importService.addActiveSlot(versionId, dto);
+    return {
+      success: true,
+      message: 'Active slot created successfully.',
+      data: slot,
+    };
+  }
+
+  @Patch('active-slots/:slotId')
+  @Roles('ADMIN')
+  async updateActiveSlot(
+    @Param('slotId') slotId: string,
+    @Body() dto: any,
+  ) {
+    const slot = await this.importService.updateActiveSlot(slotId, dto);
+    return {
+      success: true,
+      message: 'Active slot updated successfully.',
+      data: slot,
+    };
+  }
+
+  @Delete('active-slots/:slotId')
+  @Roles('ADMIN')
+  async deleteActiveSlot(@Param('slotId') slotId: string) {
+    await this.importService.deleteActiveSlot(slotId);
+    return {
+      success: true,
+      message: 'Active slot deleted successfully.',
     };
   }
 

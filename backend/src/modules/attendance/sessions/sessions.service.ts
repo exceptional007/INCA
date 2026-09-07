@@ -28,15 +28,17 @@ export class SessionsService {
       );
     }
 
-    // Enforce: no duplicate session for the same schedule/activity
+    // Enforce: return existing session if already opened for this schedule/activity
     if (hasSchedule) {
       const existing = await this.sessionRepository.findBySchedule(
         dto.scheduleId!,
       );
       if (existing) {
-        throw new ConflictException(
-          'An attendance session already exists for this schedule.',
-        );
+        return {
+          success: true,
+          message: 'Existing attendance session retrieved.',
+          data: existing,
+        };
       }
     }
 
@@ -45,9 +47,11 @@ export class SessionsService {
         dto.activityId!,
       );
       if (existing) {
-        throw new ConflictException(
-          'An attendance session already exists for this activity.',
-        );
+        return {
+          success: true,
+          message: 'Existing attendance session retrieved.',
+          data: existing,
+        };
       }
     }
 
@@ -94,6 +98,33 @@ export class SessionsService {
     return {
       success: true,
       message: 'Faculty attendance sessions retrieved successfully.',
+      data: sessions,
+    };
+  }
+
+  async findForUser(userId?: string, userRole?: string): Promise<ApiResponse<any>> {
+    if (userRole === 'FACULTY' && userId) {
+      const facultyId = await this.sessionRepository.getFacultyIdForUser(userId);
+      if (!facultyId) {
+        return {
+          success: true,
+          message: 'Faculty attendance sessions retrieved successfully.',
+          data: [],
+        };
+      }
+      const sessions = await this.sessionRepository.findByFaculty(facultyId);
+      return {
+        success: true,
+        message: 'Faculty attendance sessions retrieved successfully.',
+        data: sessions,
+      };
+    }
+
+    // Default for Admin / Super Admin
+    const sessions = await this.sessionRepository.findAll();
+    return {
+      success: true,
+      message: 'Attendance sessions retrieved successfully.',
       data: sessions,
     };
   }

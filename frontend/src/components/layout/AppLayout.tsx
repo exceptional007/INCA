@@ -9,16 +9,18 @@ export function AppLayout() {
       <SidebarInset className="bg-background">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-background z-10 sticky top-0">
           <SidebarTrigger className="-ml-1" />
-          <div className="w-full flex justify-between items-center">
+          <div className="w-full flex justify-between items-center min-w-0">
             {/* We could add Breadcrumbs here later if needed */}
-            <div className="font-medium text-sm text-muted-foreground ml-2">
+            <div className="font-medium text-sm text-muted-foreground ml-2 truncate">
               Welcome to INCA Assistant
             </div>
           </div>
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <Outlet />
-        </main>
+        <div className="flex-1 p-4 md:p-6 lg:p-8 w-full min-w-0">
+          <div className="max-w-7xl mx-auto w-full min-w-0 space-y-4">
+            <Outlet />
+          </div>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )
