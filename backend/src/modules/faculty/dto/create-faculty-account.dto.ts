@@ -9,6 +9,7 @@ import {
   MaxLength,
   MinLength,
   Matches,
+  IsUUID,
 } from 'class-validator';
 import { Gender } from '@prisma/client';
 
@@ -102,4 +103,12 @@ export class CreateFacultyAccountDto {
   @IsString()
   @MaxLength(255)
   photoKey?: string;
+
+  @ApiPropertyOptional({
+    example: 'dept-uuid-here',
+    description: 'Department ID associated with the faculty member',
+  })
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
 }

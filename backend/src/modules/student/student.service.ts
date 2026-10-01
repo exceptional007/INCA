@@ -101,6 +101,24 @@ export class StudentService {
             emergencyContactName: dto.emergencyContactName,
             emergencyContactPhone: dto.emergencyContactPhone,
             address: dto.address,
+            departmentId: dto.departmentId,
+            sectionId: dto.sectionId,
+          },
+          include: {
+            department: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                shortName: true,
+              },
+            },
+            section: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         });
 
@@ -170,11 +188,13 @@ export class StudentService {
       emergencyContactName: dto.emergencyContactName,
       emergencyContactPhone: dto.emergencyContactPhone,
       address: dto.address,
+      departmentId: dto.departmentId,
+      sectionId: dto.sectionId,
     });
   }
 
-  async getAllStudents(includeInactive: boolean = false) {
-    return this.studentRepository.findAll(includeInactive);
+  async getAllStudents(params: { includeInactive?: boolean; departmentId?: string; search?: string } | boolean = false) {
+    return this.studentRepository.findAll(params);
   }
 
   async getStudentById(id: string) {

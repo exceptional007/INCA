@@ -53,6 +53,8 @@ model User {
   attendanceAudits AttendanceAudit[]
   timetableImportBatches TimetableImportBatch[]
 
+  @@index([roleId])
+  @@index([isActive])
   @@map("users")
 }
 
@@ -80,6 +82,9 @@ model Faculty {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   scheduleTemplates  ScheduleTemplate[]
   scheduleExceptions ScheduleException[]
   activities         Activity[]
@@ -87,6 +92,8 @@ model Faculty {
   timetableSlots     TimetableSlot[]
   timetableSlotDrafts TimetableSlotDraft[]
 
+  @@index([departmentId])
+  @@index([isActive])
   @@map("faculty")
 }
 
@@ -131,8 +138,17 @@ model Student {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  sectionId String?
+  section   Section?    @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
   attendanceRecords AttendanceRecord[]
 
+  @@index([departmentId])
+  @@index([sectionId])
+  @@index([isActive])
   @@map("students")
 }
 
@@ -152,6 +168,8 @@ model Department {
 
   programs Program[]
   adminProfiles AdminProfile[]
+  faculties Faculty[]
+  students  Student[]
 
   @@map("departments")
 }
@@ -175,6 +193,8 @@ model Program {
   updatedAt DateTime @updatedAt
 
   @@unique([departmentId, name])
+  @@index([departmentId])
+  @@index([isActive])
   @@map("programs")
 }
 
@@ -211,6 +231,8 @@ model Semester {
   updatedAt DateTime @updatedAt
 
   @@unique([programId, number])
+  @@index([programId])
+  @@index([isActive])
   @@map("semesters")
 }
 
@@ -230,8 +252,11 @@ model Section {
   scheduleTemplates ScheduleTemplate[]
   timetableVersions   TimetableVersion[]
   timetableSlotDrafts TimetableSlotDraft[]
+  students            Student[]
 
   @@unique([semesterId, name])
+  @@index([semesterId])
+  @@index([isActive])
   @@map("sections")
 }
 
@@ -258,6 +283,8 @@ model Subject {
   timetableSlotDrafts TimetableSlotDraft[]
 
   @@unique([semesterId, name])
+  @@index([semesterId])
+  @@index([isActive])
   @@map("subjects")
 }
 
@@ -343,6 +370,11 @@ model ScheduleTemplate {
 
   schedules Schedule[]
 
+  @@index([sectionId])
+  @@index([subjectId])
+  @@index([facultyId])
+  @@index([roomId])
+  @@index([dayOfWeek])
   @@map("schedule_templates")
 }
 
@@ -362,6 +394,9 @@ model Schedule {
   exceptions         ScheduleException[]
   attendanceSessions AttendanceSession[]
 
+  @@index([templateId])
+  @@index([lectureDate])
+  @@index([status])
   @@map("schedules")
 }
 
@@ -386,6 +421,7 @@ model ScheduleException {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([scheduleId])
   @@map("schedule_exceptions")
 }
 
@@ -428,6 +464,9 @@ model Activity {
 
   attendanceSessions AttendanceSession[]
 
+  @@index([activityTypeId])
+  @@index([facultyId])
+  @@index([startTime])
   @@map("activities")
 }
 
@@ -454,6 +493,10 @@ model AttendanceSession {
 
   records AttendanceRecord[]
 
+  @@index([scheduleId])
+  @@index([activityId])
+  @@index([takenById])
+  @@index([attendanceDate])
   @@map("attendance_sessions")
 }
 
@@ -475,6 +518,9 @@ model AttendanceRecord {
   audits AttendanceAudit[]
 
   @@unique([attendanceSessionId, studentId])
+  @@index([attendanceSessionId])
+  @@index([studentId])
+  @@index([status])
   @@map("attendance_records")
 }
 
@@ -562,6 +608,8 @@ model TimetableVersion {
   createdAt          DateTime            @default(now())
   slots              TimetableSlot[]
 
+  @@index([sectionId])
+  @@index([isActive])
   @@map("timetable_versions")
 }
 
@@ -583,6 +631,10 @@ model TimetableSlot {
   isLab              Boolean             @default(false)
   batchSection       String?
 
+  @@index([versionId])
+  @@index([subjectId])
+  @@index([facultyId])
+  @@index([roomId])
   @@map("timetable_slots")
 }
 
@@ -646,6 +698,7 @@ model AdminProfile {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  @@index([departmentId])
   @@map("admin_profiles")
 }
 

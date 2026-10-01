@@ -12,6 +12,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { HealthModule } from './modules/health/health.module';
 import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
 
 @Module({
@@ -21,6 +22,7 @@ import { RequestLoggingMiddleware } from './common/middleware/request-logging.mi
       envFilePath: '.env',
     }),
     PrismaModule,
+    HealthModule,
     StorageModule,
     AuthModule,
     AcademicModule,

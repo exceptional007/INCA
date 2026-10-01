@@ -45,6 +45,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = `Database error (${exception.code}): ${exception.message.split('\n').pop()}`;
       }
       this.logger.warn(`Prisma Known Error [${exception.code}]: ${message} on ${request.method} ${request.url}`);
+    } else if (exception instanceof Prisma.PrismaClientInitializationError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      message = 'Database temporarily unreachable. Please try again shortly.';
+      const errorCode = (exception as any).errorCode || 'UNKNOWN';
+      this.logger.error(
+        `Prisma Initialization/Connection Error [${errorCode}] on ${request.method} ${request.url}: ${exception.message}`,
+      );
+    } else if (exception instanceof Prisma.PrismaClientRustPanicError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      message = 'Database service temporarily unavailable. Please try again shortly.';
+      this.logger.error(
+        `Prisma Engine Panic Error on ${request.method} ${request.url}: ${exception.message}`,
+      );
     } else {
       this.logger.error(
         `Unhandled Exception on ${request.method} ${request.url}:`,
