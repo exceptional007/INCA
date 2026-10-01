@@ -5,10 +5,47 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class StudentRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(includeInactive: boolean = false) {
+  async findAll(params: { includeInactive?: boolean; departmentId?: string; search?: string } | boolean = false) {
+    const opts = typeof params === 'boolean' ? { includeInactive: params } : params;
+    const { includeInactive = false, departmentId, search } = opts;
+    const where: any = {};
+
+    if (!includeInactive) {
+      where.isActive = true;
+    }
+
+    if (departmentId && departmentId !== 'ALL') {
+      where.departmentId = departmentId;
+    }
+
+    if (search && search.trim() !== '') {
+      const term = search.trim();
+      where.OR = [
+        { firstName: { contains: term, mode: 'insensitive' } },
+        { lastName: { contains: term, mode: 'insensitive' } },
+        { rollNumber: { contains: term, mode: 'insensitive' } },
+        { collegeId: { contains: term, mode: 'insensitive' } },
+        { enrollmentNumber: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
     return this.prisma.student.findMany({
-      where: includeInactive ? undefined : { isActive: true },
+      where,
       include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         user: {
           select: {
             email: true,
@@ -25,6 +62,20 @@ export class StudentRepository {
     return this.prisma.student.findUnique({
       where: { id },
       include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         user: {
           select: {
             email: true,
@@ -37,24 +88,88 @@ export class StudentRepository {
   async findByUserId(userId: string) {
     return this.prisma.student.findUnique({
       where: { userId },
+      include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
   }
 
   async findByCollegeId(collegeId: string) {
     return this.prisma.student.findUnique({
       where: { collegeId },
+      include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
   }
 
   async findByRollNumber(rollNumber: string) {
     return this.prisma.student.findUnique({
       where: { rollNumber },
+      include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
   }
 
   async findByEnrollmentNumber(enrollmentNumber: string) {
     return this.prisma.student.findUnique({
       where: { enrollmentNumber },
+      include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
   }
 
@@ -73,9 +188,27 @@ export class StudentRepository {
     emergencyContactName?: string;
     emergencyContactPhone?: string;
     address?: string;
+    departmentId?: string;
+    sectionId?: string;
   }) {
     return this.prisma.student.create({
       data,
+      include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
   }
 
@@ -96,11 +229,29 @@ export class StudentRepository {
       emergencyContactName?: string;
       emergencyContactPhone?: string;
       address?: string;
+      departmentId?: string;
+      sectionId?: string;
     },
   ) {
     return this.prisma.student.update({
       where: { id },
       data,
+      include: {
+        department: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+          },
+        },
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
   }
 

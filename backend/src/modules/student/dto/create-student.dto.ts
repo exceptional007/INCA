@@ -129,4 +129,20 @@ export class CreateStudentDto {
   @IsString()
   @MaxLength(500)
   address?: string;
+
+  @ApiPropertyOptional({
+    example: 'dept-uuid-here',
+    description: 'Department ID associated with the student',
+  })
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
+
+  @ApiPropertyOptional({
+    example: 'section-uuid-here',
+    description: 'Section ID associated with the student',
+  })
+  @IsOptional()
+  @IsUUID()
+  sectionId?: string;
 }

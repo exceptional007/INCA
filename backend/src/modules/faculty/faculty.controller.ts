@@ -51,12 +51,20 @@ export class FacultyController {
   @ApiOperation({
     summary: 'Get all faculty',
   })
-  async getAllFaculty(@Query('includeInactive') includeInactive?: string) {
+  async getAllFaculty(
+    @Query('includeInactive') includeInactive?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('search') search?: string,
+  ) {
     const shouldInclude = includeInactive === 'true';
     return {
       success: true,
       message: 'Faculty fetched successfully.',
-      data: await this.facultyService.getAllFaculty(shouldInclude),
+      data: await this.facultyService.getAllFaculty({
+        includeInactive: shouldInclude,
+        departmentId,
+        search,
+      }),
     };
   }
 

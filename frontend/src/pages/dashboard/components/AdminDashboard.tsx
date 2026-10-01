@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
-import { Users, GraduationCap, Building2, CheckCircle, Search, Plus, Trash2, Edit3, ShieldAlert } from 'lucide-react';
+import { Users, GraduationCap, Building2, CheckCircle, Search, Plus, Trash2, Edit3, ShieldAlert, Filter, RotateCcw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -79,6 +79,12 @@ export const AdminDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Filter dropdown states
+  const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState<string>('ALL');
+  const [selectedBatchFilter, setSelectedBatchFilter] = useState<string>('ALL');
+  const [selectedDesignationFilter, setSelectedDesignationFilter] = useState<string>('ALL');
+  const [allDepartmentsList, setAllDepartmentsList] = useState<string[]>([]);
+
   // Faculty-specific form fields
   const [facFirstName, setFacFirstName] = useState('');
   const [facLastName, setFacLastName] = useState('');
@@ -112,6 +118,133 @@ export const AdminDashboard: React.FC = () => {
   const [fieldC, setFieldC] = useState('');
   const [fieldD, setFieldD] = useState('');
 
+  // Dynamic filter options extraction
+  const uniqueDepartments = useMemo(() => {
+    const deptSet = new Set<string>();
+    if (departmentDisplayName) deptSet.add(departmentDisplayName);
+    faculties.forEach((f) => {
+      if (f.department && f.department !== 'Unassigned') deptSet.add(f.department);
+    });
+    students.forEach((s) => {
+      if (s.department && s.department !== 'Unassigned') deptSet.add(s.department);
+    });
+    allDepartmentsList.forEach((d) => deptSet.add(d));
+    return Array.from(deptSet).sort();
+  }, [faculties, students, allDepartmentsList, departmentDisplayName]);
+
+  const uniqueBatches = useMemo(() => {
+    const batchSet = new Set<string>();
+    students.forEach((s) => {
+      if (s.batch) batchSet.add(s.batch);
+    });
+    if (batchSet.size === 0) {
+      batchSet.add('2023-27');
+      batchSet.add('2024-28');
+    }
+    return Array.from(batchSet).sort();
+  }, [students]);
+
+  const uniqueDesignations = useMemo(() => {
+    const desigSet = new Set<string>();
+    faculties.forEach((f) => {
+      if (f.designation) desigSet.add(f.designation);
+    });
+    if (desigSet.size === 0) {
+      desigSet.add('Professor');
+      desigSet.add('Associate Professor');
+      desigSet.add('Assistant Professor');
+      desigSet.add('Lecturer');
+    }
+    return Array.from(desigSet).sort();
+  }, [faculties]);
+
+  // Active filter status & reset function
+  const isFilterActive =
+    searchQuery.trim() !== '' ||
+    selectedDepartmentFilter !== 'ALL' ||
+    selectedBatchFilter !== 'ALL' ||
+    selectedDesignationFilter !== 'ALL';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedDepartmentFilter('ALL');
+    setSelectedBatchFilter('ALL');
+    setSelectedDesignationFilter('ALL');
+  };
+
+  // Filtered Faculty members list
+  const filteredFaculties = useMemo(() => {
+    return faculties.filter((f) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        f.name.toLowerCase().includes(q) ||
+        f.email.toLowerCase().includes(q) ||
+        f.department.toLowerCase().includes(q) ||
+        f.designation.toLowerCase().includes(q) ||
+        (f.phone && f.phone.includes(q));
+
+      const matchesDept =
+        selectedDepartmentFilter === 'ALL' ||
+        f.department.toLowerCase() === selectedDepartmentFilter.toLowerCase();
+
+      const matchesDesignation =
+        selectedDesignationFilter === 'ALL' ||
+        f.designation.toLowerCase() === selectedDesignationFilter.toLowerCase();
+
+      return matchesSearch && matchesDept && matchesDesignation;
+    });
+  }, [faculties, searchQuery, selectedDepartmentFilter, selectedDesignationFilter]);
+
+  // Filtered Students list
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        s.name.toLowerCase().includes(q) ||
+        s.rollNumber.toLowerCase().includes(q) ||
+        s.department.toLowerCase().includes(q) ||
+        s.batch.toLowerCase().includes(q);
+
+      const matchesDept =
+        selectedDepartmentFilter === 'ALL' ||
+        s.department.toLowerCase() === selectedDepartmentFilter.toLowerCase();
+
+      const matchesBatch =
+        selectedBatchFilter === 'ALL' ||
+        s.batch.toLowerCase() === selectedBatchFilter.toLowerCase();
+
+      return matchesSearch && matchesDept && matchesBatch;
+    });
+  }, [students, searchQuery, selectedDepartmentFilter, selectedBatchFilter]);
+
+  // Filtered Coordinators list
+  const filteredCoordinators = useMemo(() => {
+    return coordinators.filter((c) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        c.program.toLowerCase().includes(q);
+
+      const matchesDept =
+        selectedDepartmentFilter === 'ALL' ||
+        c.program.toLowerCase().includes(selectedDepartmentFilter.toLowerCase());
+
+      return matchesSearch && matchesDept;
+    });
+  }, [coordinators, searchQuery, selectedDepartmentFilter]);
+
+  // Filtered Course Rules
+  const filteredRules = useMemo(() => {
+    return rules.filter((r) => {
+      const q = searchQuery.toLowerCase().trim();
+      return !q || r.courseName.toLowerCase().includes(q) || r.code.toLowerCase().includes(q);
+    });
+  }, [rules, searchQuery]);
+
   // Fetch all dashboard data from backend
   const fetchData = async () => {
     setLoading(true);
@@ -123,6 +256,7 @@ export const AdminDashboard: React.FC = () => {
           if (deptRes.data?.success) {
             const depts = deptRes.data.data || [];
             setDepartmentsCount(depts.length);
+            setAllDepartmentsList(depts.map((d: any) => d.name || d.shortName).filter(Boolean));
             if (depts.length > 0) {
               setDepartmentsList(depts.slice(0, 3).map((d: any) => d.shortName || d.name).join(', ') + (depts.length > 3 ? '...' : ''));
             } else {
@@ -147,7 +281,7 @@ export const AdminDashboard: React.FC = () => {
             id: f.id,
             name: `${f.firstName} ${f.lastName || ''}`.trim(),
             email: f.user?.email || '',
-            department: (user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || departmentDisplayName || 'Assigned Department',
+            department: f.department?.name || f.department?.shortName || (user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || departmentDisplayName || 'Unassigned',
             designation: f.designation,
             gender: f.gender,
             dateOfBirth: f.dateOfBirth ? f.dateOfBirth.split('T')[0] : '',
@@ -165,13 +299,19 @@ export const AdminDashboard: React.FC = () => {
           const studs = studRes.data.data || [];
           setStudents(studs.map((s: any) => {
             const roll = s.rollNumber || '';
-            let department = (user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || departmentDisplayName || 'Assigned Department';
-            let batch = '2023-27';
-            if (roll.startsWith('MEB')) {
-              department = 'Mechanical Eng.';
-            } else if (roll.startsWith('MAB')) {
-              department = 'Mathematics';
+            let department = s.department?.name || s.department?.shortName || '';
+            if (!department) {
+              if (roll.startsWith('MEB')) {
+                department = 'Mechanical Eng.';
+              } else if (roll.startsWith('MAB')) {
+                department = 'Mathematics';
+              } else if (roll.startsWith('CS') || roll.startsWith('CSE')) {
+                department = 'Computer Science & Engineering';
+              } else {
+                department = (user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || departmentDisplayName || 'Unassigned';
+              }
             }
+            let batch = '2023-27';
             if (roll.match(/\d+/)) {
               const yearDigits = roll.match(/\d+/)[0].substring(0, 2);
               if (yearDigits) {
@@ -635,23 +775,102 @@ export const AdminDashboard: React.FC = () => {
       {/* --- Management Tabs: Faculty / Students / Coordinators / Policies (CRUD Lists) --- */}
       {activeTab !== 'overview' && (
         <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b mb-6">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-ink-muted-48" />
-              <Input
-                type="search"
-                placeholder={`Search ${activeTab}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-4 rounded-full border-[#e0e0e0]"
-              />
+          {/* Filtering and Search Toolbar */}
+          <div className="flex flex-col gap-3 pb-4 border-b mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+              {/* Search Bar */}
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-ink-muted-48" />
+                <Input
+                  type="search"
+                  placeholder={`Search ${activeTab === 'faculty' ? 'faculty by name, email, phone...' : activeTab === 'students' ? 'students by name, roll no...' : activeTab}...`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-4 rounded-full border-[#e0e0e0] text-xs h-9"
+                />
+              </div>
+
+              {/* Add Action Button */}
+              {activeTab !== 'policies' && (
+                <Button onClick={handleOpenCreate} className="bg-action-blue hover:opacity-95 text-white rounded-full text-xs h-9 px-4 whitespace-nowrap">
+                  <Plus className="h-4 w-4 mr-1.5" /> Add {activeTab === 'faculty' ? 'Faculty Member' : activeTab === 'students' ? 'Student' : activeTab.slice(0, -1)}
+                </Button>
+              )}
             </div>
-            
-            {activeTab !== 'policies' && (
-              <Button onClick={handleOpenCreate} className="bg-action-blue hover:opacity-95 text-white w-full sm:w-auto rounded-full">
-                <Plus className="h-4 w-4 mr-2" /> Add {activeTab.slice(0, -1)}
-              </Button>
-            )}
+
+            {/* Filter Controls Row */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-dashed border-[#e8e8e8]">
+              <div className="flex items-center text-xs text-ink-muted-80 font-bold mr-1 select-none">
+                <Filter className="h-3.5 w-3.5 mr-1.5 text-action-blue" />
+                Filter by:
+              </div>
+
+              {/* Department Filter */}
+              <select
+                value={selectedDepartmentFilter}
+                onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                className="h-8 rounded-full border border-[#e0e0e0] bg-white px-3 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-action-blue cursor-pointer"
+              >
+                <option value="ALL">All Departments</option>
+                {uniqueDepartments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+
+              {/* Designation / Type Filter for Faculty */}
+              {activeTab === 'faculty' && (
+                <select
+                  value={selectedDesignationFilter}
+                  onChange={(e) => setSelectedDesignationFilter(e.target.value)}
+                  className="h-8 rounded-full border border-[#e0e0e0] bg-white px-3 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-action-blue cursor-pointer"
+                >
+                  <option value="ALL">All Designations / Types</option>
+                  {uniqueDesignations.map((desig) => (
+                    <option key={desig} value={desig}>
+                      {desig}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Batch Filter for Students */}
+              {activeTab === 'students' && (
+                <select
+                  value={selectedBatchFilter}
+                  onChange={(e) => setSelectedBatchFilter(e.target.value)}
+                  className="h-8 rounded-full border border-[#e0e0e0] bg-white px-3 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-action-blue cursor-pointer"
+                >
+                  <option value="ALL">All Batches</option>
+                  {uniqueBatches.map((batch) => (
+                    <option key={batch} value={batch}>
+                      Batch {batch}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Reset Filters */}
+              {isFilterActive && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="h-8 px-2.5 rounded-full text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" /> Clear Filters
+                </Button>
+              )}
+
+              {/* Result Count Badge */}
+              <div className="ml-auto text-[11px] text-ink-muted-48 font-medium">
+                {activeTab === 'faculty' && `Showing ${filteredFaculties.length} of ${faculties.length} faculty`}
+                {activeTab === 'students' && `Showing ${filteredStudents.length} of ${students.length} students`}
+                {activeTab === 'coordinators' && `Showing ${filteredCoordinators.length} of ${coordinators.length} coordinators`}
+                {activeTab === 'policies' && `Showing ${filteredRules.length} of ${rules.length} rules`}
+              </div>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -663,24 +882,26 @@ export const AdminDashboard: React.FC = () => {
             ) : (
               <>
                 {activeTab === 'faculty' && (
-                  faculties.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                    <div className="text-center py-12 text-ink-muted-48 text-xs">No registered teaching faculty found.</div>
+                  filteredFaculties.length === 0 ? (
+                    <div className="text-center py-12 text-ink-muted-48 text-xs">No registered teaching faculty found matching active filters.</div>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="text-xs font-bold text-ink-muted-80">Name</TableHead>
                           <TableHead className="text-xs font-bold text-ink-muted-80">Email</TableHead>
+                          <TableHead className="text-xs font-bold text-ink-muted-80">Department</TableHead>
                           <TableHead className="text-xs font-bold text-ink-muted-80">Phone</TableHead>
                           <TableHead className="text-xs font-bold text-ink-muted-80">Designation</TableHead>
                           <TableHead className="w-[100px] text-right text-xs font-bold text-ink-muted-80">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {faculties.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map((f) => (
+                        {filteredFaculties.map((f) => (
                           <TableRow key={f.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
                             <TableCell className="font-semibold text-xs text-ink">{f.name}</TableCell>
                             <TableCell className="text-xs text-ink-muted-80">{f.email}</TableCell>
+                            <TableCell className="text-xs text-ink-muted-80">{f.department}</TableCell>
                             <TableCell className="text-xs text-ink-muted-80">{f.phone || 'N/A'}</TableCell>
                             <TableCell className="text-xs text-ink-muted-80">{f.designation}</TableCell>
                             <TableCell className="text-right">
@@ -697,8 +918,8 @@ export const AdminDashboard: React.FC = () => {
                 )}
 
                 {activeTab === 'students' && (
-                  students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                    <div className="text-center py-12 text-ink-muted-48 text-xs">No registered students found.</div>
+                  filteredStudents.length === 0 ? (
+                    <div className="text-center py-12 text-ink-muted-48 text-xs">No registered students found matching active filters.</div>
                   ) : (
                     <Table>
                       <TableHeader>
@@ -711,7 +932,7 @@ export const AdminDashboard: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map((s) => (
+                        {filteredStudents.map((s) => (
                           <TableRow key={s.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
                             <TableCell className="font-semibold text-xs text-ink">{s.name}</TableCell>
                             <TableCell className="text-xs font-mono">{s.rollNumber}</TableCell>
@@ -731,8 +952,8 @@ export const AdminDashboard: React.FC = () => {
                 )}
 
                 {activeTab === 'coordinators' && (
-                  coordinators.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                    <div className="text-center py-12 text-ink-muted-48 text-xs">No registered academic coordinators found.</div>
+                  filteredCoordinators.length === 0 ? (
+                    <div className="text-center py-12 text-ink-muted-48 text-xs">No registered academic coordinators found matching active filters.</div>
                   ) : (
                     <Table>
                       <TableHeader>
@@ -744,7 +965,7 @@ export const AdminDashboard: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {coordinators.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).map((c) => (
+                        {filteredCoordinators.map((c) => (
                           <TableRow key={c.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
                             <TableCell className="font-semibold text-xs text-ink">{c.name}</TableCell>
                             <TableCell className="text-xs text-ink-muted-80">{c.email}</TableCell>
@@ -763,8 +984,8 @@ export const AdminDashboard: React.FC = () => {
                 )}
 
                 {activeTab === 'policies' && (
-                  rules.filter(r => r.courseName.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                    <div className="text-center py-12 text-ink-muted-48 text-xs">No course attendance rules or policies found.</div>
+                  filteredRules.length === 0 ? (
+                    <div className="text-center py-12 text-ink-muted-48 text-xs">No course attendance rules or policies found matching active filters.</div>
                   ) : (
                     <div>
                       <div className="mb-3 px-1 flex items-center justify-between">
@@ -783,7 +1004,7 @@ export const AdminDashboard: React.FC = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {rules.filter(r => r.courseName.toLowerCase().includes(searchQuery.toLowerCase())).map((r) => (
+                          {filteredRules.map((r) => (
                             <TableRow key={r.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
                               <TableCell className="font-semibold text-xs text-ink">{r.courseName}</TableCell>
                               <TableCell className="text-xs font-mono">{r.code}</TableCell>

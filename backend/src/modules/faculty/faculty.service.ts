@@ -78,6 +78,17 @@ export class FacultyService {
             designation: dto.designation,
             phone: dto.phone,
             photoKey: dto.photoKey,
+            departmentId: dto.departmentId,
+          },
+          include: {
+            department: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                shortName: true,
+              },
+            },
           },
         });
 
@@ -126,11 +137,12 @@ export class FacultyService {
       designation: dto.designation,
       phone: dto.phone,
       photoKey: dto.photoKey,
+      departmentId: dto.departmentId,
     });
   }
 
-  async getAllFaculty(includeInactive: boolean = false) {
-    return this.facultyRepository.findAll(includeInactive);
+  async getAllFaculty(params: { includeInactive?: boolean; departmentId?: string; search?: string } | boolean = false) {
+    return this.facultyRepository.findAll(params);
   }
 
   async getFacultyById(id: string) {

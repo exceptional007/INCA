@@ -15,6 +15,7 @@ import {
   Users,
   GraduationCap,
   Filter,
+  Search,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { Switch } from '@/components/ui/switch';
@@ -101,6 +102,7 @@ const facultySchema = z.object({
   employeeCode: z.string().min(2, 'Employee code required'),
   designation: z.string().min(2, 'Designation required'),
   departmentId: z.string().optional(),
+  phone: z.string().optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).default('MALE'),
   password: z.string().optional(),
 });
@@ -274,6 +276,30 @@ export const AcademicPage: React.FC = () => {
   const [subjectSemFilter, setSubjectSemFilter] = useState<string>('ALL');
   const [subjectTypeFilter, setSubjectTypeFilter] = useState<string>('ALL');
 
+  // Faculty search & department filter states
+  const [facultySearch, setFacultySearch] = useState<string>('');
+  const [debouncedFacultySearch, setDebouncedFacultySearch] = useState<string>('');
+  const [facultyDeptFilter, setFacultyDeptFilter] = useState<string>('ALL');
+
+  // Student search & department filter states
+  const [studentSearch, setStudentSearch] = useState<string>('');
+  const [debouncedStudentSearch, setDebouncedStudentSearch] = useState<string>('');
+  const [studentDeptFilter, setStudentDeptFilter] = useState<string>('ALL');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFacultySearch(facultySearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [facultySearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedStudentSearch(studentSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [studentSearch]);
+
   const allowedSemesters = useMemo(() => {
     if (subjectYearFilter === 'ALL') {
       return [1, 2, 3, 4, 5, 6, 7, 8];
@@ -366,8 +392,22 @@ export const AcademicPage: React.FC = () => {
       if (currentTab === 'programs') endpoint = `/academic/departments/programs${queryParam}`;
       if (currentTab === 'subjects') endpoint = `/academic/departments/subjects${queryParam}`;
       if (currentTab === 'rooms') endpoint = `/academic/departments/rooms`;
-      if (currentTab === 'faculty') endpoint = `/faculty${queryParam}`;
-      if (currentTab === 'students') endpoint = `/students${queryParam}`;
+      if (currentTab === 'faculty') {
+        const params = new URLSearchParams();
+        if (showInactive) params.append('includeInactive', 'true');
+        if (facultyDeptFilter !== 'ALL') params.append('departmentId', facultyDeptFilter);
+        if (debouncedFacultySearch.trim()) params.append('search', debouncedFacultySearch.trim());
+        const q = params.toString();
+        endpoint = `/faculty${q ? '?' + q : ''}`;
+      }
+      if (currentTab === 'students') {
+        const params = new URLSearchParams();
+        if (showInactive) params.append('includeInactive', 'true');
+        if (studentDeptFilter !== 'ALL') params.append('departmentId', studentDeptFilter);
+        if (debouncedStudentSearch.trim()) params.append('search', debouncedStudentSearch.trim());
+        const q = params.toString();
+        endpoint = `/students${q ? '?' + q : ''}`;
+      }
 
       const response = await api.get(endpoint);
       if (fetchId === activeFetchIdRef.current) {
@@ -388,7 +428,14 @@ export const AcademicPage: React.FC = () => {
 
   useEffect(() => {
     fetchData(activeTab);
-  }, [activeTab, showInactive]);
+  }, [
+    activeTab,
+    showInactive,
+    facultyDeptFilter,
+    debouncedFacultySearch,
+    studentDeptFilter,
+    debouncedStudentSearch,
+  ]);
 
   const handleCreateDepartment = async (values: DepartmentValues) => {
     try {
@@ -672,6 +719,12 @@ export const AcademicPage: React.FC = () => {
       if (values.lastName && values.lastName.trim()) {
         payload.lastName = values.lastName.trim();
       }
+      if (values.departmentId) {
+        payload.departmentId = values.departmentId;
+      }
+      if (values.phone && values.phone.trim()) {
+        payload.phone = values.phone.trim();
+      }
       await api.post('/faculty/accounts', payload);
       toast.success('Faculty account created successfully.');
       setCreateFacultyDialogOpen(false);
@@ -694,6 +747,12 @@ export const AcademicPage: React.FC = () => {
       };
       if (values.lastName && values.lastName.trim()) {
         payload.lastName = values.lastName.trim();
+      }
+      if (values.departmentId) {
+        payload.departmentId = values.departmentId;
+      }
+      if (values.phone && values.phone.trim()) {
+        payload.phone = values.phone.trim();
       }
       await api.patch(`/faculty/${editingFaculty.id}`, payload);
       toast.success('Faculty updated successfully.');
@@ -758,6 +817,7 @@ export const AcademicPage: React.FC = () => {
       if (values.emergencyContactName?.trim()) payload.emergencyContactName = values.emergencyContactName.trim();
       if (values.emergencyContactPhone?.trim()) payload.emergencyContactPhone = values.emergencyContactPhone.trim();
       if (values.address?.trim()) payload.address = values.address.trim();
+      if (values.departmentId) payload.departmentId = values.departmentId;
 
       await api.post('/students/accounts', payload);
       toast.success('Student account created successfully.');
@@ -785,6 +845,7 @@ export const AcademicPage: React.FC = () => {
       if (values.emergencyContactName !== undefined) payload.emergencyContactName = values.emergencyContactName.trim();
       if (values.emergencyContactPhone !== undefined) payload.emergencyContactPhone = values.emergencyContactPhone.trim();
       if (values.address !== undefined) payload.address = values.address.trim();
+      if (values.departmentId) payload.departmentId = values.departmentId;
 
       await api.patch(`/students/${editingStudent.id}`, payload);
       toast.success('Student updated successfully.');
@@ -1657,6 +1718,98 @@ export const AcademicPage: React.FC = () => {
               Reset Filters
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Faculty Tab: Search & Department Filter */}
+      {activeTab === 'faculty' && (
+        <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-muted/40 rounded-lg border border-border">
+          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+            {/* Search Input */}
+            <div className="relative min-w-[200px] max-w-xs flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search name, employee code..."
+                value={facultySearch}
+                onChange={(e) => setFacultySearch(e.target.value)}
+                className="pl-9 text-xs h-9 bg-background"
+              />
+            </div>
+
+            {/* Department Filter */}
+            {!isAdmin ? (
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-xs font-medium text-foreground whitespace-nowrap">Department:</span>
+                <select
+                  value={facultyDeptFilter}
+                  onChange={(e) => setFacultyDeptFilter(e.target.value)}
+                  className="text-xs bg-background border border-input rounded-md px-3 py-1.5 font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value="ALL">All Departments ({departments.length})</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name} ({dept.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
+                <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-xs font-medium text-foreground whitespace-nowrap">Assigned Department:</span>
+                <Badge variant="secondary" className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-0.5">
+                  {(user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || 'Assigned Department'}
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Students Tab: Search & Department Filter */}
+      {activeTab === 'students' && (
+        <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-muted/40 rounded-lg border border-border">
+          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+            {/* Search Input */}
+            <div className="relative min-w-[200px] max-w-xs flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search name, roll no, college ID..."
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                className="pl-9 text-xs h-9 bg-background"
+              />
+            </div>
+
+            {/* Department Filter */}
+            {!isAdmin ? (
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-xs font-medium text-foreground whitespace-nowrap">Department:</span>
+                <select
+                  value={studentDeptFilter}
+                  onChange={(e) => setStudentDeptFilter(e.target.value)}
+                  className="text-xs bg-background border border-input rounded-md px-3 py-1.5 font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value="ALL">All Departments ({departments.length})</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name} ({dept.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
+                <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-xs font-medium text-foreground whitespace-nowrap">Assigned Department:</span>
+                <Badge variant="secondary" className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-0.5">
+                  {(user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || 'Assigned Department'}
+                </Badge>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

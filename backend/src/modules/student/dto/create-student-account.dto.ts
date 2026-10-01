@@ -8,7 +8,8 @@ import {
   IsString,
   MaxLength,
   MinLength,
-  Matches
+  Matches,
+  IsUUID,
 } from 'class-validator';
 import { Gender, BloodGroup } from '@prisma/client';
 
@@ -130,4 +131,20 @@ export class CreateStudentAccountDto {
   @IsString()
   @MaxLength(500)
   address?: string;
+
+  @ApiPropertyOptional({
+    example: 'dept-uuid-here',
+    description: 'Department ID associated with the student',
+  })
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
+
+  @ApiPropertyOptional({
+    example: 'section-uuid-here',
+    description: 'Section ID associated with the student',
+  })
+  @IsOptional()
+  @IsUUID()
+  sectionId?: string;
 }

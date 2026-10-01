@@ -58,12 +58,20 @@ export class StudentController {
   @ApiOperation({
     summary: 'Get all students',
   })
-  async getAllStudents(@Query('includeInactive') includeInactive?: string) {
+  async getAllStudents(
+    @Query('includeInactive') includeInactive?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('search') search?: string,
+  ) {
     const shouldInclude = includeInactive === 'true';
     return {
       success: true,
       message: 'Students fetched successfully.',
-      data: await this.studentService.getAllStudents(shouldInclude),
+      data: await this.studentService.getAllStudents({
+        includeInactive: shouldInclude,
+        departmentId,
+        search,
+      }),
     };
   }
 

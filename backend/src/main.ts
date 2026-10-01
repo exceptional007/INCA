@@ -11,7 +11,7 @@ for (const className of ['Path2D', 'DOMMatrix', 'ImageData']) {
   });
 }
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -24,7 +24,9 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: ['health'],
+  });
 
   app.enableVersioning({
     type: VersioningType.URI,
@@ -64,4 +66,29 @@ async function bootstrap() {
 
   console.log(`🚀 Server running at http://localhost:${process.env.PORT || 3000}`);
 }
-bootstrap();
+
+bootstrap().catch((err: any) => {
+  const logger = new Logger('Bootstrap');
+  const errorCode = err?.errorCode || err?.code || err?.name || 'UNKNOWN';
+  const errorMessage = err?.message?.split('\n')[0] || err?.message || String(err);
+
+  const isDbError =
+    String(errorCode).startsWith('P1') ||
+    errorCode === 'PrismaClientInitializationError' ||
+    errorMessage.toLowerCase().includes('database') ||
+    errorMessage.toLowerCase().includes('can\'t reach');
+
+  if (isDbError) {
+    logger.error(
+      `❌ Fatal startup failure: Database unreachable at startup [${errorCode}]: ${errorMessage}. ` +
+        `Please check your DATABASE_URL, network connectivity, and Neon database status.`,
+    );
+  } else {
+    logger.error(
+      `❌ Fatal startup failure [${errorCode}]: ${errorMessage}.`,
+      err instanceof Error ? err.stack : undefined,
+    );
+  }
+  process.exit(1);
+});
+
