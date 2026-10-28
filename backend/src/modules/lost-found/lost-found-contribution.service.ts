@@ -13,7 +13,7 @@ export interface UserBadgeInfo {
 export class LostFoundContributionService {
   private readonly logger = new Logger(LostFoundContributionService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Determine user badge based on total points.
@@ -57,14 +57,14 @@ export class LostFoundContributionService {
       // Find current total before adding
       const existing = reportId
         ? await this.prisma.lostFoundContribution.findUnique({
-            where: {
-              userId_reportId_actionType: {
-                userId,
-                reportId,
-                actionType,
-              },
+          where: {
+            userId_reportId_actionType: {
+              userId,
+              reportId,
+              actionType,
             },
-          })
+          },
+        })
         : null;
 
       if (existing) {
@@ -159,7 +159,7 @@ export class LostFoundContributionService {
     const userMap = new Map(users.map((u) => [u.id, u]));
 
     return topContributors.map((entry, index) => {
-      const user = userMap.get(entry.userId);
+      const user = userMap.get(entry.userId) as any;
       const points = entry._sum.points || 0;
       const badgeInfo = this.getBadgeForPoints(points);
 
@@ -170,9 +170,9 @@ export class LostFoundContributionService {
         email: user?.email,
         role: user?.role?.code || 'STUDENT',
         department:
-          user?.student?.department?.code ||
+          user?.student?.program?.code ||
           user?.faculty?.department?.code ||
-          user?.student?.department?.name ||
+          user?.student?.program?.name ||
           'Campus Community',
         points,
         badge: badgeInfo.badge,

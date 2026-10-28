@@ -12,6 +12,9 @@ import { UpdateListingDto } from './dto/update-listing.dto';
 import { QueryListingsDto } from './dto/query-listings.dto';
 import { ListingStatus, ListingVisibility, Prisma } from '@prisma/client';
 
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+
 @Injectable()
 export class MarketplaceService {
   private readonly logger = new Logger(MarketplaceService.name);
@@ -29,6 +32,34 @@ export class MarketplaceService {
   private isAdmin(userRole: string): boolean {
     const role = (userRole || '').toUpperCase();
     return ['ADMIN', 'SUPER_ADMIN'].includes(role);
+  }
+
+  /**
+   * Resolve a browser-accessible delivery URL for a marketplace image key.
+   */
+  resolveImageUrl(storageKey: string, existingUrl?: string | null): string {
+    if (existingUrl && (existingUrl.startsWith('http://') || existingUrl.startsWith('https://'))) {
+      return existingUrl;
+    }
+    const safeKey = storageKey || existingUrl || '';
+    return `/api/v1/marketplace/images/stream?key=${encodeURIComponent(safeKey)}`;
+  }
+
+  /**
+   * Format listing images with resolved delivery URLs while preserving storage keys.
+   */
+  formatListingImages(images: any[]) {
+    if (!images || !Array.isArray(images)) return [];
+    return images
+      .filter((img) => Boolean(img && (img.storageKey || img.url)))
+      .map((img) => ({
+        ...img,
+        url: this.resolveImageUrl(img.storageKey, img.url),
+      }));
+  }
+
+  async streamImage(key: string) {
+    return this.r2Storage.getObjectStream(key);
   }
 
   async createListing(userId: string, userRole: string, dto: CreateListingDto) {
@@ -78,7 +109,10 @@ export class MarketplaceService {
       },
     });
 
-    return listing;
+    return {
+      ...listing,
+      images: this.formatListingImages(listing.images),
+    };
   }
 
   async uploadListingImages(
@@ -100,38 +134,65 @@ export class MarketplaceService {
       throw new ForbiddenException('Not authorized to modify this listing');
     }
 
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No image files provided for upload');
+    }
+
     if (listing.images.length + files.length > 6) {
       throw new BadRequestException('A maximum of 6 images is allowed per listing');
     }
 
+    // Validate MIME types and file sizes before uploading to storage
+    for (const file of files) {
+      const mime = (file.mimetype || '').toLowerCase();
+      if (!ALLOWED_MIME_TYPES.includes(mime) && !mime.startsWith('image/')) {
+        throw new BadRequestException(
+          `Invalid image format for file "${file.originalname}". Only JPG, PNG, WEBP, and GIF are supported.`,
+        );
+      }
+      const fileSize = (file as any).size || (file.buffer ? file.buffer.length : 0);
+      if (fileSize > MAX_IMAGE_SIZE) {
+        throw new BadRequestException(
+          `Image "${file.originalname}" exceeds the 10MB file size limit.`,
+        );
+      }
+    }
+
     const createdImages: any[] = [];
+    const uploadedKeys: string[] = [];
     const currentCount = listing.images.length;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      let fileKey = '';
       try {
-        const fileKey = await this.r2Storage.uploadMarketplaceImage(
+        fileKey = await this.r2Storage.uploadMarketplaceImage(
           file.buffer,
           file.originalname,
           file.mimetype,
         );
+        uploadedKeys.push(fileKey);
 
         const img = await this.prisma.marketplaceImage.create({
           data: {
             listingId,
             storageKey: fileKey,
-            url: fileKey,
+            url: this.resolveImageUrl(fileKey),
             sortOrder: currentCount + i,
           },
         });
         createdImages.push(img);
       } catch (err: any) {
         this.logger.error(`Error uploading image for listing ${listingId}: ${err?.message}`);
+        // Clean up any uploaded objects from this batch to prevent orphans
+        for (const k of uploadedKeys) {
+          await this.r2Storage.deleteObject(k).catch(() => {});
+        }
         throw new BadRequestException(`Image upload failed: ${err?.message}`);
       }
     }
 
-    return createdImages;
+    return this.formatListingImages(createdImages);
   }
 
   async deleteListingImage(userId: string, userRole: string, listingId: string, imageId: string) {
@@ -150,33 +211,53 @@ export class MarketplaceService {
 
     const image = listing.images.find((img) => img.id === imageId);
     if (!image) {
-      throw new NotFoundException('Image not found');
+      throw new NotFoundException('Image not found on this listing');
     }
 
-    try {
-      await this.r2Storage.deleteObject(image.storageKey);
-    } catch (e) {
-      this.logger.warn(`Could not delete R2 object: ${image.storageKey}`);
+    // Delete from R2 storage
+    if (image.storageKey) {
+      await this.r2Storage.deleteObject(image.storageKey).catch((err) => {
+        this.logger.warn(`Failed to delete R2 object ${image.storageKey}: ${err?.message}`);
+      });
     }
 
-    await this.prisma.marketplaceImage.delete({ where: { id: imageId } });
+    await this.prisma.marketplaceImage.delete({
+      where: { id: imageId },
+    });
 
-    return { success: true };
+    return { success: true, message: 'Image deleted successfully' };
   }
 
+  /**
+   * Optimized listing retrieval with batch seller reputation aggregation (resolving N+1 query bottleneck).
+   */
   async getListings(userId: string, userRole: string, query: QueryListingsDto) {
-    const isFaculty = this.isFacultyOrAdmin(userRole);
     const page = Math.max(1, Number(query.page) || 1);
-    const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
+    const limit = Math.min(50, Math.max(1, Number(query.limit) || 12));
     const skip = (page - 1) * limit;
 
     const where: Prisma.MarketplaceListingWhereInput = {
-      status: query.status ? query.status : { in: [ListingStatus.ACTIVE, ListingStatus.RESERVED] },
+      status: { in: [ListingStatus.ACTIVE, ListingStatus.RESERVED] },
     };
 
-    // Audience Visibility restriction
-    if (!isFaculty) {
+    // Role-based visibility
+    if (!this.isFacultyOrAdmin(userRole)) {
       where.visibility = ListingVisibility.ALL;
+    }
+
+    // Status filter
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    // Search filter
+    if (query.search) {
+      const term = query.search.trim();
+      where.OR = [
+        { title: { contains: term, mode: 'insensitive' } },
+        { description: { contains: term, mode: 'insensitive' } },
+        { brand: { contains: term, mode: 'insensitive' } },
+      ];
     }
 
     // Category filter
@@ -198,16 +279,6 @@ export class MarketplaceService {
       if (query.maxPrice !== undefined) {
         where.price.lte = Number(query.maxPrice);
       }
-    }
-
-    // Keyword Search
-    if (query.search && query.search.trim()) {
-      const q = query.search.trim();
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
-        { preferredLocation: { contains: q, mode: 'insensitive' } },
-      ];
     }
 
     // Order By
@@ -261,15 +332,54 @@ export class MarketplaceService {
       }),
     ]);
 
-    const formattedItems = await Promise.all(
-      items.map(async (item) => {
-        const reputation = await this.getSellerReputationSummary(item.sellerId);
-        return {
-          ...item,
-          sellerReputation: reputation,
-        };
-      }),
-    );
+    // Batch aggregate seller reputation to avoid N+1 query loop
+    const sellerIds = Array.from(new Set(items.map((i) => i.sellerId)));
+    const reputationMap = new Map<string, { averageRating: number; totalReviews: number; completedSales: number }>();
+
+    for (const sId of sellerIds) {
+      reputationMap.set(sId, { averageRating: 0, totalReviews: 0, completedSales: 0 });
+    }
+
+    if (sellerIds.length > 0) {
+      const [reviewAggregates, transactionAggregates] = await Promise.all([
+        this.prisma.marketplaceReview.groupBy({
+          by: ['sellerId'],
+          where: { sellerId: { in: sellerIds } },
+          _avg: { rating: true },
+          _count: { rating: true },
+        }),
+        this.prisma.marketplaceTransaction.groupBy({
+          by: ['sellerId'],
+          where: { sellerId: { in: sellerIds }, status: 'COMPLETED' },
+          _count: { id: true },
+        }),
+      ]);
+
+      for (const rev of reviewAggregates) {
+        const rep = reputationMap.get(rev.sellerId);
+        if (rep) {
+          rep.averageRating = rev._avg.rating ? Number(rev._avg.rating.toFixed(1)) : 0;
+          rep.totalReviews = rev._count.rating || 0;
+        }
+      }
+
+      for (const tx of transactionAggregates) {
+        const rep = reputationMap.get(tx.sellerId);
+        if (rep) {
+          rep.completedSales = tx._count.id || 0;
+        }
+      }
+    }
+
+    const formattedItems = items.map((item) => ({
+      ...item,
+      images: this.formatListingImages(item.images),
+      sellerReputation: reputationMap.get(item.sellerId) || {
+        averageRating: 0,
+        totalReviews: 0,
+        completedSales: 0,
+      },
+    }));
 
     return {
       items: formattedItems,
@@ -375,6 +485,7 @@ export class MarketplaceService {
 
     return {
       ...listing,
+      images: this.formatListingImages(listing.images),
       sellerReputation: reputation,
       sellerOffers,
       activeTransaction,
@@ -390,8 +501,7 @@ export class MarketplaceService {
           orderBy: { sortOrder: 'asc' },
         },
         offers: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
+          where: { status: 'PENDING' },
           include: {
             buyer: {
               select: {
@@ -416,7 +526,10 @@ export class MarketplaceService {
       },
     });
 
-    return listings;
+    return listings.map((l) => ({
+      ...l,
+      images: this.formatListingImages(l.images),
+    }));
   }
 
   async updateListing(
@@ -434,32 +547,42 @@ export class MarketplaceService {
     }
 
     if (listing.sellerId !== userId && !this.isAdmin(userRole)) {
-      throw new ForbiddenException('Not authorized to edit this listing');
-    }
-
-    let visibility = dto.visibility;
-    if (visibility === ListingVisibility.FACULTY_ONLY && !this.isFacultyOrAdmin(userRole)) {
-      visibility = ListingVisibility.ALL;
+      throw new ForbiddenException('Not authorized to update this listing');
     }
 
     const updated = await this.prisma.marketplaceListing.update({
       where: { id: listingId },
       data: {
-        ...(dto.title && { title: dto.title.trim() }),
-        ...(dto.description && { description: dto.description.trim() }),
-        ...(dto.price !== undefined && { price: dto.price }),
-        ...(dto.category && { category: dto.category }),
-        ...(dto.condition && { condition: dto.condition }),
-        ...(visibility && { visibility }),
-        ...(dto.pickupLocation && { preferredLocation: dto.pickupLocation.trim() }),
-        ...(dto.status && { status: dto.status }),
+        ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+        ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
+        ...(dto.price !== undefined ? { price: dto.price } : {}),
+        ...(dto.category !== undefined ? { category: dto.category } : {}),
+        ...(dto.condition !== undefined ? { condition: dto.condition } : {}),
+        ...(dto.visibility !== undefined ? { visibility: dto.visibility } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.brand !== undefined ? { brand: dto.brand?.trim() || null } : {}),
+        ...(dto.model !== undefined ? { model: dto.model?.trim() || null } : {}),
+        ...(dto.pickupLocation !== undefined
+          ? { preferredLocation: dto.pickupLocation?.trim() || null }
+          : {}),
       },
       include: {
-        images: true,
+        images: { orderBy: { sortOrder: 'asc' } },
+        seller: {
+          select: {
+            id: true,
+            email: true,
+            student: { select: { firstName: true, lastName: true } },
+            faculty: { select: { firstName: true, lastName: true } },
+          },
+        },
       },
     });
 
-    return updated;
+    return {
+      ...updated,
+      images: this.formatListingImages(updated.images),
+    };
   }
 
   async markAsSold(userId: string, userRole: string, listingId: string) {
@@ -472,7 +595,7 @@ export class MarketplaceService {
     }
 
     if (listing.sellerId !== userId && !this.isAdmin(userRole)) {
-      throw new ForbiddenException('Not authorized to change this listing');
+      throw new ForbiddenException('Not authorized to update this listing');
     }
 
     return this.prisma.marketplaceListing.update({
@@ -498,30 +621,49 @@ export class MarketplaceService {
       throw new ForbiddenException('Not authorized to delete this listing');
     }
 
-    // Soft delete to preserve audit and transaction history
-    await this.prisma.marketplaceListing.update({
-      where: { id: listingId },
-      data: { status: ListingStatus.ARCHIVED },
+    // Delete image objects from R2 storage
+    if (listing.images && listing.images.length > 0) {
+      for (const img of listing.images) {
+        if (img.storageKey) {
+          await this.r2Storage.deleteObject(img.storageKey).catch(() => {});
+        }
+      }
+    }
+
+    // Soft archive or hard delete depending on whether transactions exist
+    const hasTransactions = await this.prisma.marketplaceTransaction.count({
+      where: { listingId },
     });
 
-    return { success: true, message: 'Listing archived successfully' };
+    if (hasTransactions > 0) {
+      await this.prisma.marketplaceListing.update({
+        where: { id: listingId },
+        data: { status: ListingStatus.ARCHIVED },
+      });
+      return { success: true, message: 'Listing archived (transactions associated)' };
+    }
+
+    await this.prisma.marketplaceListing.delete({
+      where: { id: listingId },
+    });
+
+    return { success: true, message: 'Listing deleted successfully' };
   }
 
   async getSellerReputationSummary(sellerId: string) {
-    const reviews = await this.prisma.marketplaceReview.findMany({
-      where: { sellerId },
-      select: { rating: true },
-    });
+    const [reviewAgg, completedSales] = await Promise.all([
+      this.prisma.marketplaceReview.aggregate({
+        where: { sellerId },
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+      this.prisma.marketplaceTransaction.count({
+        where: { sellerId, status: 'COMPLETED' },
+      }),
+    ]);
 
-    const totalReviews = reviews.length;
-    const averageRating =
-      totalReviews > 0
-        ? Number((reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews).toFixed(1))
-        : 0;
-
-    const completedSales = await this.prisma.marketplaceTransaction.count({
-      where: { sellerId, status: 'COMPLETED' },
-    });
+    const totalReviews = reviewAgg._count.rating || 0;
+    const averageRating = reviewAgg._avg.rating ? Number(reviewAgg._avg.rating.toFixed(1)) : 0;
 
     return {
       averageRating,

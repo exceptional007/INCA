@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import type { MarketplaceListing } from '@/types/marketplace';
+import { getMarketplaceImageUrl } from '@/services/marketplace';
 import {
   MapPin,
   Star,
@@ -80,18 +81,29 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
           {/* Images Section */}
           <div className="bg-muted/40 p-6 flex flex-col justify-between border-b md:border-b-0 md:border-r">
             <div className="aspect-square rounded-xl overflow-hidden bg-background border flex items-center justify-center relative shadow-xs">
-              {images.length > 0 ? (
+              {images.length > 0 && images[selectedImgIndex] ? (
                 <img
-                  src={images[selectedImgIndex]?.url || images[selectedImgIndex]?.storageKey}
+                  src={getMarketplaceImageUrl(
+                    images[selectedImgIndex].url || images[selectedImgIndex].storageKey,
+                  )}
                   alt={listing.title}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                    const fallback = e.currentTarget.parentElement?.querySelector('.detail-img-fallback');
+                    if (fallback) (fallback as HTMLElement).classList.remove('hidden');
+                  }}
                   className="w-full h-full object-contain"
                 />
-              ) : (
-                <div className="flex flex-col items-center text-muted-foreground">
-                  <ShoppingBag className="size-12 stroke-[1.5]" />
-                  <span className="text-xs mt-2">No photo provided</span>
-                </div>
-              )}
+              ) : null}
+
+              <div
+                className={`detail-img-fallback flex flex-col items-center text-muted-foreground ${
+                  images.length > 0 ? 'hidden' : 'flex'
+                }`}
+              >
+                <ShoppingBag className="size-12 stroke-[1.5]" />
+                <span className="text-xs mt-2">No photo available</span>
+              </div>
 
               {listing.status === 'SOLD' && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -105,23 +117,26 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             {/* Thumbnail Row */}
             {images.length > 1 && (
               <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
-                {images.map((img, idx) => (
-                  <button
-                    key={img.id}
-                    onClick={() => setSelectedImgIndex(idx)}
-                    className={`relative size-14 shrink-0 rounded-lg overflow-hidden border-2 transition ${
-                      selectedImgIndex === idx
-                        ? 'border-primary ring-2 ring-primary/20'
-                        : 'border-transparent opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    <img
-                      src={img.url || img.storageKey}
-                      alt="Thumbnail"
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
+                {images.map((img, idx) => {
+                  const thumbSrc = getMarketplaceImageUrl(img.url || img.storageKey);
+                  return (
+                    <button
+                      key={img.id || idx}
+                      onClick={() => setSelectedImgIndex(idx)}
+                      className={`relative size-14 shrink-0 rounded-lg overflow-hidden border-2 transition ${
+                        selectedImgIndex === idx
+                          ? 'border-primary ring-2 ring-primary/20'
+                          : 'border-transparent opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img
+                        src={thumbSrc}
+                        alt="Thumbnail"
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  );
+                })}
               </div>
             )}
 

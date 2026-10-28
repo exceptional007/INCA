@@ -152,29 +152,47 @@ export class MarketplaceChatService {
       },
     });
 
-    const result = await Promise.all(
-      conversations.map(async (c: any) => {
-        const unreadCount = await this.prisma.marketplaceMessage.count({
-          where: {
-            conversationId: c.id,
-            senderId: { not: userId },
-            isRead: false,
-          },
-        });
+    const conversationIds = conversations.map((c) => c.id);
+    const unreadMap = new Map<string, number>();
 
-        const isUserBuyer = c.buyerId === userId;
-        const otherParty = isUserBuyer ? c.seller : c.buyer;
+    if (conversationIds.length > 0) {
+      const unreadGroups = await this.prisma.marketplaceMessage.groupBy({
+        by: ['conversationId'],
+        where: {
+          conversationId: { in: conversationIds },
+          senderId: { not: userId },
+          isRead: false,
+        },
+        _count: { id: true },
+      });
 
-        return {
-          ...c,
-          unreadCount,
-          otherParty,
-          lastMessage: c.messages?.[0] || null,
-        };
-      }),
-    );
+      for (const ug of unreadGroups) {
+        unreadMap.set(ug.conversationId, ug._count.id || 0);
+      }
+    }
+
+    const result = conversations.map((c: any) => {
+      const isUserBuyer = c.buyerId === userId;
+      const otherParty = isUserBuyer ? c.seller : c.buyer;
+
+      return {
+        ...c,
+        unreadCount: unreadMap.get(c.id) || 0,
+        otherParty,
+        lastMessage: c.messages?.[0] || null,
+      };
+    });
 
     return result;
+  }
+
+  async isUserConversationParticipant(userId: string, conversationId: string): Promise<boolean> {
+    const conv = await this.prisma.marketplaceConversation.findUnique({
+      where: { id: conversationId },
+      select: { buyerId: true, sellerId: true },
+    });
+    if (!conv) return false;
+    return conv.buyerId === userId || conv.sellerId === userId;
   }
 
   async getConversationMessages(userId: string, conversationId: string) {

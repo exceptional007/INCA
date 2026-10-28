@@ -28,6 +28,7 @@ import {
   LayoutGrid,
   Store,
   SearchCheck,
+  Bell,
 } from "lucide-react"
 
 import {
@@ -89,6 +90,12 @@ export function AppSidebar() {
           title: "AI Lost & Found",
           url: "/lost-found",
           icon: SearchCheck,
+          roles: ["SUPER_ADMIN", "ADMIN", "HOD", "COORDINATOR", "FACULTY", "STUDENT"],
+        },
+        {
+          title: "Digital Notice Board",
+          url: "/notices",
+          icon: Bell,
           roles: ["SUPER_ADMIN", "ADMIN", "HOD", "COORDINATOR", "FACULTY", "STUDENT"],
         },
       ],

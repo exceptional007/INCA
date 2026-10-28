@@ -63,6 +63,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     userRole.toUpperCase(),
   );
 
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const newFiles = Array.from(e.target.files);
@@ -70,6 +73,19 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
       setError('You can upload at most 6 images per listing');
       return;
     }
+
+    // Validate type and size
+    for (const file of newFiles) {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        setError(`File "${file.name}" has an unsupported format. Please upload JPEG, PNG, WEBP, or GIF.`);
+        return;
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setError(`File "${file.name}" exceeds the 10MB file size limit.`);
+        return;
+      }
+    }
+
     setError(null);
     const updatedFiles = [...selectedFiles, ...newFiles];
     setSelectedFiles(updatedFiles);
@@ -82,8 +98,18 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     const updatedFiles = selectedFiles.filter((_, i) => i !== index);
     setSelectedFiles(updatedFiles);
 
-    URL.revokeObjectURL(previews[index]);
+    if (previews[index]) {
+      URL.revokeObjectURL(previews[index]);
+    }
     setPreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClose = () => {
+    previews.forEach((p) => URL.revokeObjectURL(p));
+    setPreviews([]);
+    setSelectedFiles([]);
+    setError(null);
+    onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,7 +148,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
       setSelectedFiles([]);
       setPreviews([]);
       onCreated();
-      onClose();
+      handleClose();
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || 'Failed to create listing');
     } finally {
@@ -131,7 +157,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">

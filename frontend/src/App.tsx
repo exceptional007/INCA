@@ -17,6 +17,7 @@ const TimetableImportPage = lazy(() => import('./pages/academic/import/Timetable
 const NotesPage = lazy(() => import('./pages/notes/NotesPage').then((m) => ({ default: m.NotesPage })));
 const MarketplacePage = lazy(() => import('./pages/marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })));
 const LostFoundPage = lazy(() => import('./pages/lost-found/LostFoundPage').then((m) => ({ default: m.LostFoundPage })));
+const NoticeBoardPage = lazy(() => import('./pages/notices/NoticeBoardPage').then((m) => ({ default: m.NoticeBoardPage })));
 const FeatureHub = lazy(() => import('./pages/dashboard/FeatureHub').then((m) => ({ default: m.FeatureHub })));
 
 const PageLoader = () => (
@@ -59,6 +60,7 @@ export const App: React.FC = () => {
                   <Route path="/notes" element={<NotesPage />} />
                   <Route path="/marketplace" element={<MarketplacePage />} />
                   <Route path="/lost-found" element={<LostFoundPage />} />
+                  <Route path="/notices" element={<NoticeBoardPage />} />
 
                   {/* Take Attendance - FACULTY, HOD, COORDINATOR, ADMIN only (SUPER_ADMIN blocked) */}
                   <Route

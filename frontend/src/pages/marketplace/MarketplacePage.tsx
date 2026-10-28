@@ -7,7 +7,11 @@ import type {
   MarketplaceConversation,
   MarketplaceTransaction,
 } from '@/types/marketplace';
-import { marketplaceApi, type ListingQueryParams } from '@/services/marketplace';
+import {
+  marketplaceApi,
+  getMarketplaceImageUrl,
+  type ListingQueryParams,
+} from '@/services/marketplace';
 import { CreateListingModal } from './CreateListingModal';
 import { ListingDetailModal } from './ListingDetailModal';
 import { ChatDealModal } from './ChatDealModal';
@@ -186,27 +190,34 @@ export const MarketplacePage: React.FC = () => {
   };
 
   const handleStartChat = async (listing: MarketplaceListing) => {
+    // Immediate visual feedback: open chat modal right away with listing context
+    setDetailModalOpen(false);
+    setActiveChatListing(listing);
+    setActiveChatConvId(null);
+    setChatModalOpen(true);
+
     try {
-      setDetailModalOpen(false);
       const conv = await marketplaceApi.getOrCreateConversation(listing.id);
       setActiveChatConvId(conv.id);
-      setActiveChatListing(listing);
-      setChatModalOpen(true);
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to start conversation');
+      console.error('Failed to pre-fetch conversation in parent', err);
+      // ChatDealModal also attempts self-initialization gracefully
     }
   };
 
   const handleInitiateBuy = async (listing: MarketplaceListing) => {
+    // Immediate visual feedback
+    setDetailModalOpen(false);
+    setActiveChatListing(listing);
+    setActiveChatConvId(null);
+    setChatModalOpen(true);
+
     try {
-      setDetailModalOpen(false);
       const conv = await marketplaceApi.getOrCreateConversation(listing.id);
-      await marketplaceApi.initiateTransaction(listing.id);
       setActiveChatConvId(conv.id);
-      setActiveChatListing(listing);
-      setChatModalOpen(true);
+      await marketplaceApi.initiateTransaction(listing.id);
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to initiate purchase');
+      console.error('Failed to initiate deal transaction', err);
     }
   };
 
@@ -422,7 +433,8 @@ export const MarketplacePage: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {listings.map((item) => {
-                const coverImage = item.images?.[0]?.url || item.images?.[0]?.storageKey;
+                const coverRaw = item.images?.[0]?.url || item.images?.[0]?.storageKey;
+                const coverImage = coverRaw ? getMarketplaceImageUrl(coverRaw) : null;
                 const sellerName = item.seller?.student
                   ? `${item.seller.student.firstName} ${item.seller.student.lastName || ''}`.trim()
                   : item.seller?.faculty
@@ -441,11 +453,22 @@ export const MarketplacePage: React.FC = () => {
                           <img
                             src={coverImage}
                             alt={item.title}
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = 'none';
+                              const fallback = e.currentTarget.parentElement?.querySelector('.card-img-fallback');
+                              if (fallback) (fallback as HTMLElement).classList.remove('hidden');
+                            }}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
-                        ) : (
+                        ) : null}
+
+                        <div
+                          className={`card-img-fallback w-full h-full flex items-center justify-center ${
+                            coverImage ? 'hidden' : 'flex'
+                          }`}
+                        >
                           <ShoppingBag className="size-10 text-muted-foreground/40" />
-                        )}
+                        </div>
 
                         {item.status === 'SOLD' && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">

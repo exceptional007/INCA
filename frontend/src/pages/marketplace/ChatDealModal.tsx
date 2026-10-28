@@ -48,6 +48,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
   onOpenReviewModal,
   onDealCompleted,
 }) => {
+  const [internalConvId, setInternalConvId] = useState<string | null>(conversationId);
   const [messages, setMessages] = useState<MarketplaceMessage[]>([]);
   const [conversation, setConversation] = useState<MarketplaceConversation | null>(null);
   const [activeOffer, setActiveOffer] = useState<MarketplaceOffer | null>(null);
@@ -69,6 +70,8 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<any>(null);
 
+  const effectiveConvId = internalConvId || conversationId;
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -79,9 +82,9 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
       setActionError(null);
       const res = await marketplaceApi.getConversationMessages(convId);
       setConversation(res.conversation);
-      setMessages(res.messages);
-      setActiveOffer(res.activeOffer);
-      setActiveTransaction(res.activeTransaction);
+      setMessages(res.messages || []);
+      setActiveOffer(res.activeOffer || null);
+      setActiveTransaction(res.activeTransaction || null);
       setTimeout(scrollToBottom, 100);
     } catch (err: any) {
       setActionError(err?.response?.data?.message || err.message);
@@ -90,74 +93,113 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     }
   };
 
+  // Sync internalConvId when prop changes
   useEffect(() => {
-    if (isOpen && conversationId) {
-      loadData(conversationId);
+    setInternalConvId(conversationId);
+  }, [conversationId]);
 
-      const socket = getMarketplaceSocket();
-
-      socket.emit('joinConversation', { conversationId });
-
-      const handleNewMessage = (msg: MarketplaceMessage) => {
-        if (msg.conversationId === conversationId) {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, msg];
-          });
-          setTimeout(scrollToBottom, 100);
-        }
-      };
-
-      const handleOfferUpdate = (data: any) => {
-        if (data.offer && conversation && data.offer.listingId === conversation.listingId) {
-          setActiveOffer(data.offer);
-        }
-      };
-
-      const handleTransactionUpdate = (data: any) => {
-        if (data.tx && conversation && data.tx.listingId === conversation.listingId) {
-          setActiveTransaction(data.tx);
-          if (data.type === 'TX_COMPLETED') {
-            onDealCompleted?.();
-          }
-        }
-      };
-
-      const handleTyping = (data: { conversationId: string; isTyping: boolean }) => {
-        if (data.conversationId === conversationId) {
-          setPartnerTyping(data.isTyping);
-        }
-      };
-
-      socket.on('newMessage', handleNewMessage);
-      socket.on('offerUpdate', handleOfferUpdate);
-      socket.on('transactionUpdate', handleTransactionUpdate);
-      socket.on('userTyping', handleTyping);
-
-      return () => {
-        socket.emit('leaveConversation', { conversationId });
-        socket.off('newMessage', handleNewMessage);
-        socket.off('offerUpdate', handleOfferUpdate);
-        socket.off('transactionUpdate', handleTransactionUpdate);
-        socket.off('userTyping', handleTyping);
-      };
+  // Load conversation on open
+  useEffect(() => {
+    if (!isOpen) {
+      setMessages([]);
+      setConversation(null);
+      setActiveOffer(null);
+      setActiveTransaction(null);
+      setActionError(null);
+      return;
     }
-  }, [isOpen, conversationId]);
+
+    if (conversationId) {
+      loadData(conversationId);
+    } else if (listing?.id) {
+      setLoading(true);
+      marketplaceApi
+        .getOrCreateConversation(listing.id)
+        .then((conv) => {
+          setInternalConvId(conv.id);
+          loadData(conv.id);
+        })
+        .catch((err: any) => {
+          setActionError(err?.response?.data?.message || 'Failed to initialize conversation');
+          setLoading(false);
+        });
+    }
+  }, [isOpen, conversationId, listing?.id]);
+
+  // Socket room and event listeners
+  useEffect(() => {
+    if (!isOpen || !effectiveConvId) return;
+
+    const socket = getMarketplaceSocket();
+    socket.emit('joinConversation', { conversationId: effectiveConvId });
+
+    const handleNewMessage = (msg: MarketplaceMessage) => {
+      if (msg.conversationId === effectiveConvId) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setTimeout(scrollToBottom, 100);
+      }
+    };
+
+    const handleOfferUpdate = (data: any) => {
+      if (data.offer) {
+        setActiveOffer(data.offer);
+      }
+    };
+
+    const handleTransactionUpdate = (data: any) => {
+      if (data.tx) {
+        setActiveTransaction(data.tx);
+        if (data.type === 'TX_COMPLETED') {
+          onDealCompleted?.();
+        }
+      }
+    };
+
+    const handleTyping = (data: { conversationId: string; isTyping: boolean }) => {
+      if (data.conversationId === effectiveConvId) {
+        setPartnerTyping(data.isTyping);
+      }
+    };
+
+    socket.on('newMessage', handleNewMessage);
+    socket.on('offerUpdate', handleOfferUpdate);
+    socket.on('transactionUpdate', handleTransactionUpdate);
+    socket.on('userTyping', handleTyping);
+
+    return () => {
+      socket.emit('leaveConversation', { conversationId: effectiveConvId });
+      socket.off('newMessage', handleNewMessage);
+      socket.off('offerUpdate', handleOfferUpdate);
+      socket.off('transactionUpdate', handleTransactionUpdate);
+      socket.off('userTyping', handleTyping);
+    };
+  }, [isOpen, effectiveConvId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() || !conversationId) return;
+    if (!inputMessage.trim() || !effectiveConvId) return;
 
+    const text = inputMessage.trim();
     try {
       setSendingMsg(true);
-      const text = inputMessage.trim();
       setInputMessage('');
 
       const socket = getMarketplaceSocket();
-      socket.emit('typingIndicator', { conversationId, isTyping: false });
+      socket.emit('typingIndicator', { conversationId: effectiveConvId, isTyping: false });
 
-      await marketplaceApi.sendMessage(conversationId, text);
+      const sentMsg = await marketplaceApi.sendMessage(effectiveConvId, text);
+      if (sentMsg) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === sentMsg.id)) return prev;
+          return [...prev, sentMsg];
+        });
+        setTimeout(scrollToBottom, 50);
+      }
     } catch (err: any) {
+      setInputMessage(text);
       setActionError(err?.response?.data?.message || 'Failed to send message');
     } finally {
       setSendingMsg(false);
@@ -166,14 +208,14 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputMessage(e.target.value);
-    if (!conversationId) return;
+    if (!effectiveConvId) return;
 
     const socket = getMarketplaceSocket();
-    socket.emit('typingIndicator', { conversationId, isTyping: true });
+    socket.emit('typingIndicator', { conversationId: effectiveConvId, isTyping: true });
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typingIndicator', { conversationId, isTyping: false });
+      socket.emit('typingIndicator', { conversationId: effectiveConvId, isTyping: false });
     }, 1500);
   };
 

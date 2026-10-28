@@ -167,6 +167,35 @@ export class StrictR2StorageService {
     }
   }
 
+  async uploadNoticeAttachment(
+    fileBuffer: Buffer,
+    originalFilename: string,
+    contentType: string,
+  ): Promise<string> {
+    const { client, bucket } = this.assertR2Client();
+
+    const ext = originalFilename.split('.').pop()?.toLowerCase() || 'pdf';
+    const key = `notices/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
+
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: contentType || 'application/pdf',
+        }),
+      );
+      this.logger.log(`Strict R2 Notice Attachment Upload Success: ${key}`);
+      return key;
+    } catch (err: any) {
+      this.logger.error(`Strict R2 Upload Failed for notice attachment: ${key}`, err?.stack || err);
+      throw new InternalServerErrorException(
+        `Failed to upload notice attachment to Cloudflare R2: ${err?.message || 'Upload error'}`,
+      );
+    }
+  }
+
   async deleteObject(key: string): Promise<void> {
     if (!this.s3Client || !this.bucketName) {
       return;
