@@ -12,7 +12,13 @@ export class TemplateRepository {
       include: {
         section: true,
         subject: true,
-        faculty: { include: { user: true } },
+        faculty: {
+          include: {
+            user: {
+              select: { id: true, email: true, isActive: true },
+            },
+          },
+        },
         room: true,
       },
       orderBy: [
@@ -28,7 +34,13 @@ export class TemplateRepository {
       include: {
         section: true,
         subject: true,
-        faculty: { include: { user: true } },
+        faculty: {
+          include: {
+            user: {
+              select: { id: true, email: true, isActive: true },
+            },
+          },
+        },
         room: true,
       },
     });
@@ -39,7 +51,13 @@ export class TemplateRepository {
       where: { sectionId },
       include: {
         subject: true,
-        faculty: { include: { user: true } },
+        faculty: {
+          include: {
+            user: {
+              select: { id: true, email: true, isActive: true },
+            },
+          },
+        },
         room: true,
       },
       orderBy: [

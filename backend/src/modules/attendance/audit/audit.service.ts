@@ -66,20 +66,16 @@ export class AuditService {
       );
     }
 
-    // 5. Write the audit log FIRST (before updating record)
-    const audit = await this.auditRepository.createAudit({
-      attendanceRecordId: record.id,
-      oldStatus: record.status,
-      newStatus: dto.newStatus,
-      editedById: dto.editedById,
-      reason: dto.reason,
-    });
-
-    // 6. Update the record's status
-    const updatedRecord = await this.recordRepository.update(record.id, {
-      status: dto.newStatus,
-      remarks: dto.reason ?? record.remarks,
-    });
+    // 5. Atomically log audit and update record within transaction
+    const { audit, record: updatedRecord } =
+      await this.auditRepository.editRecordWithAudit({
+        recordId: record.id,
+        oldStatus: record.status,
+        newStatus: dto.newStatus,
+        editedById: dto.editedById,
+        reason: dto.reason,
+        remarks: dto.reason ?? record.remarks,
+      });
 
     return {
       success: true,

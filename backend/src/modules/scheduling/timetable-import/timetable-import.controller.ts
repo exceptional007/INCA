@@ -11,6 +11,7 @@ import {
   UseGuards,
   Req,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -50,12 +51,24 @@ export class TimetableImportController {
   }
 
   @Post()
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @UseInterceptors(FileInterceptor('file'))
   async uploadTimetable(
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: any,
   ) {
+    if (!file || !file.buffer || file.buffer.length === 0) {
+      throw new BadRequestException('No timetable file uploaded. Please upload a valid PDF document.');
+    }
+
+    if (!file.originalname.toLowerCase().endsWith('.pdf')) {
+      throw new BadRequestException('Invalid file format. Only PDF timetable files are supported.');
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      throw new BadRequestException('Uploaded file exceeds maximum allowable size of 15MB.');
+    }
+
     const result = await this.importService.uploadAndProcess(
       file.buffer,
       file.originalname,
@@ -78,7 +91,7 @@ export class TimetableImportController {
   }
 
   @Patch(':id/slots/:slotId')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async updateDraftSlot(
     @Param('id') id: string,
     @Param('slotId') slotId: string,
@@ -93,7 +106,7 @@ export class TimetableImportController {
   }
 
   @Post(':id/slots')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async addDraftSlot(
     @Param('id') id: string,
     @Body() dto: CreateDraftSlotDto,
@@ -107,7 +120,7 @@ export class TimetableImportController {
   }
 
   @Delete(':id/slots/:slotId')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async removeDraftSlot(
     @Param('id') id: string,
     @Param('slotId') slotId: string,
@@ -120,7 +133,7 @@ export class TimetableImportController {
   }
 
   @Post(':id/approve')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async approveAndCommit(
     @Param('id') id: string,
     @Body() dto?: ApproveBatchDto,
@@ -130,7 +143,7 @@ export class TimetableImportController {
   }
 
   @Post(':id/discard')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async discardBatch(@Param('id') id: string) {
     await this.importService.discardBatch(id);
     return {
@@ -150,7 +163,7 @@ export class TimetableImportController {
   }
 
   @Post('versions/:versionId/rollback')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async rollbackVersion(@Param('versionId') versionId: string) {
     const result = await this.importService.rollbackVersion(versionId);
     return {
@@ -161,7 +174,7 @@ export class TimetableImportController {
   }
 
   @Post('sync-schedules')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async syncTimetableSchedules(
     @Body() body?: { versionId?: string; startDate?: string; endDate?: string },
   ) {
@@ -203,7 +216,7 @@ export class TimetableImportController {
   }
 
   @Post('active-versions/:versionId/slots')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async addActiveSlot(
     @Param('versionId') versionId: string,
     @Body() dto: any,
@@ -217,7 +230,7 @@ export class TimetableImportController {
   }
 
   @Patch('active-slots/:slotId')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async updateActiveSlot(
     @Param('slotId') slotId: string,
     @Body() dto: any,
@@ -231,7 +244,7 @@ export class TimetableImportController {
   }
 
   @Delete('active-slots/:slotId')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async deleteActiveSlot(@Param('slotId') slotId: string) {
     await this.importService.deleteActiveSlot(slotId);
     return {

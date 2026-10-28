@@ -13,7 +13,13 @@ export class SessionRepository {
           include: {
             subject: true,
             section: true,
-            faculty: { include: { user: true } },
+            faculty: {
+              include: {
+                user: {
+                  select: { id: true, email: true, isActive: true },
+                },
+              },
+            },
             room: true,
           },
         },
@@ -22,7 +28,13 @@ export class SessionRepository {
     activity: {
       include: { activityType: true, room: true },
     },
-    takenBy: { include: { user: true } },
+    takenBy: {
+      include: {
+        user: {
+          select: { id: true, email: true, isActive: true },
+        },
+      },
+    },
     records: {
       include: { student: true },
     },

@@ -64,6 +64,12 @@ export const StudentDashboard: React.FC = () => {
   const [subjectSummaries, setSubjectSummaries] = useState<SubjectSummary[]>([]);
   const [selectedSubjectCode, setSelectedSubjectCode] = useState<string | null>(null);
   const [minThreshold, setMinThreshold] = useState<number>(75);
+  const [overallStats, setOverallStats] = useState({
+    overallAttended: 0,
+    overallTotal: 0,
+    overallPercentage: 0,
+    overallShortfall: false,
+  });
   const [isLoadingAttendance, setIsLoadingAttendance] = useState<boolean>(true);
 
   // Notices state
@@ -165,6 +171,12 @@ export const StudentDashboard: React.FC = () => {
       const data: AttendanceSummaryResponse = res.data?.data;
       if (data) {
         setMinThreshold(data.minAttendanceThreshold || 75);
+        setOverallStats({
+          overallAttended: data.overallAttended || 0,
+          overallTotal: data.overallTotal || 0,
+          overallPercentage: data.overallPercentage || 0,
+          overallShortfall: !!data.overallShortfall,
+        });
         const summaries = data.subjectSummaries || [];
         setSubjectSummaries(summaries);
         if (summaries.length > 0) {
@@ -223,27 +235,27 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex bg-canvas-parchment p-1 rounded-full border">
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/80 overflow-x-auto max-w-full scrollbar-none">
           <button
             onClick={() => setActiveTab('timetable')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'timetable' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'timetable' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             My Timetable
           </button>
           <button
             onClick={() => setActiveTab('attendance')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'attendance' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'attendance' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Attendance Tracker
           </button>
           <button
             onClick={() => setActiveTab('notices')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'notices' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'notices' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Academic Notices
@@ -319,15 +331,79 @@ export const StudentDashboard: React.FC = () => {
               </p>
             </Card>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-7">
-              {/* Left panel: course list percentage cards */}
-              <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none col-span-4 p-6">
-                <div className="flex justify-between items-center pb-4 border-b mb-6">
-                  <h3 className="text-base font-semibold text-ink">Subject Attendance Summaries</h3>
-                  <span className="text-xs text-ink-muted-80">
-                    Threshold: <strong className="text-ink">{minThreshold}%</strong>
-                  </span>
-                </div>
+            <div className="space-y-6">
+              {/* Overall KPI Cards */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-ink-muted-80">
+                    <span className="text-xs font-bold uppercase tracking-wider">Overall Attendance</span>
+                    <CheckCircle className="h-4.5 w-4.5 text-action-blue" />
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-2xl font-semibold text-ink">
+                      {overallStats.overallTotal > 0 ? `${overallStats.overallPercentage}%` : 'N/A'}
+                    </span>
+                    <p className={`text-[10px] font-semibold mt-1 ${overallStats.overallPercentage >= minThreshold ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {overallStats.overallTotal === 0
+                        ? 'No sessions logged yet'
+                        : overallStats.overallPercentage >= minThreshold
+                        ? 'Meets requirement'
+                        : 'Below 75% threshold'}
+                    </p>
+                  </div>
+                </Card>
+
+                <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-ink-muted-80">
+                    <span className="text-xs font-bold uppercase tracking-wider">Turnout Record</span>
+                    <Clock className="h-4.5 w-4.5 text-action-blue" />
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-2xl font-semibold text-ink">
+                      {overallStats.overallAttended} / {overallStats.overallTotal}
+                    </span>
+                    <p className="text-[10px] text-ink-muted-48 mt-1">Total classes attended</p>
+                  </div>
+                </Card>
+
+                <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-ink-muted-80">
+                    <span className="text-xs font-bold uppercase tracking-wider">Subjects Tracked</span>
+                    <Badge variant="outline" className="text-[10px] rounded-full">
+                      {subjectSummaries.length} Courses
+                    </Badge>
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-2xl font-semibold text-ink">
+                      {subjectSummaries.filter(s => s.percentage >= minThreshold).length}
+                    </span>
+                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">Courses without shortfall</p>
+                  </div>
+                </Card>
+
+                <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-ink-muted-80">
+                    <span className="text-xs font-bold uppercase tracking-wider">Shortfall Warning</span>
+                    <AlertTriangle className="h-4.5 w-4.5 text-amber-500" />
+                  </div>
+                  <div className="mt-4">
+                    <span className={`text-2xl font-semibold ${overallStats.overallShortfall ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {subjectSummaries.filter(s => s.percentage < minThreshold).length}
+                    </span>
+                    <p className="text-[10px] text-ink-muted-48 mt-1">Course(s) under {minThreshold}%</p>
+                  </div>
+                </Card>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-7">
+                {/* Left panel: course list percentage cards */}
+                <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none col-span-4 p-6">
+                  <div className="flex justify-between items-center pb-4 border-b mb-6">
+                    <h3 className="text-base font-semibold text-ink">Subject Attendance Summaries</h3>
+                    <span className="text-xs text-ink-muted-80">
+                      Threshold: <strong className="text-ink">{minThreshold}%</strong>
+                    </span>
+                  </div>
                 <div className="space-y-4">
                   {subjectSummaries.map((summary) => {
                     const isSelected = selectedSubjectCode === summary.code;
@@ -422,9 +498,10 @@ export const StudentDashboard: React.FC = () => {
                 )}
               </Card>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
+    )}
 
       {/* --- Tab Content: Academic Notices --- */}
       {activeTab === 'notices' && (

@@ -1,6 +1,6 @@
 import { Injectable, Logger, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 
 const DEFAULT_PLACEHOLDER_KEY = 'defaults/student-placeholder.png';
@@ -77,6 +77,138 @@ export class StrictR2StorageService {
       throw new InternalServerErrorException(
         `Failed to upload student photo to Cloudflare R2: ${err?.message || 'Upload error'}`,
       );
+    }
+  }
+
+  async uploadLearningMaterial(
+    fileBuffer: Buffer,
+    originalFilename: string,
+    contentType: string,
+  ): Promise<string> {
+    const { client, bucket } = this.assertR2Client();
+
+    const ext = originalFilename.split('.').pop()?.toLowerCase() || 'pdf';
+    const key = `learning-materials/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
+
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: contentType,
+        }),
+      );
+      this.logger.log(`Strict R2 Learning Material Upload Success: ${key}`);
+      return key;
+    } catch (err: any) {
+      this.logger.error(`Strict R2 Upload Failed for learning material: ${key}`, err?.stack || err);
+      throw new InternalServerErrorException(
+        `Failed to upload learning material to Cloudflare R2: ${err?.message || 'Upload error'}`,
+      );
+    }
+  }
+
+  async uploadMarketplaceImage(
+    fileBuffer: Buffer,
+    originalFilename: string,
+    contentType: string,
+  ): Promise<string> {
+    const { client, bucket } = this.assertR2Client();
+
+    const ext = originalFilename.split('.').pop()?.toLowerCase() || 'jpg';
+    const key = `marketplace-images/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
+
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: contentType,
+        }),
+      );
+      this.logger.log(`Strict R2 Marketplace Image Upload Success: ${key}`);
+      return key;
+    } catch (err: any) {
+      this.logger.error(`Strict R2 Upload Failed for marketplace image: ${key}`, err?.stack || err);
+      throw new InternalServerErrorException(
+        `Failed to upload marketplace image to Cloudflare R2: ${err?.message || 'Upload error'}`,
+      );
+    }
+  }
+
+  async uploadLostFoundPhoto(
+    fileBuffer: Buffer,
+    originalFilename: string,
+    contentType: string,
+  ): Promise<string> {
+    const { client, bucket } = this.assertR2Client();
+
+    const ext = originalFilename.split('.').pop()?.toLowerCase() || 'jpg';
+    const key = `lost-found/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
+
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: contentType,
+        }),
+      );
+      this.logger.log(`Strict R2 Lost & Found Photo Upload Success: ${key}`);
+      return key;
+    } catch (err: any) {
+      this.logger.error(`Strict R2 Upload Failed for lost & found photo: ${key}`, err?.stack || err);
+      throw new InternalServerErrorException(
+        `Failed to upload lost & found photo to Cloudflare R2: ${err?.message || 'Upload error'}`,
+      );
+    }
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    if (!this.s3Client || !this.bucketName) {
+      return;
+    }
+
+    try {
+      await this.s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+        }),
+      );
+      this.logger.log(`Strict R2 Object Deleted: ${key}`);
+    } catch (err: any) {
+      this.logger.warn(`Failed to delete object from R2: ${key}. Error: ${err?.message}`);
+    }
+  }
+
+  async getObjectBuffer(key: string): Promise<Buffer> {
+    const { client, bucket } = this.assertR2Client();
+
+    try {
+      const response = await client.send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: key,
+        }),
+      );
+
+      if (!response.Body) {
+        throw new NotFoundException(`File body not found for key: ${key}`);
+      }
+
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
+    } catch (err: any) {
+      this.logger.error(`Failed to read object buffer from R2 for key: ${key}`, err?.stack || err);
+      throw new NotFoundException(`Document file could not be retrieved from storage.`);
     }
   }
 

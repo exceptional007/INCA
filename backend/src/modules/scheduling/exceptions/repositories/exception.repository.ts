@@ -17,7 +17,13 @@ export class ExceptionRepository {
             }
           }
         },
-        newFaculty: { include: { user: true } },
+        newFaculty: {
+          include: {
+            user: {
+              select: { id: true, email: true, isActive: true },
+            },
+          },
+        },
         newRoom: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -35,7 +41,13 @@ export class ExceptionRepository {
             }
           }
         },
-        newFaculty: { include: { user: true } },
+        newFaculty: {
+          include: {
+            user: {
+              select: { id: true, email: true, isActive: true },
+            },
+          },
+        },
         newRoom: true,
       },
     });

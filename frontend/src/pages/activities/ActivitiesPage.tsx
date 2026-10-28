@@ -69,19 +69,19 @@ export const ActivitiesPage: React.FC = () => {
           ))}
         </div>
       ) : activities.length === 0 ? (
-        <Card className="p-12 text-center text-muted-foreground bg-muted/50 flex flex-col items-center">
-          <Calendar className="w-12 h-12 text-muted-foreground/50 mb-4" />
-          <h3 className="font-semibold text-lg text-foreground">No activities scheduled</h3>
-          <p className="text-sm mt-1">There are currently no upcoming activities or events.</p>
+        <Card className="p-12 text-center text-muted-foreground bg-card border border-border/80 flex flex-col items-center rounded-2xl shadow-2xs">
+          <Calendar className="w-10 h-10 text-muted-foreground/50 mb-3" />
+          <h3 className="font-semibold text-base text-foreground">No activities scheduled</h3>
+          <p className="text-xs text-muted-foreground mt-1">There are currently no upcoming workshops, seminars, or campus events.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {activities.map((a) => (
-            <Card key={a.id} className="flex flex-col h-full border-l-4 border-l-primary hover:shadow-md transition-shadow">
+            <Card key={a.id} className="flex flex-col h-full border-border/80 hover:shadow-md transition-shadow rounded-xl overflow-hidden">
               <CardHeader className="pb-2 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline">{a.activityType?.name || 'Event'}</Badge>
-                  <Badge variant={a.attendanceRequired ? 'destructive' : 'secondary'} className="text-[10px]">
+                  <Badge variant="outline" className="text-[10px]">{a.activityType?.name || 'Event'}</Badge>
+                  <Badge variant={a.attendanceRequired ? 'warning' : 'secondary'} className="text-[10px] font-semibold">
                     {a.attendanceRequired ? 'Mandatory' : 'Optional'}
                   </Badge>
                 </div>

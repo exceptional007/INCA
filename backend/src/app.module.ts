@@ -12,6 +12,9 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { NotesModule } from './modules/notes/notes.module';
+import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { LostFoundModule } from './modules/lost-found/lost-found.module';
 import { HealthModule } from './modules/health/health.module';
 import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
 
@@ -34,10 +37,13 @@ import { RequestLoggingMiddleware } from './common/middleware/request-logging.mi
     ReportsModule,
     RequestsModule,
     SuperAdminModule,
+    NotesModule,
+    MarketplaceModule,
+    LostFoundModule,
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(RequestLoggingMiddleware).forRoutes('*');
   }
-}
+}

@@ -83,7 +83,13 @@ export class ScheduleRepository {
           include: {
             section: true,
             subject: true,
-            faculty: { include: { user: true } },
+            faculty: {
+              include: {
+                user: {
+                  select: { id: true, email: true, isActive: true },
+                },
+              },
+            },
             room: true,
           }
         },
@@ -101,7 +107,13 @@ export class ScheduleRepository {
           include: {
             section: true,
             subject: true,
-            faculty: { include: { user: true } },
+            faculty: {
+              include: {
+                user: {
+                  select: { id: true, email: true, isActive: true },
+                },
+              },
+            },
             room: true,
           }
         },
@@ -131,7 +143,13 @@ export class ScheduleRepository {
           include: {
             section: true,
             subject: true,
-            faculty: { include: { user: true } },
+            faculty: {
+              include: {
+                user: {
+                  select: { id: true, email: true, isActive: true },
+                },
+              },
+            },
             room: true,
           }
         },

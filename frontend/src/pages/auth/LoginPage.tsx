@@ -69,7 +69,7 @@ export const LoginPage: React.FC = () => {
           <CardContent className="px-8 pb-6">
             <form onSubmit={handleSubmit} className="space-y-5">
               {error && (
-                <div className="p-3..5 rounded-[8px] bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold leading-relaxed">
+                <div className="p-3.5 rounded-[8px] bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold leading-relaxed">
                   {error}
                 </div>
               )}

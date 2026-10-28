@@ -85,6 +85,9 @@ export class MatchingService {
   async matchSubject(code: string, name: string): Promise<MatchResult> {
     const cleanCode = (code || '').trim().toUpperCase();
     const cleanName = (name || '').trim();
+    if ((!cleanCode && !cleanName) || cleanName.toUpperCase() === 'UNASSIGNED' || cleanCode === 'UNASSIGNED') {
+      return { matchedId: null, confidence: 0.0 };
+    }
     const normCode = this.normalizeCode(cleanCode);
 
     // 1. Exact match on database code or normalized code
@@ -155,6 +158,9 @@ export class MatchingService {
   async matchFaculty(fullName: string, shortCode: string): Promise<MatchResult> {
     const cleanShort = (shortCode || '').trim().toUpperCase();
     const cleanFull = (fullName || '').trim();
+    if ((!cleanShort && !cleanFull) || cleanFull.toUpperCase() === 'UNASSIGNED' || cleanShort === 'UNASSIGNED') {
+      return { matchedId: null, confidence: 0.0 };
+    }
     const normShort = this.normalizeCode(cleanShort);
 
     // 1. Exact match on employeeCode
@@ -226,7 +232,10 @@ export class MatchingService {
   }
 
   async matchRoom(roomCode: string): Promise<MatchResult> {
-    const cleanCode = roomCode.trim().toUpperCase();
+    const cleanCode = (roomCode || '').trim().toUpperCase();
+    if (!cleanCode || cleanCode === 'UNASSIGNED' || cleanCode === 'TBD' || cleanCode === 'N/A') {
+      return { matchedId: null, confidence: 0.0 };
+    }
     
     // 1. Exact match on code
     const exactCode = await this.prisma.room.findUnique({
@@ -239,7 +248,7 @@ export class MatchingService {
     let bestMatch: { id: string; confidence: number } | null = null;
 
     for (const room of rooms) {
-      const similarity = this.calculateSimilarity(roomCode, room.code);
+      const similarity = this.calculateSimilarity(cleanCode, room.code);
       if (!bestMatch || similarity > bestMatch.confidence) {
         bestMatch = { id: room.id, confidence: similarity };
       }
@@ -256,7 +265,10 @@ export class MatchingService {
   }
 
   async matchSection(sectionCode: string, semesterNum?: number, deptCode?: string): Promise<MatchResult> {
-    const cleanCode = sectionCode.trim().toUpperCase();
+    const cleanCode = (sectionCode || '').trim().toUpperCase();
+    if (!cleanCode || cleanCode === 'UNASSIGNED' || cleanCode === 'TBD' || cleanCode === 'N/A') {
+      return { matchedId: null, confidence: 0.0 };
+    }
 
     // 1. Attempt narrow database lookup including semester and department code if available
     if (semesterNum !== undefined) {

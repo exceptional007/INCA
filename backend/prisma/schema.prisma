@@ -52,6 +52,30 @@ model User {
   adminProfile AdminProfile?
   attendanceAudits AttendanceAudit[]
   timetableImportBatches TimetableImportBatch[]
+  notice_audit_logs                   notice_audit_logs[]
+  notice_reads                        notice_reads[]
+  notices_notices_approvedByIdTousers notices[]              @relation("notices_approvedByIdTousers")
+  notices_notices_authorIdTousers     notices[]              @relation("notices_authorIdTousers")
+  notifications                       notifications[]
+  sellerListings MarketplaceListing[] @relation("SellerListings")
+  buyerConversations MarketplaceConversation[] @relation("BuyerConversations")
+  sellerConversations MarketplaceConversation[] @relation("SellerConversations")
+  sentMarketplaceMessages MarketplaceMessage[] @relation("SentMarketplaceMessages")
+  buyerOffers MarketplaceOffer[] @relation("BuyerOffers")
+  sellerOffers MarketplaceOffer[] @relation("SellerOffers")
+  buyerTransactions MarketplaceTransaction[] @relation("BuyerTransactions")
+  sellerTransactions MarketplaceTransaction[] @relation("SellerTransactions")
+  buyerReviews MarketplaceReview[] @relation("BuyerReviews")
+  sellerReviews MarketplaceReview[] @relation("SellerReviews")
+  marketplaceReportsFiled MarketplaceReport[] @relation("MarketplaceReportsFiled")
+  marketplaceReportsReceived MarketplaceReport[] @relation("MarketplaceReportsReceived")
+  moderatedReports MarketplaceReport[] @relation("ModeratedReports")
+  lostFoundReports LostFoundReport[] @relation("ReporterLostFoundReports")
+  reviewedLostFoundMatches LostFoundMatch[] @relation("ReviewedMatches")
+  lostFoundClaims LostFoundClaim[] @relation("UserLostFoundClaims")
+  verifiedLostFoundClaims LostFoundClaim[] @relation("VerifiedClaims")
+  lostFoundNotifications LostFoundNotification[] @relation("UserLostFoundNotifications")
+  lostFoundContributions LostFoundContribution[] @relation("UserLostFoundContributions")
 
   @@index([roleId])
   @@index([isActive])
@@ -91,6 +115,7 @@ model Faculty {
   attendanceSessions AttendanceSession[]
   timetableSlots     TimetableSlot[]
   timetableSlotDrafts TimetableSlotDraft[]
+  learningNotes      LearningNote[]
 
   @@index([departmentId])
   @@index([isActive])
@@ -145,6 +170,9 @@ model Student {
   section   Section?    @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   attendanceRecords AttendanceRecord[]
+  tutorConversations TutorConversation[]
+  quizAttempts      QuizAttempt[]
+  createdQuizzes    LearningQuiz[]
 
   @@index([departmentId])
   @@index([sectionId])
@@ -170,6 +198,7 @@ model Department {
   adminProfiles AdminProfile[]
   faculties Faculty[]
   students  Student[]
+  notices   notices[]
 
   @@map("departments")
 }
@@ -186,6 +215,8 @@ model Program {
 
   semesters     Semester[]
   durationYears Int        @default(4)
+  learningNotePrograms LearningNoteProgram[]
+  notices              notices[]
 
   isActive Boolean @default(true)
 
@@ -281,6 +312,7 @@ model Subject {
   scheduleTemplates ScheduleTemplate[]
   timetableSlots      TimetableSlot[]
   timetableSlotDrafts TimetableSlotDraft[]
+  learningNotes       LearningNote[]
 
   @@unique([semesterId, name])
   @@index([semesterId])
@@ -702,3 +734,669 @@ model AdminProfile {
   @@map("admin_profiles")
 }
 
+
+
+enum NoteSourceType {
+  FILE
+  DRIVE
+}
+
+enum NoteStatus {
+  DRAFT
+  PROCESSING
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+model LearningNote {
+  id                  String         @id @default(uuid())
+  title               String
+  description         String?
+  sourceType          NoteSourceType @default(FILE)
+  storageKey          String?
+  originalFilename    String?
+  mimeType            String?
+  fileSize            Int?
+  driveUrl            String?
+  drivePermissionNote String?
+
+  subjectId           String
+  subject             Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  facultyId           String
+  faculty             Faculty        @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+
+  semesterNumber      Int?
+  status              NoteStatus     @default(DRAFT)
+  aiReady             Boolean        @default(false)
+  processingError     String?
+  documentVersion     Int            @default(1)
+  tags                String[]       @default([])
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  programs            LearningNoteProgram[]
+  chunks              LearningNoteChunk[]
+  conversations       TutorConversation[]
+  quizzes             LearningQuiz[]
+
+  @@index([facultyId])
+  @@index([subjectId])
+  @@index([status])
+  @@index([aiReady])
+  @@map("learning_notes")
+}
+
+model LearningNoteProgram {
+  id        String       @id @default(uuid())
+  noteId    String
+  note      LearningNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  programId String
+  program   Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, programId])
+  @@index([noteId])
+  @@index([programId])
+  @@map("learning_note_programs")
+}
+
+model LearningNoteChunk {
+  id         String       @id @default(uuid())
+  noteId     String
+  note       LearningNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  content    String       @db.Text
+  pageNumber Int?
+  tokenCount Int?
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+
+  @@index([noteId])
+  @@map("learning_note_chunks")
+}
+
+model TutorConversation {
+  id        String         @id @default(uuid())
+  studentId String
+  student   Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  noteId    String
+  note      LearningNote   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  title     String         @default("Study Session")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  messages  TutorMessage[]
+
+  @@index([studentId])
+  @@index([noteId])
+  @@map("tutor_conversations")
+}
+
+model TutorMessage {
+  id             String            @id @default(uuid())
+  conversationId String
+  conversation   TutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String            @db.Text
+  sources        Json?
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId])
+  @@map("tutor_messages")
+}
+
+model LearningQuiz {
+  id                 String        @id @default(uuid())
+  noteId             String
+  note               LearningNote  @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  title              String
+  topic              String?
+  difficulty         String        @default("MEDIUM")
+  questions          Json
+  createdByStudentId String?
+  createdByStudent   Student?      @relation(fields: [createdByStudentId], references: [id], onDelete: SetNull)
+  createdAt          DateTime      @default(now())
+
+  attempts           QuizAttempt[]
+
+  @@index([noteId])
+  @@index([createdByStudentId])
+  @@map("learning_quizzes")
+}
+
+model QuizAttempt {
+  id             String       @id @default(uuid())
+  quizId         String
+  quiz           LearningQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers        Json
+  score          Float
+  totalQuestions Int
+  passed         Boolean      @default(true)
+  completedAt    DateTime     @default(now())
+
+  @@index([quizId])
+  @@index([studentId])
+  @@map("quiz_attempts")
+}
+
+
+enum MarketplaceCategory {
+  BOOKS_AND_STUDY
+  ELECTRONICS
+  LAB_EQUIPMENT
+  HOSTEL_DORM
+  FURNITURE
+  STATIONERY
+  SPORTS_FITNESS
+  CLOTHING_ACCESSORIES
+  OTHER
+}
+
+enum ProductCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+  FOR_PARTS
+}
+
+enum ListingVisibility {
+  ALL
+  FACULTY_ONLY
+}
+
+enum ListingStatus {
+  ACTIVE
+  RESERVED
+  SOLD
+  ARCHIVED
+  REMOVED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  INITIATED
+  PRICE_AGREED
+  HANDOVER_PENDING
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  ACTION_TAKEN
+  DISMISSED
+  RESOLVED
+}
+
+enum ReportReason {
+  SUSPECTED_SCAM
+  MISLEADING_DESCRIPTION
+  PROHIBITED_ITEM
+  HARASSMENT
+  SUSPICIOUS_TRANSACTION
+  INAPPROPRIATE_CONTENT
+  OTHER
+}
+
+model MarketplaceListing {
+  id                String              @id @default(uuid())
+  title             String
+  description       String              @db.Text
+  category          MarketplaceCategory @default(OTHER)
+  customCategory    String?
+  price             Float
+  condition         ProductCondition    @default(GOOD)
+  visibility        ListingVisibility   @default(ALL)
+  status            ListingStatus       @default(ACTIVE)
+  brand             String?
+  model             String?
+  preferredLocation String?
+
+  sellerId          String
+  seller            User                @relation("SellerListings", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  images            MarketplaceImage[]
+  conversations     MarketplaceConversation[]
+  offers            MarketplaceOffer[]
+  transactions      MarketplaceTransaction[]
+  reviews           MarketplaceReview[]
+  reports           MarketplaceReport[]
+
+  soldAt            DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([sellerId])
+  @@index([category])
+  @@index([status])
+  @@index([visibility])
+  @@map("marketplace_listings")
+}
+
+model MarketplaceImage {
+  id         String             @id @default(uuid())
+  listingId  String
+  listing    MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  storageKey String
+  url        String?
+  sortOrder  Int                @default(0)
+  createdAt  DateTime           @default(now())
+
+  @@index([listingId])
+  @@map("marketplace_images")
+}
+
+model MarketplaceConversation {
+  id            String              @id @default(uuid())
+  listingId     String
+  listing       MarketplaceListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId       String
+  buyer         User                @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId      String
+  seller        User                @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  lastMessageAt DateTime            @default(now())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  messages      MarketplaceMessage[]
+
+  @@unique([listingId, buyerId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@map("marketplace_conversations")
+}
+
+model MarketplaceMessage {
+  id             String                  @id @default(uuid())
+  conversationId String
+  conversation   MarketplaceConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User                    @relation("SentMarketplaceMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  content        String                  @db.Text
+  messageType    String                  @default("TEXT")
+  metadata       Json?
+  isRead         Boolean                 @default(false)
+  readAt         DateTime?
+  createdAt      DateTime                @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("marketplace_messages")
+}
+
+model MarketplaceOffer {
+  id            String              @id @default(uuid())
+  listingId     String
+  listing       MarketplaceListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId       String
+  buyer         User                @relation("BuyerOffers", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId      String
+  seller        User                @relation("SellerOffers", fields: [sellerId], references: [id], onDelete: Cascade)
+  amount        Float
+  status        OfferStatus         @default(PENDING)
+  counterAmount Float?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([listingId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@map("marketplace_offers")
+}
+
+model MarketplaceTransaction {
+  id                  String             @id @default(uuid())
+  listingId           String
+  listing             MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId             String
+  buyer               User               @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId            String
+  seller              User               @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)
+  agreedPrice         Float
+  status              TransactionStatus  @default(INITIATED)
+  handoverOtp         String?
+  handoverOtpExpiresAt DateTime?
+  handoverOtpAttempts Int                @default(0)
+  buyerConfirmed      Boolean            @default(false)
+  sellerConfirmed     Boolean            @default(false)
+  buyerConfirmedAt    DateTime?
+  sellerConfirmedAt   DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  review              MarketplaceReview?
+  reports             MarketplaceReport[]
+
+  @@index([listingId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("marketplace_transactions")
+}
+
+model MarketplaceReview {
+  id            String                 @id @default(uuid())
+  transactionId String                 @unique
+  transaction   MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  listingId     String
+  listing       MarketplaceListing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reviewerId    String
+  reviewer      User                   @relation("BuyerReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
+  sellerId      String
+  seller        User                   @relation("SellerReviews", fields: [sellerId], references: [id], onDelete: Cascade)
+  rating        Int
+  comment       String?                @db.Text
+  createdAt     DateTime               @default(now())
+
+  @@index([sellerId])
+  @@index([listingId])
+  @@map("marketplace_reviews")
+}
+
+model MarketplaceReport {
+  id             String                  @id @default(uuid())
+  reporterId     String
+  reporter       User                    @relation("MarketplaceReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  listingId      String?
+  listing        MarketplaceListing?     @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  transactionId  String?
+  transaction    MarketplaceTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  reportedUserId String?
+  reportedUser   User?                   @relation("MarketplaceReportsReceived", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  departmentId   String?
+  reason         ReportReason
+  description    String                  @db.Text
+  status         ReportStatus            @default(OPEN)
+  resolutionNote String?
+  resolvedById   String?
+  resolvedBy     User?                   @relation("ModeratedReports", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt     DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([reporterId])
+  @@index([departmentId])
+  @@index([status])
+  @@map("marketplace_reports")
+}
+
+
+model notice_attachments {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  noticeId  String
+  fileName  String
+  fileKey   String
+  fileUrl   String
+  fileType  String
+  fileSize  Int      @default(0)
+  createdAt DateTime @default(now())
+  notices   notices  @relation(fields: [noticeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model notice_audit_logs {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  noticeId  String
+  userId    String
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+  notices   notices  @relation(fields: [noticeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users     User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model notice_reads {
+  id       String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  noticeId String
+  userId   String
+  readAt   DateTime @default(now())
+  notices  notices  @relation(fields: [noticeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users    User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([noticeId, userId], map: "notice_reads_unique")
+  @@index([userId], map: "idx_notice_reads_user")
+}
+
+model notices {
+  id                                String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  title                             String
+  content                           String
+  category                          String               @default("GENERAL")
+  priority                          String               @default("MEDIUM")
+  status                            String               @default("PUBLISHED")
+  targetScope                       String               @default("ALL")
+  departmentId                      String?
+  programId                         String?
+  targetYear                        Int?
+  targetSemester                    Int?
+  isPinned                          Boolean              @default(false)
+  publishAt                         DateTime             @default(now())
+  expiresAt                         DateTime?
+  isArchived                        Boolean              @default(false)
+  archivedAt                        DateTime?
+  authorId                          String
+  approvedById                      String?
+  approvedAt                        DateTime?
+  rejectionReason                   String?
+  aiSummary                         String?
+  aiDeadlines                       Json?
+  aiActionItems                     Json?
+  aiKeyHighlights                   Json?
+  aiTags                            Json?
+  createdAt                         DateTime             @default(now())
+  updatedAt                         DateTime             @default(now())
+  notice_attachments                notice_attachments[]
+  notice_audit_logs                 notice_audit_logs[]
+  notice_reads                      notice_reads[]
+  users_notices_approvedByIdTousers User?                @relation("notices_approvedByIdTousers", fields: [approvedById], references: [id], onUpdate: NoAction)
+  users_notices_authorIdTousers     User                 @relation("notices_authorIdTousers", fields: [authorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  departments                       Department?          @relation(fields: [departmentId], references: [id], onUpdate: NoAction)
+  programs                          Program?             @relation(fields: [programId], references: [id], onUpdate: NoAction)
+
+  @@index([departmentId], map: "idx_notices_department")
+  @@index([expiresAt], map: "idx_notices_expires_at")
+  @@index([priority], map: "idx_notices_priority")
+  @@index([publishAt], map: "idx_notices_publish_at")
+  @@index([status], map: "idx_notices_status")
+}
+
+model notifications {
+  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String
+  title     String
+  message   String
+  type      String    @default("NOTICE_NEW")
+  noticeId  String?
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  users     User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId, isRead], map: "idx_notifications_user_unread")
+}
+
+
+enum LostFoundType {
+  LOST
+  FOUND
+}
+
+enum LostFoundCategory {
+  ELECTRONICS
+  DOCUMENTS_IDS
+  BOOKS_STATIONERY
+  KEYS
+  BAGS_WALLETS
+  CLOTHING_ACCESSORIES
+  LAB_EQUIPMENT
+  CARDS
+  JEWELRY
+  OTHER
+}
+
+enum LostFoundStatus {
+  OPEN
+  CLAIM_PENDING
+  RESOLVED
+  CANCELLED
+  HANDED_OVER
+}
+
+enum MatchStatus {
+  PENDING_REVIEW
+  VERIFIED_MATCH
+  REJECTED
+  RESOLVED
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  VERIFIED_HANDOVER
+  CANCELLED
+}
+
+model LostFoundReport {
+  id                     String              @id @default(uuid())
+  type                   LostFoundType
+  title                  String
+  description            String              @db.Text
+  category               LostFoundCategory   @default(OTHER)
+  location               String
+  approximateDate        DateTime            @default(now())
+  approximateTime        String?
+  distinguishingFeatures String?             @db.Text
+  contactPreference      String?
+  status                 LostFoundStatus     @default(OPEN)
+  
+  reporterId             String
+  reporter               User                @relation("ReporterLostFoundReports", fields: [reporterId], references: [id], onDelete: Cascade)
+  
+  resolvedAt             DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  images                 LostFoundImage[]
+  lostMatches            LostFoundMatch[]    @relation("LostReportMatches")
+  foundMatches           LostFoundMatch[]    @relation("FoundReportMatches")
+  claims                 LostFoundClaim[]
+
+  @@index([reporterId])
+  @@index([type])
+  @@index([category])
+  @@index([status])
+  @@index([createdAt])
+  @@map("lost_found_reports")
+}
+
+model LostFoundImage {
+  id         String          @id @default(uuid())
+  reportId   String
+  report     LostFoundReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  storageKey String
+  url        String?
+  sortOrder  Int             @default(0)
+  createdAt  DateTime        @default(now())
+
+  @@index([reportId])
+  @@map("lost_found_images")
+}
+
+model LostFoundMatch {
+  id            String          @id @default(uuid())
+  lostReportId  String
+  lostReport    LostFoundReport @relation("LostReportMatches", fields: [lostReportId], references: [id], onDelete: Cascade)
+  foundReportId String
+  foundReport   LostFoundReport @relation("FoundReportMatches", fields: [foundReportId], references: [id], onDelete: Cascade)
+  
+  matchingScore Float
+  matchReason   String?         @db.Text
+  status        MatchStatus     @default(PENDING_REVIEW)
+  
+  reviewedById  String?
+  reviewedBy    User?           @relation("ReviewedMatches", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([lostReportId, foundReportId])
+  @@index([lostReportId])
+  @@index([foundReportId])
+  @@index([status])
+  @@map("lost_found_matches")
+}
+
+model LostFoundClaim {
+  id               String          @id @default(uuid())
+  reportId         String
+  report           LostFoundReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  claimantId       String
+  claimant         User            @relation("UserLostFoundClaims", fields: [claimantId], references: [id], onDelete: Cascade)
+  
+  claimDetails     String          @db.Text
+  proofImageUrl    String?
+  verificationCode String?
+  status           ClaimStatus     @default(PENDING)
+  staffNote        String?         @db.Text
+  
+  verifiedById     String?
+  verifiedBy       User?           @relation("VerifiedClaims", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt       DateTime?
+  
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([reportId])
+  @@index([claimantId])
+  @@index([status])
+  @@map("lost_found_claims")
+}
+
+model LostFoundNotification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation("UserLostFoundNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String    @db.Text
+  reportId  String?
+  matchId   String?
+  claimId   String?
+  type      String    @default("MATCH_FOUND")
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, isRead])
+  @@map("lost_found_notifications")
+}
+
+model LostFoundContribution {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation("UserLostFoundContributions", fields: [userId], references: [id], onDelete: Cascade)
+  reportId   String?
+  points     Int      @default(10)
+  actionType String   @default("REPORT_FOUND")
+  badge      String?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, reportId, actionType])
+  @@index([userId])
+  @@map("lost_found_contributions")
+}

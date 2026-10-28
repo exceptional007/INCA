@@ -56,7 +56,7 @@ export const FacultyDashboard: React.FC = () => {
       const sessionList: any[] = res.data?.data || [];
       const formattedLogs: AttendanceLog[] = sessionList.map((s: any) => {
         const records = s.records || [];
-        const presentCount = records.filter((r: any) => r.status === 'PRESENT').length;
+        const presentCount = records.filter((r: any) => r.status === 'PRESENT' || r.status === 'LATE' || r.status === 'EXCUSED').length;
         const totalCount = records.length;
         const dateStr = s.attendanceDate
           ? new Date(s.attendanceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -190,13 +190,13 @@ export const FacultyDashboard: React.FC = () => {
           </Button>
 
           {/* Tab Switcher */}
-          <div className="flex bg-canvas-parchment p-1 rounded-full border">
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/80 overflow-x-auto max-w-full scrollbar-none">
             <button
               onClick={() => setActiveTab('schedule')}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'schedule'
-                  ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]'
-                  : 'text-ink-muted-80 hover:text-ink'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               My Schedule
@@ -206,10 +206,10 @@ export const FacultyDashboard: React.FC = () => {
                 setActiveTab('logs');
                 fetchPastLogs();
               }}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === 'logs'
-                  ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]'
-                  : 'text-ink-muted-80 hover:text-ink'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Past Roster Logs
@@ -221,6 +221,65 @@ export const FacultyDashboard: React.FC = () => {
       {/* --- Tab Content: My Schedule --- */}
       {activeTab === 'schedule' && (
         <div className="space-y-6">
+          {/* Summary KPI Cards */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+              <div className="flex items-center justify-between text-ink-muted-80">
+                <span className="text-xs font-bold uppercase tracking-wider">Today's Lectures</span>
+                <Clock className="h-4.5 w-4.5 text-action-blue" />
+              </div>
+              <div className="mt-4">
+                <span className="text-2xl font-semibold text-ink">{sessions.length}</span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">
+                  Assigned classroom sessions
+                </p>
+              </div>
+            </Card>
+
+            <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+              <div className="flex items-center justify-between text-ink-muted-80">
+                <span className="text-xs font-bold uppercase tracking-wider">Conducted Today</span>
+                <CalendarCheck2 className="h-4.5 w-4.5 text-emerald-600" />
+              </div>
+              <div className="mt-4">
+                <span className="text-2xl font-semibold text-emerald-600">{completedCount}</span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">
+                  Attendance verified & submitted
+                </p>
+              </div>
+            </Card>
+
+            <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+              <div className="flex items-center justify-between text-ink-muted-80">
+                <span className="text-xs font-bold uppercase tracking-wider">Pending Attendance</span>
+                <Badge variant={pendingCount > 0 ? "outline" : "secondary"} className="text-[10px] rounded-full">
+                  {pendingCount > 0 ? `${pendingCount} Left` : 'Completed'}
+                </Badge>
+              </div>
+              <div className="mt-4">
+                <span className={`text-2xl font-semibold ${pendingCount > 0 ? 'text-action-blue' : 'text-ink-muted-48'}`}>
+                  {pendingCount}
+                </span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">
+                  Requires roster marking
+                </p>
+              </div>
+            </Card>
+
+            <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+              <div className="flex items-center justify-between text-ink-muted-80">
+                <span className="text-xs font-bold uppercase tracking-wider">Roster History</span>
+                <CheckSquare className="h-4.5 w-4.5 text-action-blue" />
+              </div>
+              <div className="mt-4">
+                <span className="text-2xl font-semibold text-ink">{logs.length}</span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">
+                  Total past sessions logged
+                </p>
+              </div>
+            </Card>
+          </div>
+
           <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b mb-6">
               <div>

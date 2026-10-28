@@ -9,7 +9,13 @@ export class ActivityRepository {
 
   private readonly include = {
     activityType: true,
-    faculty: { include: { user: true } },
+    faculty: {
+      include: {
+        user: {
+          select: { id: true, email: true, isActive: true },
+        },
+      },
+    },
     room: true,
   };
 

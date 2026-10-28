@@ -211,3 +211,108 @@ export interface ApiResponse<T> {
   message: string;
   data: T;
 }
+
+export type NoteSourceType = 'FILE' | 'DRIVE';
+export type NoteStatus = 'DRAFT' | 'PROCESSING' | 'PUBLISHED' | 'FAILED' | 'ARCHIVED';
+
+export interface LearningNote {
+  id: string;
+  title: string;
+  description?: string;
+  sourceType: NoteSourceType;
+  storageKey?: string;
+  originalFilename?: string;
+  mimeType?: string;
+  fileSize?: number;
+  driveUrl?: string;
+  drivePermissionNote?: string;
+  subjectId: string;
+  subject: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  facultyId: string;
+  faculty?: {
+    id: string;
+    firstName: string;
+    lastName?: string;
+    employeeCode: string;
+  };
+  semesterNumber?: number;
+  status: NoteStatus;
+  aiReady: boolean;
+  processingError?: string;
+  documentVersion: number;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  programs: Array<{
+    program: {
+      id: string;
+      code: string;
+      name: string;
+      shortName?: string;
+    };
+  }>;
+  _count?: {
+    chunks?: number;
+    quizzes?: number;
+    conversations?: number;
+  };
+}
+
+export interface GroundedSource {
+  chunkId: string;
+  chunkIndex: number;
+  pageNumber: number | null;
+  snippet: string;
+}
+
+export interface TutorMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: GroundedSource[];
+  createdAt: string;
+}
+
+export interface TutorConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: TutorMessage[];
+  _count?: {
+    messages: number;
+  };
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  type: 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
+  options: string[];
+}
+
+export interface QuizAttemptReview {
+  id: string;
+  question: string;
+  options: string[];
+  selectedAnswer: string | null;
+  correctAnswer: string;
+  isCorrect: boolean;
+  explanation: string;
+  sourceSnippet?: string;
+}
+
+export interface QuizResult {
+  attemptId: string;
+  quizId: string;
+  score: number;
+  totalQuestions: number;
+  correctCount: number;
+  passed: boolean;
+  completedAt: string;
+  review: QuizAttemptReview[];
+}

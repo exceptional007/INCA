@@ -37,14 +37,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       } else if (exception.code === 'P2025') {
         status = HttpStatus.NOT_FOUND;
         message = 'Requested record not found.';
+      } else if (exception.code === 'P2003') {
+        status = HttpStatus.BAD_REQUEST;
+        message = 'Operation failed due to a related record constraint.';
       } else if (exception.code === 'P2028') {
         status = HttpStatus.REQUEST_TIMEOUT;
         message = 'Database operation timed out. Please try again.';
       } else {
         status = HttpStatus.BAD_REQUEST;
-        message = `Database error (${exception.code}): ${exception.message.split('\n').pop()}`;
+        message = 'A database constraint error occurred.';
       }
-      this.logger.warn(`Prisma Known Error [${exception.code}]: ${message} on ${request.method} ${request.url}`);
+      this.logger.warn(`Prisma Known Error [${exception.code}]: ${exception.message.split('\n').pop()} on ${request.method} ${request.url}`);
     } else if (exception instanceof Prisma.PrismaClientInitializationError) {
       status = HttpStatus.SERVICE_UNAVAILABLE;
       message = 'Database temporarily unreachable. Please try again shortly.';
