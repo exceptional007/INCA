@@ -48,6 +48,7 @@ export const TimetableReviewGrid: React.FC<TimetableReviewGridProps> = ({
   onUpdateSlot,
   onAddSlot,
   onDeleteSlot,
+  conflicts = [],
 }) => {
   const [activeDay, setActiveDay] = useState<DayOfWeek>('Monday');
 
@@ -333,6 +334,26 @@ export const TimetableReviewGrid: React.FC<TimetableReviewGridProps> = ({
               Click the <span className="font-semibold text-foreground">Pencil icon</span> on any card to assign registered teachers or subjects before approval.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Conflicts Banner */}
+      {conflicts && conflicts.length > 0 && (
+        <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 space-y-2">
+          <div className="flex items-center gap-2 text-destructive font-bold text-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <span>Blocking Scheduling Conflicts Detected ({conflicts.length})</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The following scheduling conflicts prevent approval. Please edit or reassign the conflicting slots below before approving.
+          </p>
+          <ul className="list-disc list-inside space-y-1 text-xs text-destructive/90 max-h-48 overflow-y-auto font-mono">
+            {conflicts.map((c, idx) => (
+              <li key={idx}>
+                <span className="font-semibold font-sans">[{c.type}]</span> {c.message}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

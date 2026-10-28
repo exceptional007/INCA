@@ -6,7 +6,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { R2StorageService } from './r2-storage.service';
 import { GeminiExtractionService } from './gemini-extraction.service';
 import { PdfTextParserService } from './pdf-text-parser.service';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('TimetableImport Testing Suite', () => {
   let matchingService: MatchingService;
@@ -51,9 +51,29 @@ describe('TimetableImport Testing Suite', () => {
       timetableVersion: {
         create: jest.fn(),
         updateMany: jest.fn(),
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
       },
       timetableSlot: {
         create: jest.fn(),
+        createMany: jest.fn(),
+        findMany: jest.fn(),
+      },
+      scheduleTemplate: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      schedule: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        createMany: jest.fn(),
+      },
+      program: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
       },
       timetableImportBatch: {
@@ -427,7 +447,12 @@ describe('TimetableImport Testing Suite', () => {
       prismaMock.timetableSlot.findMany.mockResolvedValue([]);
 
       // Force a mock error on create to trigger transactional rollback
-      prismaMock.timetableSlot.create.mockRejectedValue(new Error('DB connection timed out.'));
+      prismaMock.section.findUnique.mockResolvedValue({
+        id: 'sec-1',
+        name: 'C',
+        semester: { programId: 'prog-1' },
+      });
+      prismaMock.timetableSlot.createMany.mockRejectedValue(new Error('DB connection timed out.'));
 
       await expect(importService.approveAndCommit(mockBatchId)).rejects.toThrow(
         BadRequestException,
@@ -437,6 +462,368 @@ describe('TimetableImport Testing Suite', () => {
       expect(prismaMock.timetableImportBatch.update).not.toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ data: expect.objectContaining({ status: 'COMMITTED' }) }),
+      );
+    });
+
+    it('should reject approval when a slot has unmapped faculty without silently creating fake users', async () => {
+      const mockBatchId = 'batch-unmapped-fac';
+      prismaMock.timetableImportBatch.findUnique.mockResolvedValue({
+        id: mockBatchId,
+        status: 'PENDING_REVIEW',
+        slots: [
+          {
+            id: 'slot-unmapped-1',
+            day: 'MON',
+            timeSlotStart: '09:10 AM',
+            timeSlotEnd: '10:05 AM',
+            sectionCodes: ['C'],
+            subjectRaw: 'Deep Learning',
+            facultyRaw: 'UNKNOWN PROFESSOR',
+            room: '416',
+            matchedSubjectId: 'sub-1',
+            matchedFacultyId: null, // Unmapped faculty
+            matchedRoomId: 'room-1',
+            matchedSectionId: 'sec-1',
+          },
+        ],
+      });
+
+      prismaMock.timetableSlot.findMany.mockResolvedValue([]);
+      prismaMock.section.findUnique.mockResolvedValue({
+        id: 'sec-1',
+        name: 'C',
+        semesterId: 'sem-1',
+        semester: { number: 1, programId: 'prog-1' },
+      });
+      prismaMock.faculty.findFirst.mockResolvedValue(null); // DB also doesn't have it
+
+      await expect(importService.approveAndCommit(mockBatchId)).rejects.toThrow(
+        /Unresolved faculty/i,
+      );
+
+      // Verify no user or faculty was created
+      expect(prismaMock.user.create).not.toHaveBeenCalled();
+      expect(prismaMock.faculty.create).not.toHaveBeenCalled();
+    });
+
+    it('should detect invalid time ranges and duplicate entries in ConflictService', () => {
+      const invalidTimeSlots: any[] = [
+        {
+          day: 'MON',
+          timeSlotStart: '10:05 AM',
+          timeSlotEnd: '09:10 AM', // Start > End
+          subjectName: 'Test Subject',
+          facultyFullName: 'Faculty Name',
+          room: '416',
+          sectionCodes: ['C'],
+        },
+      ];
+
+      const timeConflicts = conflictService.detectConflicts(invalidTimeSlots, []);
+      expect(timeConflicts.some((c) => c.type === 'TIME_RANGE')).toBe(true);
+
+      const duplicateSlots: any[] = [
+        {
+          day: 'MON',
+          timeSlotStart: '09:10 AM',
+          timeSlotEnd: '10:05 AM',
+          subjectName: 'Deep Learning',
+          facultyFullName: 'Prof A',
+          room: '416',
+          sectionCodes: ['C'],
+        },
+        {
+          day: 'MON',
+          timeSlotStart: '09:10 AM',
+          timeSlotEnd: '10:05 AM',
+          subjectName: 'Deep Learning',
+          facultyFullName: 'Prof A',
+          room: '416',
+          sectionCodes: ['C'],
+        },
+      ];
+
+      const dupConflicts = conflictService.detectConflicts(duplicateSlots, []);
+      expect(dupConflicts.some((c) => c.type === 'DUPLICATE')).toBe(true);
+    });
+
+    it('should safely return zero confidence for UNASSIGNED entity queries', async () => {
+      const unassignedSub = await matchingService.matchSubject('UNASSIGNED', 'UNASSIGNED');
+      expect(unassignedSub.matchedId).toBeNull();
+      expect(unassignedSub.confidence).toBe(0.0);
+
+      const unassignedFac = await matchingService.matchFaculty('Unassigned', 'Unassigned');
+      expect(unassignedFac.matchedId).toBeNull();
+      expect(unassignedFac.confidence).toBe(0.0);
+
+      const unassignedRoom = await matchingService.matchRoom('UNASSIGNED');
+      expect(unassignedRoom.matchedId).toBeNull();
+      expect(unassignedRoom.confidence).toBe(0.0);
+    });
+
+    it('should successfully approve and commit batch, creating version, slots, templates and schedules', async () => {
+      const mockBatchId = 'batch-approve-success-1';
+      prismaMock.timetableImportBatch.findUnique.mockResolvedValue({
+        id: mockBatchId,
+        status: 'PENDING_REVIEW',
+        slots: [
+          {
+            id: 'slot-1',
+            day: 'MON',
+            timeSlotStart: '09:10 AM',
+            timeSlotEnd: '10:05 AM',
+            isMergedSlot: false,
+            sectionCodes: ['C'],
+            subjectRaw: 'Deep Learning',
+            facultyRaw: 'MR RANJEET SINGH',
+            room: '416',
+            category: 'academic',
+            matchedSubjectId: 'sub-1',
+            matchedFacultyId: 'fac-1',
+            matchedRoomId: 'room-1',
+            matchedSectionId: 'sec-1',
+          },
+          {
+            id: 'slot-2',
+            day: 'TUES',
+            timeSlotStart: '10:05 AM',
+            timeSlotEnd: '11:00 AM',
+            isMergedSlot: false,
+            sectionCodes: ['C'],
+            subjectRaw: 'Internet of Things',
+            facultyRaw: 'MR KRISHNA JAISWAL',
+            room: '416',
+            category: 'academic',
+            matchedSubjectId: 'sub-2',
+            matchedFacultyId: 'fac-2',
+            matchedRoomId: 'room-1',
+            matchedSectionId: 'sec-1',
+          },
+        ],
+      });
+
+      prismaMock.section.findUnique.mockResolvedValue({
+        id: 'sec-1',
+        name: 'C',
+        semesterId: 'sem-1',
+        semester: { programId: 'prog-1' },
+      });
+      prismaMock.section.findMany.mockResolvedValue([]);
+      prismaMock.timetableSlot.findMany.mockResolvedValue([]);
+      prismaMock.timetableVersion.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock.timetableVersion.create.mockResolvedValue({
+        id: 'ver-new-1',
+        sectionId: 'sec-1',
+        isActive: true,
+        importBatchId: mockBatchId,
+      });
+      prismaMock.timetableVersion.findMany.mockResolvedValue([
+        {
+          id: 'ver-new-1',
+          sectionId: 'sec-1',
+          isActive: true,
+          slots: [
+            {
+              day: 'MON',
+              timeSlotStart: '09:10 AM',
+              timeSlotEnd: '10:05 AM',
+              subjectId: 'sub-1',
+              facultyId: 'fac-1',
+              roomId: 'room-1',
+            },
+            {
+              day: 'TUES',
+              timeSlotStart: '10:05 AM',
+              timeSlotEnd: '11:00 AM',
+              subjectId: 'sub-2',
+              facultyId: 'fac-2',
+              roomId: 'room-1',
+            },
+          ],
+        },
+      ]);
+      prismaMock.timetableSlot.createMany.mockResolvedValue({ count: 2 });
+      prismaMock.scheduleTemplate.findMany.mockResolvedValue([]);
+      prismaMock.scheduleTemplate.create.mockImplementation((args: any) => ({
+        id: `tpl-${Math.random().toString(36).substring(7)}`,
+        ...args.data,
+      }));
+      prismaMock.schedule.findMany.mockResolvedValue([]);
+      prismaMock.schedule.createMany.mockResolvedValue({ count: 4 });
+      prismaMock.timetableImportBatch.update.mockResolvedValue({
+        id: mockBatchId,
+        status: 'COMMITTED',
+      });
+
+      const res = await importService.approveAndCommit(mockBatchId);
+
+      expect(res.success).toBe(true);
+      expect(prismaMock.timetableImportBatch.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockBatchId },
+          data: expect.objectContaining({ status: 'COMMITTED' }),
+        }),
+      );
+      expect(prismaMock.timetableVersion.create).toHaveBeenCalled();
+      expect(prismaMock.timetableSlot.createMany).toHaveBeenCalled();
+      expect(prismaMock.scheduleTemplate.create).toHaveBeenCalled();
+      expect(prismaMock.schedule.createMany).toHaveBeenCalled();
+    });
+
+    it('should be idempotent and return existing versions when batch is already COMMITTED', async () => {
+      const mockBatchId = 'batch-already-committed';
+      prismaMock.timetableImportBatch.findUnique.mockResolvedValue({
+        id: mockBatchId,
+        status: 'COMMITTED',
+        slots: [],
+      });
+      prismaMock.timetableVersion.findMany.mockResolvedValue([
+        { id: 'ver-existing-1', isActive: true, importBatchId: mockBatchId, slots: [] },
+      ]);
+
+      const res = await importService.approveAndCommit(mockBatchId);
+
+      expect(res.success).toBe(true);
+      expect(res.message).toMatch(/already approved and committed/i);
+      expect(prismaMock.timetableSlot.createMany).not.toHaveBeenCalled();
+      expect(prismaMock.schedule.createMany).not.toHaveBeenCalled();
+    });
+
+    it('should reject approval when batch is DISCARDED', async () => {
+      const mockBatchId = 'batch-discarded-1';
+      prismaMock.timetableImportBatch.findUnique.mockResolvedValue({
+        id: mockBatchId,
+        status: 'DISCARDED',
+        slots: [],
+      });
+
+      await expect(importService.approveAndCommit(mockBatchId)).rejects.toThrow(
+        /Cannot approve a discarded import batch/i,
+      );
+    });
+
+    it('should throw NotFoundException when approving a nonexistent batch', async () => {
+      prismaMock.timetableImportBatch.findUnique.mockResolvedValue(null);
+
+      await expect(importService.approveAndCommit('nonexistent-uuid')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should return conflicts without modifying database when blocking timetable conflict exists', async () => {
+      const mockBatchId = 'batch-with-conflict';
+      prismaMock.timetableImportBatch.findUnique.mockResolvedValue({
+        id: mockBatchId,
+        status: 'PENDING_REVIEW',
+        slots: [
+          {
+            id: 'slot-c1',
+            day: 'MON',
+            timeSlotStart: '09:10 AM',
+            timeSlotEnd: '10:05 AM',
+            sectionCodes: ['C'],
+            subjectRaw: 'Deep Learning',
+            facultyRaw: 'DR RANJEET SINGH',
+            room: '416',
+            category: 'academic',
+            matchedSubjectId: 'sub-1',
+            matchedFacultyId: 'fac-1',
+            matchedRoomId: 'room-1',
+            matchedSectionId: 'sec-c',
+          },
+        ],
+      });
+
+      // Existing active slot in another section with the same faculty at the same time
+      prismaMock.section.findMany.mockResolvedValue([]);
+      prismaMock.timetableSlot.findMany.mockResolvedValue([
+        {
+          id: 'exist-slot-1',
+          day: 'MON',
+          timeSlotStart: '09:10 AM',
+          timeSlotEnd: '10:05 AM',
+          facultyId: 'fac-1',
+          roomId: 'room-other',
+          version: { sectionId: 'sec-other', isActive: true },
+          subject: { name: 'Machine Learning' },
+          faculty: { firstName: 'Ranjeet', lastName: 'Singh' },
+          room: { code: 'CR-501' },
+        },
+      ]);
+
+      const res = await importService.approveAndCommit(mockBatchId);
+
+      expect(res.success).toBe(false);
+      expect(res.conflicts.length).toBeGreaterThan(0);
+      expect(res.conflicts[0].type).toBe('FACULTY');
+      // Verify database was NOT updated
+      expect(prismaMock.timetableImportBatch.update).not.toHaveBeenCalled();
+      expect(prismaMock.timetableVersion.create).not.toHaveBeenCalled();
+    });
+
+    it('should resolve room using numeric digits fallback when exact room code differs by prefix', async () => {
+      const mockBatchId = 'batch-room-fallback';
+      prismaMock.timetableImportBatch.findUnique.mockResolvedValue({
+        id: mockBatchId,
+        status: 'PENDING_REVIEW',
+        slots: [
+          {
+            id: 'slot-rf-1',
+            day: 'MON',
+            timeSlotStart: '09:10 AM',
+            timeSlotEnd: '10:05 AM',
+            sectionCodes: ['C'],
+            subjectRaw: 'Deep Learning',
+            facultyRaw: 'DR RANJEET SINGH',
+            room: 'L-418', // Extracted code is L-418
+            category: 'academic',
+            matchedSubjectId: 'sub-1',
+            matchedFacultyId: 'fac-1',
+            matchedRoomId: null, // Unmapped room initially
+            matchedSectionId: 'sec-1',
+          },
+        ],
+      });
+
+      prismaMock.section.findUnique.mockResolvedValue({
+        id: 'sec-1',
+        name: 'C',
+        semesterId: 'sem-1',
+        semester: { programId: 'prog-1' },
+      });
+      prismaMock.section.findMany.mockResolvedValue([]);
+      prismaMock.timetableSlot.findMany.mockResolvedValue([]);
+      // Room first findFirst fails with exact L-418, but second findFirst with digits '418' succeeds
+      prismaMock.room.findFirst = jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'room-cr-418',
+          code: 'CR-418',
+          name: '418',
+        });
+
+      prismaMock.timetableVersion.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock.timetableVersion.create.mockResolvedValue({ id: 'ver-1' });
+      prismaMock.timetableVersion.findMany.mockResolvedValue([
+        { id: 'ver-1', sectionId: 'sec-1', isActive: true, slots: [] },
+      ]);
+      prismaMock.timetableSlot.createMany.mockResolvedValue({ count: 1 });
+      prismaMock.scheduleTemplate.findMany.mockResolvedValue([]);
+      prismaMock.schedule.findMany.mockResolvedValue([]);
+      prismaMock.timetableImportBatch.update.mockResolvedValue({ id: mockBatchId, status: 'COMMITTED' });
+
+      const res = await importService.approveAndCommit(mockBatchId);
+
+      expect(res.success).toBe(true);
+      expect(prismaMock.timetableSlot.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [
+            expect.objectContaining({
+              roomId: 'room-cr-418',
+            }),
+          ],
+        }),
       );
     });
   });

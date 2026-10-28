@@ -724,7 +724,23 @@ export class TimetableImportService {
   async approveAndCommit(id: string, programId?: string) {
     const batch = await this.getBatchDetails(id);
     if (batch.status === 'COMMITTED') {
-      throw new BadRequestException('Batch is already committed.');
+      const existingVersions = await this.prisma.timetableVersion.findMany({
+        where: { importBatchId: id, isActive: true },
+        include: { slots: true },
+      });
+      return {
+        success: true,
+        message: 'Batch is already approved and committed.',
+        versions: existingVersions,
+      };
+    }
+
+    if (batch.status === 'DISCARDED') {
+      throw new BadRequestException('Cannot approve a discarded import batch.');
+    }
+
+    if (batch.status !== 'PENDING_REVIEW' && batch.status !== 'EXTRACTED') {
+      throw new BadRequestException(`Batch is not ready for approval (current status: ${batch.status}).`);
     }
 
     if (programId) {
@@ -737,11 +753,67 @@ export class TimetableImportService {
     }
 
     const slots = batch.slots;
+    if (!slots || slots.length === 0) {
+      throw new BadRequestException('No lecture slots found in this import batch to approve.');
+    }
+
+    // Collect target section IDs being updated in this batch
+    const targetSectionIds = new Set<string>();
+    for (const s of slots) {
+      if (s.matchedSectionId) targetSectionIds.add(s.matchedSectionId);
+    }
+
+    // Also collect sections from slot sectionCodes
+    for (const s of slots) {
+      if (!s.matchedSectionId && s.sectionCodes && s.sectionCodes.length > 0) {
+        for (const code of s.sectionCodes) {
+          const sec = await this.prisma.section.findFirst({
+            where: {
+              name: code.trim().toUpperCase(),
+              ...(programId ? { semester: { programId } } : {}),
+            },
+          });
+          if (sec) targetSectionIds.add(sec.id);
+        }
+      }
+    }
+
+    // Expand to all cohort sections in the same semester sharing the base cohort name (e.g., C, C1, C2, C1+C2)
+    if (targetSectionIds.size > 0) {
+      const seedSections = (await this.prisma.section.findMany({
+        where: { id: { in: Array.from(targetSectionIds) } },
+        include: { semester: true },
+      })) || [];
+      for (const sec of seedSections) {
+        const baseName = sec?.name ? (sec.name.split(/[\d+]/)[0].trim().toUpperCase() || sec.name.toUpperCase()) : '';
+        if (baseName && sec.semesterId) {
+          const cohortSections = (await this.prisma.section.findMany({
+            where: {
+              semesterId: sec.semesterId,
+              OR: [
+                { name: { equals: baseName, mode: 'insensitive' } },
+                { name: { startsWith: baseName, mode: 'insensitive' } },
+                { name: { contains: baseName, mode: 'insensitive' } },
+              ],
+            },
+            select: { id: true },
+          })) || [];
+          for (const cs of cohortSections) {
+            targetSectionIds.add(cs.id);
+          }
+        }
+      }
+    }
 
     // Run Stage 6: Conflict detection before finalizing database transaction
-    // Step 1: Collect active timetable slots from database
+    // Step 1: Collect active timetable slots from database EXCLUDING the sections being superseded
     const dbActiveSlots = await this.prisma.timetableSlot.findMany({
-      where: { version: { isActive: true } },
+      where: {
+        version: {
+          isActive: true,
+          ...(targetSectionIds.size > 0 ? { sectionId: { notIn: Array.from(targetSectionIds) } } : {}),
+        },
+      },
       include: {
         version: true,
         subject: true,
@@ -780,16 +852,13 @@ export class TimetableImportService {
     if (conflicts.length > 0) {
       return {
         success: false,
-        message: 'Blocking timetable conflicts detected.',
+        message: `Blocking timetable conflicts detected (${conflicts.length}). Please resolve conflicts before approving.`,
         conflicts,
       };
     }
 
-    // Step 2: Auto-create missing entities and commit within transaction
+    // Step 2: Validate and resolve all academic entities against real database records
     try {
-      // Pre-compute bcrypt password outside the interactive transaction to avoid blocking CPU time
-      const defaultPassHash = await bcrypt.hash('DefaultPass123!', 10);
-
       const result = await this.prisma.$transaction(
         async (tx) => {
           const subjectCache = new Map<string, string>();
@@ -797,10 +866,6 @@ export class TimetableImportService {
           const roomCache = new Map<string, string>();
           const sectionMap = new Map<string, any>(); // sectionId -> section entity with semester
           const sectionCodeMap = new Map<string, any>(); // cacheKey -> section entity with semester
-
-          const facultyRole = await tx.role.findUnique({
-            where: { code: 'FACULTY' },
-          });
 
           for (const slot of slots) {
             // 1. Resolve Section
@@ -833,16 +898,16 @@ export class TimetableImportService {
                   sectionMap.set(sectionId, cachedSec);
                 }
               } else {
-                let dbSec: any = null;
-                if (programId) {
-                  dbSec = await tx.section.findFirst({
-                    where: {
-                      name: secCode,
-                      semester: { programId },
-                    },
-                    include: { semester: true },
-                  });
-                } else {
+                let dbSec = await tx.section.findFirst({
+                  where: {
+                    name: secCode,
+                    ...(programId ? { semester: { programId } } : {}),
+                  },
+                  include: { semester: true },
+                });
+
+                if (!dbSec) {
+                  // Fallback without program filter
                   dbSec = await tx.section.findFirst({
                     where: { name: secCode },
                     include: { semester: true },
@@ -850,58 +915,21 @@ export class TimetableImportService {
                 }
 
                 if (!dbSec) {
-                  let targetSemester: any = null;
-                  if (programId) {
-                    // Attempt to extract semester number from section code (e.g. "AIML-7" -> 7, "C3" -> 3)
-                    let semNum = 1;
-                    const numMatch = secCode.match(/\b([1-8])\b/) || secCode.match(/([1-8])/);
-                    if (numMatch) {
-                      semNum = parseInt(numMatch[1], 10);
-                    }
-                    targetSemester = await tx.semester.findFirst({
-                      where: { programId, number: semNum },
-                    });
-                    if (!targetSemester) {
-                      targetSemester = await tx.semester.findFirst({
-                        where: { programId },
-                      });
-                    }
-                    if (!targetSemester) {
-                      // Create semester for this program
-                      targetSemester = await tx.semester.create({
-                        data: {
-                          programId,
-                          number: semNum,
-                          name: `Semester ${semNum}`,
-                          isActive: true,
-                        },
-                      });
-                    }
-                  } else {
-                    targetSemester = await tx.semester.findFirst();
-                  }
-
-                  if (!targetSemester) {
-                    throw new BadRequestException('Cannot auto-create Section without Semester in DB.');
-                  }
-                  dbSec = await tx.section.create({
-                    data: {
-                      name: secCode,
-                      semesterId: targetSemester.id,
-                    },
-                    include: { semester: true },
-                  });
+                  throw new BadRequestException(
+                    `Unresolved section "${secCode}" for slot on ${slot.day} (${slot.timeSlotStart}). Please ensure section exists in Academic catalog or map it before approving.`,
+                  );
                 }
+
                 sectionId = dbSec.id;
                 sectionCodeMap.set(cacheKey, dbSec);
-                if (sectionId) {
-                  sectionMap.set(sectionId, dbSec);
-                }
+                sectionMap.set(sectionId, dbSec);
               }
             }
 
             if (!sectionId) {
-              throw new BadRequestException(`Could not match or resolve Section for slot: ${slot.rawCellText}`);
+              throw new BadRequestException(
+                `Could not resolve section for slot on ${slot.day} (${slot.timeSlotStart}). Please map this slot to a valid section before approving.`,
+              );
             }
 
             let section = sectionMap.get(sectionId);
@@ -915,10 +943,8 @@ export class TimetableImportService {
               }
               sectionMap.set(sectionId, section);
             }
-            const semesterId = section.semesterId;
-            const activeProgramId = section.semester.programId;
 
-            // 2. Resolve Subject
+            // 2. Resolve Subject (against existing records)
             let subjectId = slot.matchedSubjectId;
             if (!subjectId && slot.subjectRaw) {
               const subClean = slot.subjectRaw.trim();
@@ -929,120 +955,163 @@ export class TimetableImportService {
                 subjectId = subjectCache.get(subClean) || null;
               } else {
                 let dbSub = await tx.subject.findFirst({
-                  where: { code: subCode },
+                  where: {
+                    OR: [
+                      { code: { equals: subCode, mode: 'insensitive' } },
+                      { code: { equals: subClean, mode: 'insensitive' } },
+                      { name: { equals: subClean, mode: 'insensitive' } },
+                    ],
+                  },
                 });
+
                 if (!dbSub) {
-                  const semNum = section.semester?.number || 1;
-                  dbSub = await tx.subject.create({
-                    data: {
-                      code: subCode,
-                      name: subClean,
-                      year: Math.ceil(semNum / 2),
-                      semesterId,
-                    },
-                  });
+                  const prefix = subClean.split('-')[0].trim();
+                  if (prefix) {
+                    dbSub = await tx.subject.findFirst({
+                      where: {
+                        OR: [
+                          { code: { equals: prefix, mode: 'insensitive' } },
+                          { name: { contains: prefix, mode: 'insensitive' } },
+                        ],
+                      },
+                    });
+                  }
                 }
+
+                if (!dbSub) {
+                  throw new BadRequestException(
+                    `Unresolved subject "${slot.subjectRaw}" on ${slot.day} (${slot.timeSlotStart}). Please map this slot to an existing subject before approving.`,
+                  );
+                }
+
                 subjectId = dbSub.id;
                 subjectCache.set(subClean, subjectId);
               }
             }
 
-            // 3. Resolve Faculty
+            if (!subjectId) {
+              throw new BadRequestException(
+                `Slot on ${slot.day} (${slot.timeSlotStart}) is missing a valid subject assignment.`,
+              );
+            }
+
+            // 3. Resolve Faculty (against existing records)
             let facultyId = slot.matchedFacultyId;
             if (!facultyId && slot.facultyRaw) {
               const facClean = slot.facultyRaw.trim();
               if (facultyCache.has(facClean)) {
                 facultyId = facultyCache.get(facClean) || null;
               } else {
-                const initials = facClean
-                  .split(' ')
-                  .map((n) => n[0])
-                  .join('')
-                  .toUpperCase()
-                  .replace(/[^A-Z]/g, '');
-                const employeeCode = `FAC-${initials}-${Math.floor(100 + Math.random() * 900)}`;
-
+                const nameWithoutTitle = facClean.replace(/^(mr|mrs|ms|dr|prof)\.?\s+/i, '').trim();
+                const firstName = nameWithoutTitle.split(' ')[0];
                 let dbFac = await tx.faculty.findFirst({
-                  where: { employeeCode },
+                  where: {
+                    OR: [
+                      { employeeCode: { equals: facClean, mode: 'insensitive' } },
+                      { firstName: { contains: firstName, mode: 'insensitive' } },
+                    ],
+                  },
                 });
 
                 if (!dbFac) {
-                  const email = `${facClean.toLowerCase().replace(/[^a-z]/g, '')}@inca.edu`;
-
-                  const firstRole = await tx.role.findFirst();
-                  if (!firstRole && !facultyRole) {
-                    throw new BadRequestException('No roles defined in the database.');
-                  }
-                  const roleId = facultyRole ? facultyRole.id : firstRole!.id;
-
-                  const user = await tx.user.create({
-                    data: {
-                      email,
-                      password: defaultPassHash,
-                      roleId,
-                      mustChangePassword: true,
-                    },
-                  });
-
-                  const names = facClean.replace(/^(mr|mrs|ms|dr|prof)\.?\s+/i, '').split(' ');
-                  const firstName = names[0] || 'Faculty';
-                  const lastName = names.slice(1).join(' ') || null;
-
-                  dbFac = await tx.faculty.create({
-                    data: {
-                      userId: user.id,
-                      employeeCode,
-                      firstName,
-                      lastName,
-                      gender: 'OTHER',
-                      designation: 'Lecturer',
-                    },
-                  });
+                  throw new BadRequestException(
+                    `Unresolved faculty "${slot.facultyRaw}" on ${slot.day} (${slot.timeSlotStart}). Please map this slot to an existing faculty member before approving.`,
+                  );
                 }
+
                 facultyId = dbFac.id;
                 facultyCache.set(facClean, facultyId);
               }
             }
 
-            // 4. Resolve Room
+            if (!facultyId) {
+              throw new BadRequestException(
+                `Slot on ${slot.day} (${slot.timeSlotStart}) for subject "${slot.subjectRaw}" is missing a valid faculty assignment.`,
+              );
+            }
+
+            // 4. Resolve Room (against existing records)
             let roomId = slot.matchedRoomId;
             if (!roomId && slot.room) {
               const roomCode = slot.room.trim().toUpperCase();
               if (roomCache.has(roomCode)) {
                 roomId = roomCache.get(roomCode) || null;
               } else {
-                let dbRoom = await tx.room.findUnique({
-                  where: { code: roomCode },
+                let dbRoom = await tx.room.findFirst({
+                  where: {
+                    OR: [
+                      { code: { equals: roomCode, mode: 'insensitive' } },
+                      { name: { equals: roomCode, mode: 'insensitive' } },
+                    ],
+                  },
                 });
+
                 if (!dbRoom) {
-                  dbRoom = await tx.room.create({
-                    data: {
-                      code: roomCode,
-                      name: `Room ${roomCode}`,
-                    },
-                  });
+                  const digits = roomCode.match(/\d+/)?.[0];
+                  if (digits) {
+                    dbRoom = await tx.room.findFirst({
+                      where: {
+                        OR: [
+                          { code: { equals: digits, mode: 'insensitive' } },
+                          { name: { equals: digits, mode: 'insensitive' } },
+                          { code: { contains: digits, mode: 'insensitive' } },
+                          { name: { contains: digits, mode: 'insensitive' } },
+                        ],
+                      },
+                    });
+                  }
                 }
+
+                if (!dbRoom) {
+                  throw new BadRequestException(
+                    `Unresolved room "${slot.room}" on ${slot.day} (${slot.timeSlotStart}). Please map this slot to an existing room before approving.`,
+                  );
+                }
+
                 roomId = dbRoom.id;
                 roomCache.set(roomCode, roomId);
               }
+            }
+
+            if (!roomId) {
+              throw new BadRequestException(
+                `Slot on ${slot.day} (${slot.timeSlotStart}) is missing a valid room assignment.`,
+              );
             }
 
             slot.matchedSectionId = sectionId;
             slot.matchedSubjectId = subjectId;
             slot.matchedFacultyId = facultyId;
             slot.matchedRoomId = roomId;
+
+            // Persist resolved IDs back into the draft record
+            if (slot.id) {
+              await tx.timetableSlotDraft.update({
+                where: { id: slot.id },
+                data: {
+                  matchedSectionId: sectionId,
+                  matchedSubjectId: subjectId,
+                  matchedFacultyId: facultyId,
+                  matchedRoomId: roomId,
+                },
+              });
+            }
           }
+
+          // Deactivate prior active versions for all superseded sections in targetSectionIds
+          await tx.timetableVersion.updateMany({
+            where: {
+              sectionId: { in: Array.from(targetSectionIds) },
+              isActive: true,
+            },
+            data: { isActive: false },
+          });
 
           // Commit as new versions for each section
           const uniqueSectionIds = Array.from(new Set(slots.map((s) => s.matchedSectionId).filter((s): s is string => !!s)));
           const createdVersions: any[] = [];
 
           for (const secId of uniqueSectionIds) {
-            await tx.timetableVersion.updateMany({
-              where: { sectionId: secId, isActive: true },
-              data: { isActive: false },
-            });
-
             const version = await tx.timetableVersion.create({
               data: {
                 sectionId: secId,
@@ -1079,6 +1148,10 @@ export class TimetableImportService {
             createdVersions.push(version);
           }
 
+          // Synchronize committed slots into ScheduleTemplate and generate daily schedules INSIDE THE ATOMIC TRANSACTION
+          const versionIds = createdVersions.map((v) => v.id);
+          await this.syncTimetableToSchedules(versionIds, undefined, undefined, tx);
+
           await tx.timetableImportBatch.update({
             where: { id },
             data: { status: 'COMMITTED', committedAt: new Date() },
@@ -1092,13 +1165,6 @@ export class TimetableImportService {
         },
       );
 
-      // Auto-sync committed slots into ScheduleTemplate and generate daily schedules
-      try {
-        await this.syncTimetableToSchedules();
-      } catch (syncErr) {
-        this.logger.warn('Non-fatal: failed to auto-sync schedules after commit', syncErr);
-      }
-
       return {
         success: true,
         message: 'Timetable batch successfully approved and committed.',
@@ -1106,6 +1172,9 @@ export class TimetableImportService {
       };
     } catch (txErr) {
       this.logger.error('Transaction failed during timetable commit', txErr);
+      if (txErr instanceof BadRequestException || txErr instanceof NotFoundException) {
+        throw txErr;
+      }
       throw new BadRequestException(`Failed to commit timetable: ${txErr.message}`);
     }
   }
@@ -1300,11 +1369,23 @@ export class TimetableImportService {
     }));
   }
 
-  async syncTimetableToSchedules(versionId?: string, startDateStr?: string, endDateStr?: string) {
+  async syncTimetableToSchedules(
+    versionIdOrIds?: string | string[],
+    startDateStr?: string,
+    endDateStr?: string,
+    txClient?: any,
+  ) {
+    const db = txClient || this.prisma;
     const whereClause: any = { isActive: true };
-    if (versionId) whereClause.id = versionId;
+    if (versionIdOrIds) {
+      if (Array.isArray(versionIdOrIds)) {
+        whereClause.id = { in: versionIdOrIds };
+      } else {
+        whereClause.id = versionIdOrIds;
+      }
+    }
 
-    const versions = await this.prisma.timetableVersion.findMany({
+    const versions = await db.timetableVersion.findMany({
       where: whereClause,
       include: {
         slots: {
@@ -1320,9 +1401,9 @@ export class TimetableImportService {
 
     const dayToInt: Record<string, number> = {
       MON: 1, MONDAY: 1,
-      TUE: 2, TUESDAY: 2,
+      TUE: 2, TUES: 2, TUESDAY: 2,
       WED: 3, WEDNESDAY: 3,
-      THU: 4, THURSDAY: 4,
+      THU: 4, THURS: 4, THURSDAY: 4,
       FRI: 5, FRIDAY: 5,
       SAT: 6, SATURDAY: 6,
       SUN: 7, SUNDAY: 7,
@@ -1331,19 +1412,29 @@ export class TimetableImportService {
     let templatesCreated = 0;
     let schedulesCreated = 0;
 
-    // Default 14 days from today
-    const start = startDateStr ? new Date(startDateStr) : new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = endDateStr ? new Date(endDateStr) : new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
-    end.setHours(23, 59, 59, 999);
+    // Default 14 days from today using calendar date to prevent timezone shifts
+    const now = new Date();
+    const startYear = now.getFullYear();
+    const startMonth = now.getMonth();
+    const startDay = now.getDate();
 
-    // Pre-fetch all existing templates into memory
-    const existingTemplates = await this.prisma.scheduleTemplate.findMany();
+    const start = startDateStr ? new Date(startDateStr) : new Date(Date.UTC(startYear, startMonth, startDay));
+    const end = endDateStr ? new Date(endDateStr) : new Date(Date.UTC(startYear, startMonth, startDay + 14));
+
+    // Collect affected section IDs
+    const affectedSectionIds = Array.from(new Set(versions.map((v: any) => v.sectionId)));
+
+    // Pre-fetch existing templates for affected sections
+    const existingTemplates = await db.scheduleTemplate.findMany({
+      where: affectedSectionIds.length > 0 ? { sectionId: { in: affectedSectionIds } } : {},
+    });
     const templateMap = new Map<string, any>();
     for (const t of existingTemplates) {
       const key = `${t.sectionId}:${t.subjectId}:${t.facultyId}:${t.roomId}:${t.dayOfWeek}:${t.startTime}:${t.endTime}`;
       templateMap.set(key, t);
     }
+
+    const currentTemplateMap = new Map<string, any>();
 
     for (const version of versions) {
       for (const slot of version.slots) {
@@ -1352,8 +1443,9 @@ export class TimetableImportService {
         const endTime = slot.timeSlotEnd.trim();
         const key = `${version.sectionId}:${slot.subjectId}:${slot.facultyId}:${slot.roomId}:${dayInt}:${startTime}:${endTime}`;
 
-        if (!templateMap.has(key)) {
-          const newTemplate = await this.prisma.scheduleTemplate.create({
+        let template = templateMap.get(key);
+        if (!template) {
+          template = await db.scheduleTemplate.create({
             data: {
               sectionId: version.sectionId,
               subjectId: slot.subjectId,
@@ -1365,45 +1457,57 @@ export class TimetableImportService {
               effectiveFrom: version.effectiveFrom || new Date(),
             },
           });
-          templateMap.set(key, newTemplate);
+          templateMap.set(key, template);
           templatesCreated++;
         }
+        currentTemplateMap.set(key, template);
       }
     }
 
-    // Pre-fetch existing schedules in date range
-    const existingSchedules = await this.prisma.schedule.findMany({
+    // Pre-fetch existing schedules in date range for templates of the active versions
+    const templateIds = Array.from(currentTemplateMap.values()).map((t) => t.id);
+    const existingSchedules = await db.schedule.findMany({
       where: {
+        templateId: { in: templateIds },
         lectureDate: { gte: start, lte: end },
       },
       select: { templateId: true, lectureDate: true },
     });
     const scheduleSet = new Set<string>();
     for (const s of existingSchedules) {
-      scheduleSet.add(`${s.templateId}:${s.lectureDate.toISOString().split('T')[0]}`);
+      const d = s.lectureDate;
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      scheduleSet.add(`${s.templateId}:${y}-${m}-${day}`);
     }
 
     const schedulesToCreate: any[] = [];
-    for (const [, template] of templateMap.entries()) {
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const currentDayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+    for (const [, template] of currentTemplateMap.entries()) {
+      const cur = new Date(start.getTime());
+      while (cur <= end) {
+        const currentDayOfWeek = cur.getUTCDay() === 0 ? 7 : cur.getUTCDay();
         if (currentDayOfWeek === template.dayOfWeek) {
-          const dateStr = d.toISOString().split('T')[0];
+          const y = cur.getUTCFullYear();
+          const m = cur.getUTCMonth();
+          const dayNum = cur.getUTCDate();
+          const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
           const schedKey = `${template.id}:${dateStr}`;
           if (!scheduleSet.has(schedKey)) {
             schedulesToCreate.push({
               templateId: template.id,
-              lectureDate: new Date(dateStr),
+              lectureDate: new Date(Date.UTC(y, m, dayNum)),
               status: 'SCHEDULED',
             });
             scheduleSet.add(schedKey);
           }
         }
+        cur.setUTCDate(cur.getUTCDate() + 1);
       }
     }
 
     if (schedulesToCreate.length > 0) {
-      await this.prisma.schedule.createMany({
+      await db.schedule.createMany({
         data: schedulesToCreate,
         skipDuplicates: true,
       });
@@ -1434,7 +1538,13 @@ export class TimetableImportService {
             include: {
               section: true,
               subject: true,
-              faculty: { include: { user: true } },
+              faculty: {
+                include: {
+                  user: {
+                    select: { id: true, email: true, isActive: true },
+                  },
+                },
+              },
               room: true,
             },
           },

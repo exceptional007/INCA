@@ -35,7 +35,7 @@ export class SchedulesController {
 
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT')
+  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT', 'HOD', 'COORDINATOR')
   @ApiOperation({ summary: 'Get all schedules' })
   findAll(@Req() req: any, @Query('facultyId') facultyIdQuery?: string) {
     const userRole = req.user?.role?.code || req.user?.role;
@@ -44,7 +44,7 @@ export class SchedulesController {
 
   @Get('today')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT')
+  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT', 'HOD', 'COORDINATOR')
   @ApiOperation({ summary: 'Get today\'s schedules' })
   getTodaySchedules(@Req() req: any, @Query('facultyId') facultyIdQuery?: string) {
     const userRole = req.user?.role?.code || req.user?.role;
@@ -53,7 +53,7 @@ export class SchedulesController {
 
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT')
+  @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT', 'HOD', 'COORDINATOR')
   @ApiOperation({ summary: 'Get schedule by ID' })
   findOne(@Param('id') id: string) {
     return this.schedulesService.findOne(id);

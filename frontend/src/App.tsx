@@ -14,6 +14,9 @@ const ActivitiesPage = lazy(() => import('./pages/activities/ActivitiesPage').th
 const MarkAttendancePage = lazy(() => import('./pages/attendance/MarkAttendancePage').then((m) => ({ default: m.MarkAttendancePage })));
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const TimetableImportPage = lazy(() => import('./pages/academic/import/TimetableImportPage').then((m) => ({ default: m.TimetableImportPage })));
+const NotesPage = lazy(() => import('./pages/notes/NotesPage').then((m) => ({ default: m.NotesPage })));
+const MarketplacePage = lazy(() => import('./pages/marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })));
+const LostFoundPage = lazy(() => import('./pages/lost-found/LostFoundPage').then((m) => ({ default: m.LostFoundPage })));
 const FeatureHub = lazy(() => import('./pages/dashboard/FeatureHub').then((m) => ({ default: m.FeatureHub })));
 
 const PageLoader = () => (
@@ -53,6 +56,9 @@ export const App: React.FC = () => {
                   <Route path="/schedules" element={<SchedulingPage />} />
                   <Route path="/activities" element={<ActivitiesPage />} />
                   <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/notes" element={<NotesPage />} />
+                  <Route path="/marketplace" element={<MarketplacePage />} />
+                  <Route path="/lost-found" element={<LostFoundPage />} />
 
                   {/* Take Attendance - FACULTY, HOD, COORDINATOR, ADMIN only (SUPER_ADMIN blocked) */}
                   <Route

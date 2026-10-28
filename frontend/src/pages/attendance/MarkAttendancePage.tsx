@@ -24,10 +24,12 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import { CardSwipeAttendance } from '@/components/attendance/CardSwipeAttendance';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 
 export const MarkAttendancePage: React.FC = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const scheduleIdParam = searchParams.get('scheduleId');
@@ -248,6 +250,11 @@ export const MarkAttendancePage: React.FC = () => {
       // 2. Lock session
       await api.patch(`/attendance/sessions/${activeSession.id}/submit`);
 
+      // Invalidate dashboard and reporting caches
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['schedules'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+
       setStatusMsg('✅ Attendance submitted and locked successfully!');
       setActiveSession((prev: any) => ({ ...prev, status: 'SUBMITTED' }));
     } catch (err: any) {
@@ -268,6 +275,9 @@ export const MarkAttendancePage: React.FC = () => {
         editedById: user.id,
         reason: editReason,
       });
+
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
 
       setStatusMsg(`✅ Record updated to ${editStatus} with audit entry!`);
       setAuditModalOpen(false);

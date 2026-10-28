@@ -18,12 +18,14 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, Upload, History, ArrowLeft, RefreshCw, AlertTriangle, CheckCircle, GraduationCap } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '@/api/axios';
 import { TimetableBatchList } from './components/TimetableBatchList';
 import { TimetableReviewGrid } from './components/TimetableReviewGrid';
 import { TimetableVersionHistory } from './components/TimetableVersionHistory';
 
 export const TimetableImportPage: React.FC = () => {
+  const queryClient = useQueryClient();
   const [view, setView] = useState<'list' | 'upload' | 'review' | 'history'>('list');
   const [batches, setBatches] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
@@ -227,14 +229,25 @@ export const TimetableImportPage: React.FC = () => {
       if (res.data.success === false) {
         setConflicts(res.data.conflicts || []);
         setIsApproveModalOpen(false);
+        const conflictCount = res.data.conflicts?.length || 0;
+        const sampleDetails = res.data.conflicts?.slice(0, 3).map((c: any) => `• ${c.message}`).join('\n') || '';
+        alert(`Cannot approve timetable: ${res.data.message || 'Scheduling conflicts detected.'}\n\n${sampleDetails}${conflictCount > 3 ? `\n...and ${conflictCount - 3} more conflict(s).` : ''}\n\nPlease review and resolve conflicting slots on the review page.`);
       } else {
         alert('Timetable batch successfully approved, linked to program, and scheduled!');
         setIsApproveModalOpen(false);
+        // Authoritatively update selectedBatch status so review page reflects committed state
+        setSelectedBatch((prev: any) => prev ? { ...prev, status: 'COMMITTED', committedAt: new Date().toISOString() } : null);
+        // Invalidate queries so scheduling, dashboard, and reports pages reflect new timetable & schedules
+        queryClient.invalidateQueries({ queryKey: ['schedules'] });
+        queryClient.invalidateQueries({ queryKey: ['reports'] });
+        queryClient.invalidateQueries({ queryKey: ['attendance'] });
+        queryClient.invalidateQueries({ queryKey: ['academic'] });
         setView('list');
-        fetchBatches();
+        await fetchBatches();
       }
     } catch (err: any) {
-      alert(`Approval failed: ${err.response?.data?.message || 'Error occurred.'}`);
+      console.error('Approval failed:', err);
+      alert(`Approval failed: ${err.response?.data?.message || err.message || 'Error occurred.'}`);
     } finally {
       setIsCommitLoading(false);
     }
@@ -502,16 +515,16 @@ export const TimetableImportPage: React.FC = () => {
                       <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400 bg-amber-500/10 p-2.5 rounded border border-amber-500/30">
                         <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
                         <div>
-                          <span className="font-bold">{unassignedTeacherCount} lecture slot(s) have unassigned teachers.</span>
+                          <span className="font-bold">{unassignedTeacherCount} lecture slot(s) require teacher assignment.</span>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
-                            They will be auto-assigned an auto-generated faculty profile, or you can cancel and assign teachers using the pencil icon on each card.
+                            Please ensure all teachers are mapped to active faculty records using the pencil icon on each card before committing.
                           </p>
                         </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 p-2 rounded border border-emerald-500/20">
                         <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" />
-                        <span>All {currentSlots.length} lecture slots have registered teachers assigned.</span>
+                        <span>All {currentSlots.length} lecture slots have verified teachers assigned.</span>
                       </div>
                     )}
 
@@ -521,7 +534,7 @@ export const TimetableImportPage: React.FC = () => {
                         <div>
                           <span className="font-bold">{unassignedSubjectCount} lecture slot(s) have unmatched subjects.</span>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
-                            These subjects will be auto-created under this program upon approval.
+                            Please map these slots to approved subjects in the Academic catalog using the edit card action before approving.
                           </p>
                         </div>
                       </div>

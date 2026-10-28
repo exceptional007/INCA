@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 export interface ConflictDetail {
-  type: 'FACULTY' | 'ROOM' | 'SECTION';
+  type: 'FACULTY' | 'ROOM' | 'SECTION' | 'TIME_RANGE' | 'DUPLICATE';
   message: string;
   slot1: {
     day: string;
@@ -12,7 +12,7 @@ export interface ConflictDetail {
     room?: string;
     sectionName?: string;
   };
-  slot2: {
+  slot2?: {
     day: string;
     timeSlotStart: string;
     timeSlotEnd: string;
@@ -26,7 +26,7 @@ export interface ConflictDetail {
 @Injectable()
 export class ConflictService {
   parseTimeToMinutes(timeStr: string): number {
-    const cleaned = timeStr.replace(/\s+/g, ' ').trim();
+    const cleaned = (timeStr || '').replace(/\s+/g, ' ').trim();
     const match = cleaned.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
     if (!match) {
       // Fallback: try parsing with space or no space
@@ -105,6 +105,27 @@ export class ConflictService {
   ): ConflictDetail[] {
     const conflicts: ConflictDetail[] = [];
 
+    // Step 0: Validate individual slot time ranges
+    for (const slot of newSlots) {
+      const s = this.parseTimeToMinutes(slot.timeSlotStart);
+      const e = this.parseTimeToMinutes(slot.timeSlotEnd);
+      if (s > 0 && e > 0 && s >= e) {
+        conflicts.push({
+          type: 'TIME_RANGE',
+          message: `Invalid time range on ${slot.day}: start time (${slot.timeSlotStart}) must be strictly before end time (${slot.timeSlotEnd}).`,
+          slot1: {
+            day: slot.day,
+            timeSlotStart: slot.timeSlotStart,
+            timeSlotEnd: slot.timeSlotEnd,
+            subjectName: slot.subjectName,
+            facultyName: slot.facultyFullName,
+            room: slot.room,
+            sectionName: slot.sectionCodes.join('+'),
+          },
+        });
+      }
+    }
+
     // Step 1: Detect internal conflicts (among the new slots)
     for (let i = 0; i < newSlots.length; i++) {
       for (let j = i + 1; j < newSlots.length; j++) {
@@ -119,9 +140,16 @@ export class ConflictService {
         // Section conflict (if they share any sections)
         const commonSections = slotA.sectionCodes.filter(sec => slotB.sectionCodes.includes(sec));
         if (commonSections.length > 0) {
+          const isExactDuplicate =
+            slotA.timeSlotStart === slotB.timeSlotStart &&
+            slotA.timeSlotEnd === slotB.timeSlotEnd &&
+            slotA.subjectName.trim().toUpperCase() === slotB.subjectName.trim().toUpperCase();
+
           conflicts.push({
-            type: 'SECTION',
-            message: `Double class booked for section group(s) [${commonSections.join(', ')}] on ${slotA.day} at ${slotA.timeSlotStart}-${slotA.timeSlotEnd}.`,
+            type: isExactDuplicate ? 'DUPLICATE' : 'SECTION',
+            message: isExactDuplicate
+              ? `Duplicate timetable entry for subject "${slotA.subjectName}" in section [${commonSections.join(', ')}] on ${slotA.day} at ${slotA.timeSlotStart}-${slotA.timeSlotEnd}.`
+              : `Double class booked for section group(s) [${commonSections.join(', ')}] on ${slotA.day} at ${slotA.timeSlotStart}-${slotA.timeSlotEnd}.`,
             slot1: {
               day: slotA.day,
               timeSlotStart: slotA.timeSlotStart,

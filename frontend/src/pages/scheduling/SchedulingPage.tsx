@@ -120,13 +120,14 @@ export const SchedulingPage: React.FC = () => {
           <Badge
             variant={
               status === 'COMPLETED'
-                ? 'default'
+                ? 'success'
                 : status === 'CANCELLED'
                 ? 'destructive'
                 : status === 'RESCHEDULED'
-                ? 'outline'
+                ? 'warning'
                 : 'secondary'
             }
+            className="text-[10px] font-semibold"
           >
             {status}
           </Badge>

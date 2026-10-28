@@ -190,3 +190,33 @@ export const useStudentNotices = (enabled: boolean = true) => {
   });
 };
 
+// Admin & HOD Dashboard Summary
+export const useAdminDashboardSummary = (departmentId?: string, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['reports', 'dashboard', 'admin', { departmentId }],
+    queryFn: async () => {
+      const query = departmentId && departmentId !== 'ALL' ? `?departmentId=${departmentId}` : '';
+      const res = await api.get(`/reports/dashboard/admin${query}`);
+      return res.data?.data || null;
+    },
+    staleTime: 30 * 1000, // 30s cache
+    gcTime: 5 * 60 * 1000,
+    enabled,
+  });
+};
+
+// Coordinator Dashboard Summary
+export const useCoordinatorDashboardSummary = (sectionId?: string, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['reports', 'dashboard', 'coordinator', { sectionId }],
+    queryFn: async () => {
+      const query = sectionId ? `?sectionId=${sectionId}` : '';
+      const res = await api.get(`/reports/dashboard/coordinator${query}`);
+      return res.data?.data || null;
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    enabled,
+  });
+};
+

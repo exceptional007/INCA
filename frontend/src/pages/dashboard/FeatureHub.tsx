@@ -21,7 +21,8 @@ import {
   DollarSign, 
   MessageSquare, 
   PieChart, 
-  Leaf 
+  Leaf,
+  SearchCheck 
 } from 'lucide-react';
 
 export const FeatureHub: React.FC = () => {
@@ -47,20 +48,29 @@ export const FeatureHub: React.FC = () => {
     {
       id: 'tutor',
       name: 'AI Notes & Tutor',
-      description: 'Automated study transcripts, summary generation, and interactive chat tutoring.',
+      description: 'Department notes library, document-grounded AI tutor, and interactive quizzes.',
       icon: Sparkles,
-      active: false,
-      badge: 'Coming Soon',
-      url: '#',
+      active: true,
+      badge: 'Active',
+      url: '/notes',
     },
     {
       id: 'marketplace',
       name: 'Campus Marketplace',
-      description: 'Exchange books, dorm items, and equipment with verified student peers.',
+      description: 'Exchange books, dorm items, and equipment with verified campus peers.',
       icon: DollarSign,
-      active: false,
-      badge: 'Coming Soon',
-      url: '#',
+      active: true,
+      badge: 'Active',
+      url: '/marketplace',
+    },
+    {
+      id: 'lost-found',
+      name: 'AI-Powered Lost & Found',
+      description: 'Report lost or found belongings, match items with Gemini AI, and safely verify campus handovers.',
+      icon: SearchCheck,
+      active: true,
+      badge: 'Active',
+      url: '/lost-found',
     },
     {
       id: 'noticeboard',

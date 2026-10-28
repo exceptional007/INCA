@@ -128,24 +128,34 @@ export class SchedulesService {
     }
 
     const templates = await this.templateRepository.findAll();
+    const existingSchedules = await this.scheduleRepository.findByDateRange(start, end);
+    const existingKeySet = new Set(
+      existingSchedules.map((s) => `${s.templateId}_${s.lectureDate instanceof Date ? s.lectureDate.toISOString().slice(0, 10) : new Date(s.lectureDate).toISOString().slice(0, 10)}`)
+    );
+
     const schedulesToCreate: any[] = [];
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay(); 
+      const dateStr = d.toISOString().slice(0, 10);
       
       const dayTemplates = templates.filter(t => t.dayOfWeek === dayOfWeek && t.effectiveFrom <= d && (!t.effectiveTo || t.effectiveTo >= d));
       
       for (const t of dayTemplates) {
-        schedulesToCreate.push({
-          templateId: t.id,
-          lectureDate: new Date(d),
-          status: 'SCHEDULED',
-        });
+        const key = `${t.id}_${dateStr}`;
+        if (!existingKeySet.has(key)) {
+          existingKeySet.add(key);
+          schedulesToCreate.push({
+            templateId: t.id,
+            lectureDate: new Date(d),
+            status: 'SCHEDULED',
+          });
+        }
       }
     }
 
     if (schedulesToCreate.length === 0) {
-      return { success: true, message: 'No schedules to generate for this date range.', data: [] };
+      return { success: true, message: 'All schedules for this date range have already been generated.', data: [] };
     }
 
     await this.scheduleRepository.createMany(schedulesToCreate);

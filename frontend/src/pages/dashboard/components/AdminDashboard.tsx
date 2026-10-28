@@ -1,12 +1,38 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card } from '@/components/ui/card';
-import { Users, GraduationCap, Building2, CheckCircle, Search, Plus, Trash2, Edit3, ShieldAlert, Filter, RotateCcw } from 'lucide-react';
+import { Card, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  Users,
+  GraduationCap,
+  Building2,
+  Search,
+  Plus,
+  Trash2,
+  Edit3,
+  ShieldAlert,
+  Filter,
+  RotateCcw,
+  Calendar,
+  AlertTriangle,
+  TrendingUp,
+  Activity,
+  CheckCircle2,
+} from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import api from '@/api/axios';
 import { useAuth } from '@/context/AuthContext';
+import { useAdminDashboardSummary } from '@/hooks/useAcademicQueries';
 import {
   Dialog,
   DialogContent,
@@ -69,12 +95,6 @@ interface CourseRule {
 
 export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
-  const departmentDisplayName =
-    (user as any)?.departmentName ||
-    (user as any)?.adminProfile?.department?.name ||
-    (user as any)?.department?.name ||
-    (user as any)?.department?.shortName ||
-    null;
   const [activeTab, setActiveTab] = useState<'overview' | 'faculty' | 'students' | 'coordinators' | 'policies'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -84,6 +104,20 @@ export const AdminDashboard: React.FC = () => {
   const [selectedBatchFilter, setSelectedBatchFilter] = useState<string>('ALL');
   const [selectedDesignationFilter, setSelectedDesignationFilter] = useState<string>('ALL');
   const [allDepartmentsList, setAllDepartmentsList] = useState<string[]>([]);
+
+  // Real aggregate summary from backend
+  const { data: adminSummary, refetch: refetchSummary } = useAdminDashboardSummary(
+    selectedDepartmentFilter !== 'ALL' ? selectedDepartmentFilter : undefined,
+  );
+
+  const departmentDisplayName =
+    adminSummary?.department?.name ||
+    (user as any)?.departmentName ||
+    (user as any)?.adminProfile?.department?.name ||
+    (user as any)?.faculty?.department?.name ||
+    (user as any)?.department?.name ||
+    (user as any)?.department?.shortName ||
+    null;
 
   // Faculty-specific form fields
   const [facFirstName, setFacFirstName] = useState('');
@@ -135,12 +169,8 @@ export const AdminDashboard: React.FC = () => {
   const uniqueBatches = useMemo(() => {
     const batchSet = new Set<string>();
     students.forEach((s) => {
-      if (s.batch) batchSet.add(s.batch);
+      if (s.batch && s.batch !== 'General Roster') batchSet.add(s.batch);
     });
-    if (batchSet.size === 0) {
-      batchSet.add('2023-27');
-      batchSet.add('2024-28');
-    }
     return Array.from(batchSet).sort();
   }, [students]);
 
@@ -149,12 +179,6 @@ export const AdminDashboard: React.FC = () => {
     faculties.forEach((f) => {
       if (f.designation) desigSet.add(f.designation);
     });
-    if (desigSet.size === 0) {
-      desigSet.add('Professor');
-      desigSet.add('Associate Professor');
-      desigSet.add('Assistant Professor');
-      desigSet.add('Lecturer');
-    }
     return Array.from(desigSet).sort();
   }, [faculties]);
 
@@ -247,6 +271,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Fetch all dashboard data from backend
   const fetchData = async () => {
+    refetchSummary();
     setLoading(true);
     try {
       // 1. Fetch departments (Only for SUPER_ADMIN, as ADMIN is restricted from departments endpoint)
@@ -298,31 +323,14 @@ export const AdminDashboard: React.FC = () => {
         if (studRes.data?.success) {
           const studs = studRes.data.data || [];
           setStudents(studs.map((s: any) => {
-            const roll = s.rollNumber || '';
-            let department = s.department?.name || s.department?.shortName || '';
-            if (!department) {
-              if (roll.startsWith('MEB')) {
-                department = 'Mechanical Eng.';
-              } else if (roll.startsWith('MAB')) {
-                department = 'Mathematics';
-              } else if (roll.startsWith('CS') || roll.startsWith('CSE')) {
-                department = 'Computer Science & Engineering';
-              } else {
-                department = (user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || departmentDisplayName || 'Unassigned';
-              }
-            }
-            let batch = '2023-27';
-            if (roll.match(/\d+/)) {
-              const yearDigits = roll.match(/\d+/)[0].substring(0, 2);
-              if (yearDigits) {
-                const startYear = parseInt('20' + yearDigits);
-                batch = `${startYear}-${startYear + 4}`;
-              }
-            }
+            const department = s.department?.name || s.department?.shortName || departmentDisplayName || 'Unassigned';
+            const batch = s.section
+              ? `${s.section.semester?.program?.shortName || s.section.semester?.program?.name || 'Program'} Sem ${s.section.semester?.number || ''} (${s.section.name})`.trim()
+              : (s.enrollmentNumber || 'General Roster');
             return {
               id: s.id,
               name: `${s.firstName} ${s.lastName || ''}`.trim(),
-              rollNumber: s.rollNumber,
+              rollNumber: s.rollNumber || s.collegeId || '',
               department,
               batch,
             };
@@ -664,8 +672,8 @@ export const AdminDashboard: React.FC = () => {
             <span>{departmentDisplayName || 'Unassigned'}</span>
           </Badge>
 
-          {/* Navigation Tabs (Apple capsule style) */}
-          <div className="flex flex-wrap bg-canvas-parchment p-1 rounded-full border">
+          {/* Navigation Tabs */}
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/80 overflow-x-auto max-w-full scrollbar-none">
             {['overview', 'faculty', 'students', 'coordinators', 'policies'].map((tab) => (
               <button
                 key={tab}
@@ -673,8 +681,8 @@ export const AdminDashboard: React.FC = () => {
                   setActiveTab(tab as any);
                   setSearchQuery('');
                 }}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer capitalize ${
-                  activeTab === tab ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer capitalize ${
+                  activeTab === tab ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab === 'policies' ? 'Rules & Policies' : tab}
@@ -687,15 +695,20 @@ export const AdminDashboard: React.FC = () => {
       {/* --- Tab Content: Overview --- */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* Real Metrics 6-Card Grid */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
               <div className="flex items-center justify-between text-ink-muted-80">
-                <span className="text-xs font-bold uppercase tracking-wider">Departments</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Department Scope</span>
                 <Building2 className="h-4.5 w-4.5 text-action-blue" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-ink">{departmentsCount}</span>
-                <p className="text-[10px] text-ink-muted-48 mt-1">{departmentsList}</p>
+                <span className="text-xl font-semibold text-ink truncate block">
+                  {adminSummary?.department?.shortName || adminSummary?.department?.code || (departmentDisplayName ? 'Scoped' : `${departmentsCount} Registered`)}
+                </span>
+                <p className="text-[10px] text-ink-muted-48 mt-1 truncate">
+                  {adminSummary?.department?.name || departmentsList}
+                </p>
               </div>
             </Card>
 
@@ -705,8 +718,10 @@ export const AdminDashboard: React.FC = () => {
                 <Users className="h-4.5 w-4.5 text-action-blue" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-ink">{faculties.length}</span>
-                <p className="text-[10px] text-ink-muted-48 mt-1">Registered lecturers</p>
+                <span className="text-2xl font-semibold text-ink">
+                  {adminSummary?.activeFacultyCount ?? faculties.length}
+                </span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">Teaching lecturers</p>
               </div>
             </Card>
 
@@ -716,58 +731,248 @@ export const AdminDashboard: React.FC = () => {
                 <GraduationCap className="h-4.5 w-4.5 text-action-blue" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-ink">{students.length}</span>
+                <span className="text-2xl font-semibold text-ink">
+                  {adminSummary?.activeStudentsCount ?? students.length}
+                </span>
                 <p className="text-[10px] text-ink-muted-48 mt-1">Enrolled students</p>
               </div>
             </Card>
 
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
               <div className="flex items-center justify-between text-ink-muted-80">
-                <span className="text-xs font-bold uppercase tracking-wider">Pending Tasks</span>
-                <CheckCircle className="h-4.5 w-4.5 text-action-blue" />
+                <span className="text-xs font-bold uppercase tracking-wider">Today's Classes</span>
+                <Calendar className="h-4.5 w-4.5 text-action-blue" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-ink">{pendingApprovals.length}</span>
-                <p className="text-[10px] text-ink-muted-48 mt-1">Awaiting administrative actions</p>
+                <span className="text-2xl font-semibold text-ink">
+                  {adminSummary?.todaySchedulesCount ?? 0}
+                </span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">
+                  {adminSummary?.todaySessionsCount ?? 0} session(s) taken
+                </p>
+              </div>
+            </Card>
+
+            <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+              <div className="flex items-center justify-between text-ink-muted-80">
+                <span className="text-xs font-bold uppercase tracking-wider">Attendance Rate</span>
+                <TrendingUp className="h-4.5 w-4.5 text-action-blue" />
+              </div>
+              <div className="mt-4">
+                <span className="text-2xl font-semibold text-ink">
+                  {adminSummary?.attendanceRate ?? 0}%
+                </span>
+                <p className={`text-[10px] font-semibold mt-1 ${(adminSummary?.attendanceRate ?? 0) >= 75 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {(adminSummary?.attendanceRate ?? 0) >= 75 ? 'Optimal benchmark' : 'Below 75% target'}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
+              <div className="flex items-center justify-between text-ink-muted-80">
+                <span className="text-xs font-bold uppercase tracking-wider">Shortfall Alerts</span>
+                <AlertTriangle className="h-4.5 w-4.5 text-amber-500" />
+              </div>
+              <div className="mt-4">
+                <span className={`text-2xl font-semibold ${(adminSummary?.shortfallCount ?? 0) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {adminSummary?.shortfallCount ?? 0}
+                </span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">Students under 75%</p>
               </div>
             </Card>
           </div>
 
-          <div className="bg-white border border-[#e0e0e0] rounded-[18px] p-6">
-            <div className="flex items-center gap-2 pb-4 border-b mb-6">
-              <ShieldAlert className="h-5 w-5 text-action-blue" />
-              <div>
-                <h3 className="text-sm font-semibold text-ink mt-0.5">Recent Requests & Approvals</h3>
-                <p className="text-[10px] text-ink-muted-48">Audit log of system overrides and scheduling shifts.</p>
-              </div>
+          {/* Chart & Activity Rows */}
+          <div className="grid gap-6 lg:grid-cols-7">
+            {/* Left 4 Cols: Attendance Trend Chart & Recent Sessions */}
+            <div className="col-span-4 space-y-6">
+              {/* Attendance Trend Chart */}
+              <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-6 shadow-none">
+                <div className="pb-4 border-b flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-ink">Department Attendance Trend</CardTitle>
+                    <CardDescription className="text-xs text-ink-muted-80">
+                      Daily attendance turnout across recent verified lecture sessions.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] font-mono">
+                    Live Verified Records
+                  </Badge>
+                </div>
+
+                <div className="mt-6 h-[220px] w-full">
+                  {(!adminSummary?.attendanceTrend || adminSummary.attendanceTrend.length === 0) ? (
+                    <div className="h-full flex flex-col items-center justify-center text-ink-muted-48 text-xs space-y-2">
+                      <Activity className="h-6 w-6 text-ink-muted-48" />
+                      <p>No historical attendance sessions recorded yet for this scope.</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={adminSummary.attendanceTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="rateGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis
+                          dataKey="date"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontSize: 10, fill: '#888' }}
+                          tickFormatter={(str: string) => {
+                            try {
+                              const d = new Date(str);
+                              return `${d.getMonth() + 1}/${d.getDate()}`;
+                            } catch {
+                              return str;
+                            }
+                          }}
+                        />
+                        <YAxis
+                          domain={[0, 100]}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontSize: 10, fill: '#888' }}
+                          unit="%"
+                        />
+                        <Tooltip
+                          formatter={(value: any) => [`${value}% Attendance`, 'Turnout']}
+                          labelFormatter={(label: any) => `Date: ${label}`}
+                          contentStyle={{
+                            backgroundColor: '#ffffff',
+                            borderRadius: '12px',
+                            border: '1px solid #e0e0e0',
+                            fontSize: '11px',
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="rate"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#rateGradient)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </Card>
+
+              {/* Recent Classroom Attendance Sessions */}
+              <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-6 shadow-none">
+                <div className="pb-4 border-b flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-ink">Recent Classroom Sessions</CardTitle>
+                    <CardDescription className="text-xs text-ink-muted-80">
+                      Attendance submissions logged by department faculty.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="text-[10px]">
+                    {adminSummary?.recentActivity?.length ?? 0} Recent
+                  </Badge>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {(!adminSummary?.recentActivity || adminSummary.recentActivity.length === 0) ? (
+                    <div className="text-center py-8 text-xs text-ink-muted-48">
+                      No lecture attendance sessions logged yet.
+                    </div>
+                  ) : (
+                    adminSummary.recentActivity.map((act: any) => {
+                      const rate = act.total > 0 ? Math.round((act.present / act.total) * 100) : 0;
+                      return (
+                        <div key={act.id} className="flex items-center justify-between p-3 rounded-xl border border-[#e8e8e8] hover:bg-canvas-parchment/30 transition-colors">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-ink">{act.subject}</span>
+                              <span className="text-[10px] font-mono text-ink-muted-80">({act.code})</span>
+                            </div>
+                            <p className="text-[10px] text-ink-muted-48">
+                              Faculty: {act.faculty} &bull; {act.section} &bull; {act.date}
+                            </p>
+                          </div>
+                          <div className="text-right flex items-center gap-2">
+                            <div className="text-xs font-semibold text-ink">
+                              {act.present} / {act.total}
+                              <span className="text-[10px] text-ink-muted-48 block">students present</span>
+                            </div>
+                            <Badge
+                              className={`text-[9px] rounded-full ${
+                                rate >= 75
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                            >
+                              {rate}%
+                            </Badge>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </Card>
             </div>
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-6 space-y-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-action-blue"></div>
-                <p className="text-xs text-ink-muted-48">Loading requests...</p>
-              </div>
-            ) : pendingApprovals.length === 0 ? (
-              <div className="text-center py-6 text-ink-muted-48 text-xs">No pending requests require attention.</div>
-            ) : (
-              <div className="space-y-4">
-                {pendingApprovals.map((req) => (
-                  <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-canvas-parchment/30 rounded-xl border border-[#e5e5e5] hover:border-action-blue/20 transition-colors">
-                    <div className="space-y-1">
-                      <span className="text-xs font-bold text-ink">{req.title}</span>
-                      <p className="text-[11px] text-ink-muted-80 leading-relaxed">{req.details}</p>
-                      <div className="flex items-center gap-2 pt-1">
-                        <Badge className="bg-amber-50 text-amber-700 border-amber-200/50 text-[9px] hover:bg-amber-50">Pending Approval</Badge>
-                        <span className="text-[9px] text-ink-muted-48">Requested by: {req.requester}</span>
-                      </div>
-                    </div>
-                    <Button onClick={() => handleApprove(req.id)} size="sm" className="bg-action-blue hover:opacity-95 text-white rounded-full text-xs font-semibold px-4 py-1 h-8">
-                      Approve Request
-                    </Button>
+            {/* Right 3 Cols: Pending Administrative Approvals */}
+            <div className="col-span-3 space-y-6">
+              <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-6 shadow-none">
+                <div className="flex items-center gap-2 pb-4 border-b mb-6">
+                  <ShieldAlert className="h-5 w-5 text-action-blue" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-ink mt-0.5">Pending Action Requests</h3>
+                    <p className="text-[10px] text-ink-muted-48">
+                      {pendingApprovals.length} item(s) awaiting administrative review.
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-6 space-y-2">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-action-blue"></div>
+                    <p className="text-xs text-ink-muted-48">Loading requests...</p>
+                  </div>
+                ) : pendingApprovals.length === 0 ? (
+                  <div className="text-center py-10 text-ink-muted-48 text-xs space-y-2">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
+                    <p className="font-semibold text-ink">All tasks up to date</p>
+                    <p className="text-[11px] text-ink-muted-48">No pending duty leaves or schedule overrides require your attention.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingApprovals.map((req) => (
+                      <div
+                        key={req.id}
+                        className="p-4 bg-canvas-parchment/30 rounded-xl border border-[#e5e5e5] hover:border-action-blue/20 transition-colors space-y-3"
+                      >
+                        <div className="space-y-1">
+                          <span className="text-xs font-bold text-ink">{req.title}</span>
+                          <p className="text-[11px] text-ink-muted-80 leading-relaxed">{req.details}</p>
+                          <div className="flex items-center gap-2 pt-1">
+                            <Badge className="bg-amber-50 text-amber-700 border-amber-200/50 text-[9px]">
+                              Pending Approval
+                            </Badge>
+                            <span className="text-[9px] text-ink-muted-48 truncate">
+                              By: {req.requester}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handleApprove(req.id)}
+                          size="sm"
+                          className="w-full bg-action-blue hover:opacity-95 text-white rounded-full text-xs font-semibold h-8"
+                        >
+                          Approve Request
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
           </div>
         </div>
       )}

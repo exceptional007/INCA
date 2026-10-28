@@ -338,22 +338,16 @@ export class AuthService {
     // Map coordinators to CoordinatorRecord interface
     return users.map((user) => {
       const emailPrefix = user.email.split('@')[0];
-      let name = emailPrefix.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-      let program = 'Academic Program';
-
-      if (emailPrefix === 'akumar') {
-        name = 'Amit Kumar';
-        program = 'B.Tech CS (3rd Yr)';
-      } else if (emailPrefix === 'rbora') {
-        name = 'Runima Bora';
-        program = 'M.Tech CSE';
-      }
+      const name = emailPrefix
+        .split(/[._-]/)
+        .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+        .join(' ') || 'Coordinator';
 
       return {
         id: user.id,
         name,
         email: user.email,
-        program,
+        program: 'Academic Coordinator',
         isActive: user.isActive,
       };
     });

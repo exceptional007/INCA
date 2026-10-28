@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
-import { Users, AlertTriangle, Plus, Send, HeartPulse, Sparkles, CheckCircle2 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import {
+  Users,
+  AlertTriangle,
+  HeartPulse,
+  CheckCircle2,
+  Layers,
+  ArrowRight,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useNavigate } from 'react-router-dom';
 import {
   Table,
   TableBody,
@@ -21,149 +23,153 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-
-interface TimetableSlot {
-  id: string;
-  courseName: string;
-  code: string;
-  day: string;
-  timeSlot: string;
-  instructor: string;
-  room: string;
-}
-
-interface ShortfallStudent {
-  id: string;
-  name: string;
-  roll: string;
-  attendancePct: number;
-  classesAttended: number;
-  classesTotal: number;
-  status: 'pending' | 'warned' | 'excused';
-}
+import { useCoordinatorDashboardSummary } from '@/hooks/useAcademicQueries';
 
 export const CoordinatorDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'logs' | 'escalations'>('overview');
+  const [warnedStudentIds, setWarnedStudentIds] = useState<Set<string>>(new Set());
 
-  // 1. Scoped Program Batch Data State
-  const assignedBatch = "B.Tech Computer Science 2023-27 (3rd Year)";
-  const [scheduleSlots, setScheduleSlots] = useState<TimetableSlot[]>([
-    { id: 't1', courseName: 'Computer Networks', code: 'CS-301', day: 'Monday', timeSlot: '10:00 AM - 11:30 AM', instructor: 'Dr. Amitabh Roy', room: 'Room-304' },
-    { id: 't2', courseName: 'Database Systems', code: 'CS-303', day: 'Tuesday', timeSlot: '01:30 PM - 03:00 PM', instructor: 'Prof. J. Phukan', room: 'Room-202' },
-    { id: 't3', courseName: 'Engineering Math III', code: 'MA-201', day: 'Wednesday', timeSlot: '09:00 AM - 10:30 AM', instructor: 'Dr. Minati Kalita', room: 'Room-102' },
-  ]);
+  // Fetch real summary from backend
+  const { data: summaryData, isLoading, isError, refetch, isFetching } = useCoordinatorDashboardSummary(
+    selectedSectionId || undefined,
+  );
 
-  const [shortfalls, setShortfalls] = useState<ShortfallStudent[]>([
-    { id: 's1', name: 'Rohan Sen', roll: 'CSB23010', attendancePct: 62.5, classesAttended: 15, classesTotal: 24, status: 'pending' },
-    { id: 's2', name: 'Kabir Bora', roll: 'CSB23015', attendancePct: 68.2, classesAttended: 15, classesTotal: 22, status: 'warned' },
-    { id: 's3', name: 'Darshana Gogoi', roll: 'CSB23024', attendancePct: 71.0, classesAttended: 17, classesTotal: 24, status: 'pending' },
-  ]);
+  const section = summaryData?.section;
+  const availableSections: any[] = summaryData?.availableSections || [];
+  const totalStudents: number = summaryData?.totalStudents ?? 0;
+  const attendanceRate: number = summaryData?.sectionAttendanceRate ?? 0;
+  const shortfallStudents: any[] = summaryData?.shortfallStudents || [];
+  const todaySchedules: any[] = summaryData?.todaySchedules || [];
+  const recentSessions: any[] = summaryData?.recentSessions || [];
 
-  // Dialog forms State
-  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
-  const [formCourse, setFormCourse] = useState('');
-  const [formCode, setFormCode] = useState('');
-  const [formDay, setFormDay] = useState('Monday');
-  const [formTimeSlot, setFormTimeSlot] = useState('');
-  const [formInstructor, setFormInstructor] = useState('');
-  const [formRoom, setFormRoom] = useState('');
+  const shortfallCount = shortfallStudents.length;
+  const compliantCount = Math.max(0, totalStudents - shortfallCount);
 
-  // Past logs of attendance submissions
-  const [attendanceLogs] = useState([
-    { id: 'l1', course: 'Computer Networks', code: 'CS-301', date: 'Aug 24, 2026', present: 41, total: 45, instructor: 'Dr. Amitabh Roy' },
-    { id: 'l2', course: 'Database Systems', code: 'CS-303', date: 'Aug 24, 2026', present: 38, total: 45, instructor: 'Prof. J. Phukan' },
-    { id: 'l3', course: 'Engineering Math III', code: 'MA-201', date: 'Aug 23, 2026', present: 44, total: 45, instructor: 'Dr. Minati Kalita' },
-  ]);
-
-  const handleSendWarning = (id: string, studentName: string) => {
-    setShortfalls(shortfalls.map(s => s.id === id ? { ...s, status: 'warned' } : s));
-    toast.success(`Warning notice dispatched to ${studentName} via institutional mail.`);
-  };
-
-  const handleExcuseAbsence = (id: string, studentName: string) => {
-    setShortfalls(shortfalls.map(s => s.id === id ? { ...s, status: 'excused', attendancePct: Math.min(100, Math.round(s.attendancePct + 12.5)) } : s));
-    toast.success(`Medical absence waiver applied for ${studentName}. Attendance updated.`);
-  };
-
-  const handleOpenCreate = () => {
-    setFormCourse('');
-    setFormCode('');
-    setFormDay('Monday');
-    setFormTimeSlot('');
-    setFormInstructor('');
-    setFormRoom('');
-    setIsScheduleOpen(true);
-  };
-
-  const handleCreateSchedule = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formCourse || !formCode || !formTimeSlot || !formInstructor || !formRoom) {
-      toast.error('All fields must be configured.');
-      return;
-    }
-    const newSlot: TimetableSlot = {
-      id: Date.now().toString(),
-      courseName: formCourse,
-      code: formCode,
-      day: formDay,
-      timeSlot: formTimeSlot,
-      instructor: formInstructor,
-      room: formRoom,
-    };
-    setScheduleSlots([...scheduleSlots, newSlot]);
-    setIsScheduleOpen(false);
-    toast.success(`Lecture session registered conflict-free for ${formCourse}.`);
+  const handleSendWarning = (student: any) => {
+    setWarnedStudentIds(prev => new Set(prev).add(student.id));
+    toast.success(`Academic shortfall notification flagged for ${student.name} (${student.roll}).`);
   };
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Title */}
+      {/* Title & Section Scope Selector */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <span className="text-xs uppercase text-action-blue tracking-widest font-semibold">ASSAM Scoped Coordinator</span>
+          <span className="text-xs uppercase text-action-blue tracking-widest font-semibold">
+            Institutional Academic Coordination
+          </span>
           <h2 className="text-2xl font-semibold tracking-tight text-ink mt-0.5">Program Coordinator Hub</h2>
-          <p className="text-xs text-ink-muted-80">Currently assigned: <strong className="text-ink">{assignedBatch}</strong></p>
+          <p className="text-xs text-ink-muted-80">
+            Currently scoped cohort:{' '}
+            <strong className="text-ink">
+              {section?.displayName || section?.name || 'Academic Batch Roster'}
+            </strong>
+            {section?.department && (
+              <span className="ml-2 text-ink-muted-48">({section.department})</span>
+            )}
+          </p>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex bg-canvas-parchment p-1 rounded-full border">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'overview' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
-            }`}
+        {/* Section Switcher & Refresh */}
+        <div className="flex flex-wrap items-center gap-2">
+          {availableSections.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-white border border-[#e0e0e0] rounded-full px-3 py-1 shadow-2xs">
+              <Layers className="h-3.5 w-3.5 text-action-blue shrink-0" />
+              <select
+                value={selectedSectionId || section?.id || ''}
+                onChange={(e) => setSelectedSectionId(e.target.value)}
+                className="text-xs font-semibold text-ink bg-transparent focus:outline-none cursor-pointer pr-2"
+              >
+                {availableSections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <Button
+            onClick={() => refetch()}
+            variant="outline"
+            size="sm"
+            disabled={isFetching}
+            className="rounded-full h-8 px-3 text-xs border-[#e0e0e0]"
           >
-            Batch Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('schedule')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'schedule' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
-            }`}
-          >
-            Schedules
-          </button>
-          <button
-            onClick={() => setActiveTab('logs')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'logs' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
-            }`}
-          >
-            Logs
-          </button>
-          <button
-            onClick={() => setActiveTab('escalations')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'escalations' ? 'bg-white text-ink shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'text-ink-muted-80 hover:text-ink'
-            }`}
-          >
-            Escalations ({shortfalls.filter(s => s.status === 'pending').length})
-          </button>
+            <RefreshCw className={`h-3 w-3 mr-1.5 ${isFetching ? 'animate-spin text-action-blue' : ''}`} />
+            Sync
+          </Button>
+
+          {/* Navigation Tabs */}
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/80 overflow-x-auto max-w-full scrollbar-none">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === 'overview'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Batch Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('schedule')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === 'schedule'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Schedules ({todaySchedules.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === 'logs'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Conducted Logs
+            </button>
+            <button
+              onClick={() => setActiveTab('escalations')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === 'escalations'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Escalations {shortfallCount > 0 && `(${shortfallCount})`}
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center py-16 space-y-3 bg-white rounded-[18px] border border-[#e0e0e0]">
+          <Loader2 className="h-8 w-8 animate-spin text-action-blue" />
+          <p className="text-xs text-ink-muted-80 font-medium">Aggregating live section records & attendance metrics...</p>
+        </div>
+      )}
+
+      {/* Error state */}
+      {!isLoading && isError && (
+        <div className="p-6 bg-red-50/50 border border-red-200 rounded-[18px] text-center space-y-3">
+          <AlertTriangle className="h-6 w-6 text-red-600 mx-auto" />
+          <h3 className="text-sm font-semibold text-red-900">Failed to load coordinator cohort data</h3>
+          <p className="text-xs text-red-700">The attendance and timetable services are temporarily unreachable.</p>
+          <Button onClick={() => refetch()} variant="outline" size="sm" className="rounded-full text-xs">
+            Retry Connection
+          </Button>
+        </div>
+      )}
+
       {/* --- Tab Content: Overview --- */}
-      {activeTab === 'overview' && (
+      {!isLoading && !isError && activeTab === 'overview' && (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
@@ -172,8 +178,8 @@ export const CoordinatorDashboard: React.FC = () => {
                 <Users className="h-4.5 w-4.5 text-action-blue" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-ink">45</span>
-                <p className="text-[10px] text-ink-muted-48 mt-1">Students enrolled in batch</p>
+                <span className="text-2xl font-semibold text-ink">{totalStudents}</span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">Enrolled students in section</p>
               </div>
             </Card>
 
@@ -183,19 +189,21 @@ export const CoordinatorDashboard: React.FC = () => {
                 <CheckCircle2 className="h-4.5 w-4.5 text-action-blue" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-ink">84.5%</span>
-                <p className="text-[10px] text-emerald-600 font-semibold mt-1">Healthy threshold average</p>
+                <span className="text-2xl font-semibold text-ink">{attendanceRate}%</span>
+                <p className={`text-[10px] font-semibold mt-1 ${attendanceRate >= 75 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {attendanceRate >= 75 ? 'Healthy threshold average' : 'Below institutional target (75%)'}
+                </p>
               </div>
             </Card>
 
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] p-5 shadow-none flex flex-col justify-between">
               <div className="flex items-center justify-between text-ink-muted-80">
-                <span className="text-xs font-bold uppercase tracking-wider">Shortfall Escaped</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Compliant Students</span>
                 <HeartPulse className="h-4.5 w-4.5 text-emerald-500" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-emerald-600">42</span>
-                <p className="text-[10px] text-ink-muted-48 mt-1">Clear of warnings</p>
+                <span className="text-2xl font-semibold text-emerald-600">{compliantCount}</span>
+                <p className="text-[10px] text-ink-muted-48 mt-1">≥75% attendance record</p>
               </div>
             </Card>
 
@@ -205,8 +213,12 @@ export const CoordinatorDashboard: React.FC = () => {
                 <AlertTriangle className="h-4.5 w-4.5 text-amber-500" />
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-semibold text-amber-600">3</span>
-                <p className="text-[10px] text-[#ff9500] font-semibold mt-1">Requires review action</p>
+                <span className={`text-2xl font-semibold ${shortfallCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {shortfallCount}
+                </span>
+                <p className="text-[10px] text-[#ff9500] font-semibold mt-1">
+                  {shortfallCount > 0 ? 'Requires coordinator review' : 'No shortfall alerts active'}
+                </p>
               </div>
             </Card>
           </div>
@@ -214,24 +226,55 @@ export const CoordinatorDashboard: React.FC = () => {
           <div className="grid gap-6 lg:grid-cols-7">
             {/* Active alerts */}
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none col-span-4 p-6">
-              <div className="pb-4 border-b">
-                <CardTitle className="text-base font-semibold text-ink">Active Batch Alerts</CardTitle>
-                <CardDescription className="text-xs text-ink-muted-80">Roster alerts scoped to CS-2023.</CardDescription>
+              <div className="pb-4 border-b flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-ink">Active Batch Alerts</CardTitle>
+                  <CardDescription className="text-xs text-ink-muted-80">
+                    Real shortfall alerts (&lt;75% attendance) for {section?.displayName || 'current section'}.
+                  </CardDescription>
+                </div>
+                {shortfallCount > 0 && (
+                  <Badge variant="destructive" className="text-xs">
+                    {shortfallCount} Flagged
+                  </Badge>
+                )}
               </div>
               <div className="mt-6 space-y-4">
-                {shortfalls.filter(s => s.status === 'pending').map((student) => (
-                  <div key={student.id} className="flex justify-between items-center border-b pb-3.5 last:border-0 last:pb-0">
-                    <div>
-                      <p className="text-xs font-semibold text-ink">{student.name} ({student.roll})</p>
-                      <p className="text-[10px] text-rose-600 mt-1 font-semibold">
-                        Critical Shortfall: {student.attendancePct}% Attendance
-                      </p>
-                    </div>
-                    <Button onClick={() => setActiveTab('escalations')} className="bg-action-blue hover:opacity-95 text-white text-[11px] h-8 px-4 rounded-full">
-                      Take Action
-                    </Button>
+                {shortfallStudents.length === 0 ? (
+                  <div className="py-8 text-center space-y-2">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
+                    <p className="text-xs font-semibold text-ink">All enrolled students meet the attendance threshold</p>
+                    <p className="text-[11px] text-ink-muted-48">No students in this section currently require escalation.</p>
                   </div>
-                ))}
+                ) : (
+                  shortfallStudents.slice(0, 5).map((student) => {
+                    const isWarned = warnedStudentIds.has(student.id);
+                    return (
+                      <div key={student.id} className="flex justify-between items-center border-b pb-3.5 last:border-0 last:pb-0">
+                        <div>
+                          <p className="text-xs font-semibold text-ink">{student.name} ({student.roll})</p>
+                          <p className="text-[10px] text-rose-600 mt-0.5 font-semibold">
+                            Critical Shortfall: {student.attendancePct}% ({student.classesAttended}/{student.classesTotal} attended)
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => handleSendWarning(student)}
+                            size="sm"
+                            disabled={isWarned}
+                            className={`text-[11px] h-8 px-3 rounded-full ${
+                              isWarned
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-action-blue hover:opacity-95 text-white'
+                            }`}
+                          >
+                            {isWarned ? 'Notice Dispatched' : 'Issue Notice'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </Card>
 
@@ -239,98 +282,188 @@ export const CoordinatorDashboard: React.FC = () => {
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none col-span-3 p-6 flex flex-col justify-between">
               <div>
                 <div className="pb-4 border-b">
-                  <CardTitle className="text-base font-semibold text-ink">Batch Tools</CardTitle>
-                  <CardDescription className="text-xs text-ink-muted-80">Manage batch roster.</CardDescription>
+                  <CardTitle className="text-base font-semibold text-ink">Coordination Tools</CardTitle>
+                  <CardDescription className="text-xs text-ink-muted-80">Roster & report management.</CardDescription>
                 </div>
                 <div className="mt-6 space-y-3">
-                  <div onClick={handleOpenCreate} className="flex justify-between items-center p-3.5 rounded-xl border hover:bg-canvas-parchment/50 cursor-pointer active:scale-98">
-                    <span className="text-xs font-semibold text-ink">Register Lecture Session</span>
-                    <Plus className="h-4 w-4 text-action-blue" />
+                  <div
+                    onClick={() => setActiveTab('schedule')}
+                    className="flex justify-between items-center p-3.5 rounded-xl border border-[#e0e0e0] hover:bg-canvas-parchment/50 cursor-pointer transition-colors"
+                  >
+                    <div>
+                      <span className="text-xs font-semibold text-ink">Inspect Section Timetable</span>
+                      <p className="text-[10px] text-ink-muted-48">View current week lecture slots</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-action-blue" />
                   </div>
-                  <div onClick={() => setActiveTab('escalations')} className="flex justify-between items-center p-3.5 rounded-xl border hover:bg-canvas-parchment/50 cursor-pointer active:scale-98">
-                    <span className="text-xs font-semibold text-ink">Waiver/Escalations</span>
-                    <HeartPulse className="h-4 w-4 text-action-blue" />
+
+                  <div
+                    onClick={() => navigate('/reports')}
+                    className="flex justify-between items-center p-3.5 rounded-xl border border-[#e0e0e0] hover:bg-canvas-parchment/50 cursor-pointer transition-colors"
+                  >
+                    <div>
+                      <span className="text-xs font-semibold text-ink">Official Attendance Reports</span>
+                      <p className="text-[10px] text-ink-muted-48">Generate institutional PDF/CSV exports</p>
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-action-blue" />
+                  </div>
+
+                  <div
+                    onClick={() => setActiveTab('escalations')}
+                    className="flex justify-between items-center p-3.5 rounded-xl border border-[#e0e0e0] hover:bg-canvas-parchment/50 cursor-pointer transition-colors"
+                  >
+                    <div>
+                      <span className="text-xs font-semibold text-ink">Shortfall Action Register</span>
+                      <p className="text-[10px] text-ink-muted-48">Review students under minimum threshold</p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">
+                      {shortfallCount} Active
+                    </Badge>
                   </div>
                 </div>
               </div>
-              <div className="bg-canvas-parchment p-3 rounded-xl border flex gap-2.5 mt-6 items-start">
-                <Sparkles className="h-4 w-4 text-action-blue mt-0.5 shrink-0" />
-                <p className="text-[10px] text-ink-muted-80 leading-relaxed">
-                  Timetable clashes inside your batch program scope are audited on save. Alerts are automatically dispatched if attendance lags below 75%.
-                </p>
+
+              <div className="mt-6 pt-4 border-t text-[11px] text-ink-muted-80 flex items-center justify-between">
+                <span>Database Sync Active</span>
+                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live
+                </span>
               </div>
             </Card>
           </div>
         </div>
       )}
 
-      {/* --- Tab Content: Batch Schedules --- */}
-      {activeTab === 'schedule' && (
+      {/* --- Tab Content: Schedule --- */}
+      {!isLoading && !isError && activeTab === 'schedule' && (
         <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b mb-6">
-            <h3 className="text-base font-semibold text-ink">Active Batch Lecture Slots</h3>
-            <Button onClick={handleOpenCreate} className="bg-action-blue hover:opacity-95 text-white rounded-full">
-              <Plus className="h-4 w-4 mr-2" /> Register Session
+          <div className="pb-4 border-b flex justify-between items-center">
+            <div>
+              <CardTitle className="text-base font-semibold text-ink">Section Timetable Schedule</CardTitle>
+              <CardDescription className="text-xs text-ink-muted-80">
+                Scheduled lecture slots for {section?.displayName || 'current section'}.
+              </CardDescription>
+            </div>
+            <Button
+              onClick={() => navigate('/scheduling')}
+              size="sm"
+              className="bg-action-blue text-white rounded-full text-xs h-8 px-4"
+            >
+              Manage Timetables
             </Button>
           </div>
-          <div className="overflow-x-auto">
+
+          <div className="mt-6 overflow-hidden rounded-xl border border-[#e0e0e0]">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-canvas-parchment/40">
                 <TableRow>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Subject</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Code</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Day</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Time Slot</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Instructor</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80 text-right">Room</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Subject / Course</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Code</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Day</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Time Slot</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Instructor</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Room</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {scheduleSlots.map((slot) => (
-                  <TableRow key={slot.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
-                    <TableCell className="font-semibold text-xs text-ink">{slot.courseName}</TableCell>
-                    <TableCell className="text-xs font-mono">{slot.code}</TableCell>
-                    <TableCell className="text-xs text-ink-muted-80">{slot.day}</TableCell>
-                    <TableCell className="text-xs text-ink-muted-80">{slot.timeSlot}</TableCell>
-                    <TableCell className="text-xs text-ink-muted-80">{slot.instructor}</TableCell>
-                    <TableCell className="text-xs text-ink font-semibold text-right">{slot.room}</TableCell>
+                {todaySchedules.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-ink-muted-48 text-xs">
+                      No active lecture schedules registered for this section.
+                    </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  todaySchedules.map((slot) => (
+                    <TableRow key={slot.id} className="hover:bg-canvas-parchment/20">
+                      <TableCell className="text-xs font-semibold text-ink">{slot.courseName}</TableCell>
+                      <TableCell className="text-xs font-mono text-ink-muted-80">{slot.code}</TableCell>
+                      <TableCell className="text-xs text-ink-muted-80">{slot.day}</TableCell>
+                      <TableCell className="text-xs font-mono text-ink-muted-80">{slot.timeSlot}</TableCell>
+                      <TableCell className="text-xs text-ink">{slot.instructor}</TableCell>
+                      <TableCell className="text-xs text-ink-muted-80">
+                        <Badge variant="outline" className="text-[10px] rounded-full">
+                          {slot.room}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge
+                          className={`text-[9px] rounded-full ${
+                            slot.status === 'COMPLETED'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : slot.status === 'CANCELLED'
+                              ? 'bg-red-50 text-red-700 border-red-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}
+                        >
+                          {slot.status || 'SCHEDULED'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
         </Card>
       )}
 
-      {/* --- Tab Content: Attendance Logs --- */}
-      {activeTab === 'logs' && (
+      {/* --- Tab Content: Logs --- */}
+      {!isLoading && !isError && activeTab === 'logs' && (
         <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
-          <h3 className="text-base font-semibold text-ink pb-4 border-b mb-6">Submitted Attendance Logs</h3>
-          <div className="overflow-x-auto">
+          <div className="pb-4 border-b">
+            <CardTitle className="text-base font-semibold text-ink">Conducted Attendance Sessions</CardTitle>
+            <CardDescription className="text-xs text-ink-muted-80">
+              Verified faculty submission history for {section?.displayName || 'this section'}.
+            </CardDescription>
+          </div>
+
+          <div className="mt-6 overflow-hidden rounded-xl border border-[#e0e0e0]">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-canvas-parchment/40">
                 <TableRow>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Lecture Subject</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Subject Code</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Date Logged</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Roster Ratio</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80 text-right">Instructor</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Course</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Code</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Date</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Conducted By</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Turnout</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Attendance Rate</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {attendanceLogs.map((log) => (
-                  <TableRow key={log.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
-                    <TableCell className="font-semibold text-xs text-ink">{log.course}</TableCell>
-                    <TableCell className="text-xs font-mono">{log.code}</TableCell>
-                    <TableCell className="text-xs text-ink-muted-80">{log.date}</TableCell>
-                    <TableCell>
-                      <Badge className="bg-action-blue/10 text-action-blue border-none text-[10px]">
-                        {log.present} / {log.total} Checked
-                      </Badge>
+                {recentSessions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-ink-muted-48 text-xs">
+                      No attendance sessions have been submitted for this section yet.
                     </TableCell>
-                    <TableCell className="text-xs text-ink-muted-80 text-right">{log.instructor}</TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  recentSessions.map((log) => {
+                    const pct = log.total > 0 ? Math.round((log.present / log.total) * 100) : 0;
+                    return (
+                      <TableRow key={log.id} className="hover:bg-canvas-parchment/20">
+                        <TableCell className="text-xs font-semibold text-ink">{log.course}</TableCell>
+                        <TableCell className="text-xs font-mono text-ink-muted-80">{log.code}</TableCell>
+                        <TableCell className="text-xs text-ink-muted-80">{log.date}</TableCell>
+                        <TableCell className="text-xs text-ink">{log.instructor}</TableCell>
+                        <TableCell className="text-xs font-semibold text-ink">
+                          {log.present} / {log.total} present
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <Badge
+                            className={`text-[9px] rounded-full ${
+                              pct >= 75
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}
+                          >
+                            {pct}%
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
@@ -338,164 +471,88 @@ export const CoordinatorDashboard: React.FC = () => {
       )}
 
       {/* --- Tab Content: Escalations --- */}
-      {activeTab === 'escalations' && (
+      {!isLoading && !isError && activeTab === 'escalations' && (
         <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
-          <h3 className="text-base font-semibold text-ink pb-4 border-b mb-6">Shortfall Roster Escalations</h3>
-          <div className="overflow-x-auto">
+          <div className="pb-4 border-b flex justify-between items-center">
+            <div>
+              <CardTitle className="text-base font-semibold text-ink">Attendance Shortfall Escalation Register</CardTitle>
+              <CardDescription className="text-xs text-ink-muted-80">
+                Official institutional register of students under the 75% attendance threshold.
+              </CardDescription>
+            </div>
+            <Button
+              onClick={() => navigate('/reports')}
+              size="sm"
+              variant="outline"
+              className="rounded-full text-xs h-8 px-4 border-[#e0e0e0]"
+            >
+              Export Report
+            </Button>
+          </div>
+
+          <div className="mt-6 overflow-hidden rounded-xl border border-[#e0e0e0]">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-canvas-parchment/40">
                 <TableRow>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Student</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Roll Number</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Attendance Rate</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Logged Days</TableHead>
-                  <TableHead className="text-xs font-bold text-ink-muted-80">Escalation Status</TableHead>
-                  <TableHead className="w-[200px] text-right text-xs font-bold text-ink-muted-80">Resolve Actions</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Roll Number</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Student Name</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Attendance %</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Attended / Total</TableHead>
+                  <TableHead className="text-xs font-bold text-ink">Shortfall Gap</TableHead>
+                  <TableHead className="text-xs font-bold text-ink text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {shortfalls.map((s) => (
-                  <TableRow key={s.id} className="border-b last:border-0 hover:bg-canvas-parchment/30">
-                    <TableCell className="font-semibold text-xs text-ink">{s.name}</TableCell>
-                    <TableCell className="text-xs font-mono">{s.roll}</TableCell>
-                    <TableCell className="text-xs font-semibold text-rose-600">{s.attendancePct}%</TableCell>
-                    <TableCell className="text-xs text-ink-muted-80">{s.classesAttended} / {s.classesTotal}</TableCell>
-                    <TableCell>
-                      <Badge className={`text-[9px] border-none px-2 py-0.5 rounded-full ${
-                        s.status === 'pending' ? 'bg-amber-100 text-amber-800' :
-                        s.status === 'warned' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {s.status.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {s.status === 'excused' ? (
-                        <span className="text-[10px] text-emerald-600 font-semibold">Medical Exception Applied</span>
-                      ) : (
-                        <div className="flex justify-end gap-1.5">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => handleSendWarning(s.id, s.name)}
-                            className="h-8 text-[10px] border-[#e0e0e0] text-ink hover:bg-canvas-parchment font-semibold"
-                          >
-                            <Send className="h-3 w-3 mr-1" /> Warn
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            onClick={() => handleExcuseAbsence(s.id, s.name)}
-                            className="h-8 text-[10px] bg-action-blue text-white font-semibold"
-                          >
-                            <HeartPulse className="h-3 w-3 mr-1" /> Excuse
-                          </Button>
-                        </div>
-                      )}
+                {shortfallStudents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10 space-y-2">
+                      <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
+                      <p className="text-xs font-semibold text-ink">No shortfall escalations</p>
+                      <p className="text-[11px] text-ink-muted-48">
+                        All students in {section?.displayName || 'this section'} have met or exceeded the 75% attendance criterion.
+                      </p>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  shortfallStudents.map((stud) => {
+                    const isWarned = warnedStudentIds.has(stud.id);
+                    const needed = Math.max(1, Math.ceil((0.75 * stud.classesTotal - stud.classesAttended) / 0.25));
+                    return (
+                      <TableRow key={stud.id} className="hover:bg-canvas-parchment/20">
+                        <TableCell className="text-xs font-mono font-semibold text-ink">{stud.roll}</TableCell>
+                        <TableCell className="text-xs font-semibold text-ink">{stud.name}</TableCell>
+                        <TableCell className="text-xs">
+                          <span className="font-bold text-rose-600">{stud.attendancePct}%</span>
+                        </TableCell>
+                        <TableCell className="text-xs text-ink-muted-80">
+                          {stud.classesAttended} / {stud.classesTotal} classes
+                        </TableCell>
+                        <TableCell className="text-xs text-ink-muted-80">
+                          <span className="text-[11px] text-amber-700">Need ~{needed} consecutive classes</span>
+                        </TableCell>
+                        <TableCell className="text-xs text-right space-x-2">
+                          <Button
+                            onClick={() => handleSendWarning(stud)}
+                            size="sm"
+                            disabled={isWarned}
+                            className={`rounded-full text-[11px] h-7 px-3 ${
+                              isWarned
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-action-blue hover:opacity-95 text-white'
+                            }`}
+                          >
+                            {isWarned ? 'Warned' : 'Dispatch Warning'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
         </Card>
       )}
-
-      {/* --- Schedule Modal Form Dialog --- */}
-      <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-        <DialogContent className="rounded-[18px] bg-white border border-[#e0e0e0] shadow-none w-11/12 max-w-md font-sans">
-          <form onSubmit={handleCreateSchedule}>
-            <DialogHeader className="pb-3 border-b mb-4">
-              <DialogTitle className="text-base font-semibold text-ink">Register Timetable Lecture</DialogTitle>
-              <DialogDescription className="text-xs text-ink-muted-80">Add a schedule slot to the active batch program.</DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-ink">Course Title</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Computer Networks"
-                  value={formCourse}
-                  onChange={(e) => setFormCourse(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-ink">Subject Code</label>
-                <Input
-                  type="text"
-                  placeholder="CS-301"
-                  value={formCode}
-                  onChange={(e) => setFormCode(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-ink">Day</label>
-                  <select 
-                    value={formDay}
-                    onChange={(e) => setFormDay(e.target.value)}
-                    className="h-11 w-full rounded-lg border border-[#e0e0e0] px-3 text-xs bg-white text-ink focus-visible:outline-none"
-                  >
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-ink">Time Slot</label>
-                  <Input
-                    type="text"
-                    placeholder="10:00 AM - 11:30 AM"
-                    value={formTimeSlot}
-                    onChange={(e) => setFormTimeSlot(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-ink">Instructor</label>
-                  <Input
-                    type="text"
-                    placeholder="e.g. Dr. Amitabh Roy"
-                    value={formInstructor}
-                    onChange={(e) => setFormInstructor(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-ink">Class Room</label>
-                  <Input
-                    type="text"
-                    placeholder="Room-304"
-                    value={formRoom}
-                    onChange={(e) => setFormRoom(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="mt-6 border-t pt-3 flex gap-2 justify-end">
-              <Button type="button" variant="outline" onClick={() => setIsScheduleOpen(false)} className="rounded-full">
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-action-blue text-white rounded-full">
-                Add Slot
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
-export default CoordinatorDashboard;

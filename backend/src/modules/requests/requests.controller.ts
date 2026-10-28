@@ -3,17 +3,21 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { RequestsService } from './requests.service';
 import { RequestStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CreateRequestDto } from './dto/create-request.dto';
+import { UpdateRequestStatusDto } from './dto/update-request-status.dto';
 
 @ApiTags('Requests')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('requests')
 export class RequestsController {
   constructor(private readonly requestsService: RequestsService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new request' })
-  async create(@Body() dto: { title: string; details: string; requester: string }) {
+  async create(@Body() dto: CreateRequestDto) {
     return {
       success: true,
       message: 'Request created successfully.',
@@ -32,8 +36,9 @@ export class RequestsController {
   }
 
   @Patch(':id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD')
   @ApiOperation({ summary: 'Update a request status (approve/reject)' })
-  async update(@Param('id') id: string, @Body() dto: { status: RequestStatus }) {
+  async update(@Param('id') id: string, @Body() dto: UpdateRequestStatusDto) {
     return {
       success: true,
       message: 'Request updated successfully.',
@@ -42,6 +47,7 @@ export class RequestsController {
   }
 
   @Delete(':id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD')
   @ApiOperation({ summary: 'Delete a request' })
   async remove(@Param('id') id: string) {
     await this.requestsService.remove(id);
