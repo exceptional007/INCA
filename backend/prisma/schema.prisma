@@ -1160,12 +1160,13 @@ model notice_audit_logs {
 }
 
 model notice_reads {
-  id       String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  noticeId String
-  userId   String
-  readAt   DateTime @default(now())
-  notices  notices  @relation(fields: [noticeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users    User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  noticeId       String
+  userId         String
+  readAt         DateTime  @default(now())
+  acknowledgedAt DateTime?
+  notices        notices   @relation(fields: [noticeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([noticeId, userId], map: "notice_reads_unique")
   @@index([userId], map: "idx_notice_reads_user")
@@ -1183,6 +1184,8 @@ model notices {
   programId                         String?
   targetYear                        Int?
   targetSemester                    Int?
+  targetAudience                    Json?
+  requiresAcknowledgement           Boolean              @default(false)
   isPinned                          Boolean              @default(false)
   publishAt                         DateTime             @default(now())
   expiresAt                         DateTime?

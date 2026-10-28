@@ -14,23 +14,28 @@ import type {
   ReportStatus,
 } from '@/types/marketplace';
 
-// Socket connection
+// Socket connection singleton
 let socket: Socket | null = null;
 
 export const getMarketplaceSocket = (): Socket => {
-  if (!socket || !socket.connected) {
-    const token = localStorage.getItem('inca_token');
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-    const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
+  const token = localStorage.getItem('inca_token');
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+  const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
 
+  if (!socket) {
     socket = io(`${baseUrl}/marketplace`, {
       auth: { token },
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
     });
+  } else if (!socket.connected && token) {
+    socket.auth = { token };
+    socket.connect();
   }
+
   return socket;
 };
 
@@ -39,6 +44,25 @@ export const disconnectMarketplaceSocket = () => {
     socket.disconnect();
     socket = null;
   }
+};
+
+/**
+ * Universal delivery URL resolver for Cloudflare R2 marketplace images.
+ */
+export const getMarketplaceImageUrl = (urlOrKey: string | null | undefined): string => {
+  if (!urlOrKey) return '';
+  if (urlOrKey.startsWith('http://') || urlOrKey.startsWith('https://')) {
+    return urlOrKey;
+  }
+
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+  const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
+
+  if (urlOrKey.startsWith('/api/')) {
+    return `${baseUrl}${urlOrKey}`;
+  }
+
+  return `${baseUrl}/api/v1/marketplace/images/stream?key=${encodeURIComponent(urlOrKey)}`;
 };
 
 export interface ListingQueryParams {
@@ -93,9 +117,8 @@ export const marketplaceApi = {
   uploadListingImages: async (listingId: string, files: File[]) => {
     const formData = new FormData();
     files.forEach((file) => formData.append('images', file));
-    const res = await api.post(`/marketplace/listings/${listingId}/images`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    // Let browser and Axios set Content-Type with the multipart boundary automatically
+    const res = await api.post(`/marketplace/listings/${listingId}/images`, formData);
     return res.data;
   },
 
@@ -122,7 +145,7 @@ export const marketplaceApi = {
   },
 
   markAsSold: async (id: string) => {
-    const res = await api.patch<MarketplaceListing>(`/marketplace/listings/${id}/sold`);
+    const res = await api.patch(`/marketplace/listings/${id}/sold`);
     return res.data;
   },
 
@@ -131,11 +154,9 @@ export const marketplaceApi = {
     return res.data;
   },
 
-  // CONVERSATIONS & CHAT
+  // CHAT & CONVERSATIONS
   getOrCreateConversation: async (listingId: string) => {
-    const res = await api.post<MarketplaceConversation>('/marketplace/conversations', {
-      listingId,
-    });
+    const res = await api.post<MarketplaceConversation>('/marketplace/conversations', { listingId });
     return res.data;
   },
 
@@ -190,7 +211,7 @@ export const marketplaceApi = {
     return res.data;
   },
 
-  // TRANSACTIONS & HANDOVER
+  // TRANSACTIONS & OTP
   initiateTransaction: async (listingId: string, offerId?: string) => {
     const res = await api.post<MarketplaceTransaction>('/marketplace/transactions', {
       listingId,
@@ -200,70 +221,69 @@ export const marketplaceApi = {
   },
 
   getMyDeals: async () => {
-    const res = await api.get<{
-      purchases: MarketplaceTransaction[];
-      sales: MarketplaceTransaction[];
-    }>('/marketplace/transactions/my-deals');
+    const res = await api.get<{ purchases: MarketplaceTransaction[]; sales: MarketplaceTransaction[] }>(
+      '/marketplace/transactions/my-deals',
+    );
     return res.data;
   },
 
-  getTransactionById: async (transactionId: string) => {
-    const res = await api.get<MarketplaceTransaction>(`/marketplace/transactions/${transactionId}`);
-    return res.data;
-  },
-
-  verifyHandover: async (transactionId: string, otp: string) => {
-    const res = await api.post<{
-      success: boolean;
-      message: string;
-      transaction: MarketplaceTransaction;
-    }>(`/marketplace/transactions/${transactionId}/verify-handover`, { otp });
+  getTransactionById: async (id: string) => {
+    const res = await api.get<MarketplaceTransaction>(`/marketplace/transactions/${id}`);
     return res.data;
   },
 
   regenerateOtp: async (transactionId: string) => {
-    const res = await api.post<{
-      success: boolean;
-      handoverOtp?: string;
-      handoverOtpExpiresAt: string;
-    }>(`/marketplace/transactions/${transactionId}/regenerate-otp`);
+    const res = await api.post<MarketplaceTransaction>(
+      `/marketplace/transactions/${transactionId}/regenerate-otp`,
+    );
+    return res.data;
+  },
+
+  verifyHandover: async (transactionId: string, otp: string) => {
+    const res = await api.post<{ success: boolean; message: string; transaction: MarketplaceTransaction }>(
+      `/marketplace/transactions/${transactionId}/verify-handover`,
+      { otp },
+    );
     return res.data;
   },
 
   cancelTransaction: async (transactionId: string, reason?: string) => {
-    const res = await api.post<{ success: boolean; transaction: MarketplaceTransaction }>(
+    const res = await api.post<MarketplaceTransaction>(
       `/marketplace/transactions/${transactionId}/cancel`,
       { reason },
     );
     return res.data;
   },
 
-  // REVIEWS
-  createReview: async (transactionId: string, rating: number, comment?: string) => {
-    const res = await api.post<MarketplaceReview>('/marketplace/reviews', {
-      transactionId,
-      rating,
-      comment,
-    });
+  // REVIEWS & RATINGS
+  createReview: async (
+    dataOrTxId: { transactionId: string; rating: number; comment?: string } | string,
+    rating?: number,
+    comment?: string,
+  ) => {
+    const payload =
+      typeof dataOrTxId === 'string'
+        ? { transactionId: dataOrTxId, rating: rating || 5, comment }
+        : dataOrTxId;
+    const res = await api.post<MarketplaceReview>('/marketplace/reviews', payload);
     return res.data;
   },
 
   getSellerReviews: async (sellerId: string) => {
     const res = await api.get<{
-      totalReviews: number;
-      averageRating: number;
+      summary: { averageRating: number; totalReviews: number; completedSales: number };
       reviews: MarketplaceReview[];
     }>(`/marketplace/sellers/${sellerId}/reviews`);
     return res.data;
   },
 
-  // REPORTS & MODERATION
+  // MODERATION & REPORTS
   createReport: async (data: {
+    listingId?: string;
+    reportedUserId?: string;
+    transactionId?: string;
     reason: string;
     description: string;
-    listingId?: string;
-    transactionId?: string;
-    reportedUserId?: string;
   }) => {
     const res = await api.post<MarketplaceReport>('/marketplace/reports', data);
     return res.data;
@@ -271,7 +291,7 @@ export const marketplaceApi = {
 
   getModerationReports: async (status?: ReportStatus) => {
     const res = await api.get<MarketplaceReport[]>('/marketplace/moderation/reports', {
-      params: status ? { status } : undefined,
+      params: { status },
     });
     return res.data;
   },
@@ -282,6 +302,7 @@ export const marketplaceApi = {
       status: ReportStatus;
       resolutionNote?: string;
       removeListing?: boolean;
+      action?: 'NONE' | 'REMOVE_LISTING' | 'WARN_USER' | 'SUSPEND_USER';
     },
   ) => {
     const res = await api.patch<MarketplaceReport>(

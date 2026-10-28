@@ -68,16 +68,31 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
   }
 
   @SubscribeMessage('joinConversation')
-  handleJoinConversation(
+  async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
   ) {
-    if (data?.conversationId) {
-      const room = `conv_${data.conversationId}`;
-      client.join(room);
-      this.logger.log(`Client ${client.id} joined conversation room ${room}`);
-      return { success: true, room };
+    const userId = client.data?.userId;
+    if (!userId || !data?.conversationId) {
+      return { success: false, error: 'Unauthorized or missing conversation ID' };
     }
+
+    const isMember = await this.chatService.isUserConversationParticipant(
+      userId,
+      data.conversationId,
+    );
+
+    if (!isMember) {
+      this.logger.warn(
+        `Unauthorized room join attempt: User ${userId} tried to join conv_${data.conversationId}`,
+      );
+      return { success: false, error: 'You are not an authorized participant of this conversation' };
+    }
+
+    const room = `conv_${data.conversationId}`;
+    client.join(room);
+    this.logger.log(`Client ${client.id} (user ${userId}) authorized and joined room ${room}`);
+    return { success: true, room };
   }
 
   @SubscribeMessage('leaveConversation')
@@ -93,17 +108,24 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
   }
 
   @SubscribeMessage('typingIndicator')
-  handleTypingIndicator(
+  async handleTypingIndicator(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string; isTyping: boolean },
   ) {
-    if (data?.conversationId) {
-      client.to(`conv_${data.conversationId}`).emit('userTyping', {
-        userId: client.data.userId,
-        conversationId: data.conversationId,
-        isTyping: data.isTyping,
-      });
-    }
+    const userId = client.data?.userId;
+    if (!userId || !data?.conversationId) return;
+
+    const isMember = await this.chatService.isUserConversationParticipant(
+      userId,
+      data.conversationId,
+    );
+    if (!isMember) return;
+
+    client.to(`conv_${data.conversationId}`).emit('userTyping', {
+      userId,
+      conversationId: data.conversationId,
+      isTyping: data.isTyping,
+    });
   }
 
   @SubscribeMessage('sendMessage')

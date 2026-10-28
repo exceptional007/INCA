@@ -37,6 +37,14 @@ export class CreateListingDto {
   pickupLocation?: string;
 
   @IsOptional()
+  @IsString()
+  brand?: string;
+
+  @IsOptional()
+  @IsString()
+  model?: string;
+
+  @IsOptional()
   @IsString({ each: true })
   tags?: string[];
 }

@@ -19,10 +19,10 @@ import {
   Clock, 
   Sparkles, 
   DollarSign, 
-  MessageSquare, 
   PieChart, 
   Leaf,
-  SearchCheck 
+  SearchCheck,
+  Bell 
 } from 'lucide-react';
 
 export const FeatureHub: React.FC = () => {
@@ -75,11 +75,11 @@ export const FeatureHub: React.FC = () => {
     {
       id: 'noticeboard',
       name: 'Digital Notice Board',
-      description: 'Real-time department updates, central announcements, and notices board.',
-      icon: MessageSquare,
-      active: false,
-      badge: 'Coming Soon',
-      url: '#',
+      description: 'Official campus announcements, department circulars, examination updates, and important deadlines—all targeted to the right audience.',
+      icon: Bell,
+      active: true,
+      badge: 'Active',
+      url: '/notices',
     },
     {
       id: 'polls',

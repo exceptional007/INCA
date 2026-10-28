@@ -22,7 +22,7 @@ export const USER_SAFE_SELECT = {
       firstName: true,
       lastName: true,
       rollNumber: true,
-      department: { select: { code: true, name: true } },
+      program: { select: { code: true, name: true } },
     },
   },
   faculty: {
@@ -60,7 +60,7 @@ export class LostFoundService {
     private readonly storageService: StrictR2StorageService,
     private readonly matchingService: LostFoundMatchingService,
     private readonly contributionService: LostFoundContributionService,
-  ) {}
+  ) { }
 
   /**
    * Create a new Lost or Found item report with optional photos.
@@ -330,7 +330,7 @@ export class LostFoundService {
 
     // Re-run matching if core details changed
     if (dto.title || dto.category || dto.location) {
-      this.matchingService.findAndCreateMatchesForReport(id).catch(() => {});
+      this.matchingService.findAndCreateMatchesForReport(id).catch(() => { });
     }
 
     return {
