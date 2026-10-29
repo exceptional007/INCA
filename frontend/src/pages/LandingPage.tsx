@@ -1,414 +1,835 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { 
-  ShieldCheck, 
-  ChevronRight, 
-  MessageSquare, 
-  Search as SearchIcon, 
-  BarChart3, 
-  Award, 
-  PieChart, 
-  Map, 
-  Leaf,
-  Sparkles
-} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import {
+  ShieldCheck,
+  ChevronRight,
+  ArrowRight,
+  Clock,
+  Calendar,
+  Bell,
+  Sparkles,
+  ShoppingBag,
+  Search,
+  CheckCircle2,
+  FileText,
+  Menu,
+  X,
+  FileSpreadsheet,
+} from 'lucide-react';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeShowcaseTab, setActiveShowcaseTab] = useState<'attendance' | 'scheduling' | 'notices' | 'notes'>('attendance');
+
+  const scrollToSection = (id: string) => {
+    setMobileMenuOpen(false);
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans select-none overflow-x-hidden">
-      {/* 1. Global Navigation Bar (Apple Style: Pinned, Thin, Black) */}
-      <header className="h-[44px] w-full bg-surface-black text-white flex items-center justify-between px-6 z-50 sticky top-0">
-        <div className="flex items-center gap-6 max-w-7xl mx-auto w-full">
-          <div className="flex items-center gap-2 mr-4 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate('/')}>
-            <ShieldCheck className="h-4.5 w-4.5 text-white" />
-            <span className="text-[14px] font-semibold tracking-tight">INCA</span>
+    <div className="min-h-screen bg-background flex flex-col font-sans overflow-x-hidden text-foreground">
+      {/* 1. Unified Navigation Bar */}
+      <header className="sticky top-0 z-50 w-full bg-background/90 backdrop-blur-md border-b border-border transition-colors">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          {/* Logo & Brand */}
+          <div 
+            className="flex items-center gap-2.5 cursor-pointer select-none group" 
+            onClick={() => navigate('/')}
+          >
+            <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-xs transition-transform group-hover:scale-102">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-base font-bold tracking-tight text-foreground flex items-center gap-1.5 leading-none">
+                INCA
+                <span className="text-[10px] font-semibold text-primary px-1.5 py-0.5 rounded-md bg-primary/10 border border-primary/20">
+                  Campus SaaS
+                </span>
+              </span>
+              <span className="text-[10px] text-muted-foreground hidden sm:inline-block mt-0.5 font-medium">
+                Intelligent Campus Assistant
+              </span>
+            </div>
           </div>
-          
-          <nav className="hidden md:flex items-center gap-6 text-[12px] text-[#cccccc] font-normal tracking-tight">
-            <a href="#features" className="hover:text-white transition-colors">Flagship Features</a>
-            <a href="#utility-grid" className="hover:text-white transition-colors">Core Modules</a>
-            <a href="#about" className="hover:text-white transition-colors">About</a>
+
+          {/* Desktop Nav Links */}
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+            <button 
+              onClick={() => scrollToSection('overview')}
+              className="hover:text-foreground transition-colors cursor-pointer"
+            >
+              Overview
+            </button>
+            <button 
+              onClick={() => scrollToSection('showcase')}
+              className="hover:text-foreground transition-colors cursor-pointer"
+            >
+              Live Interface
+            </button>
+            <button 
+              onClick={() => scrollToSection('capabilities')}
+              className="hover:text-foreground transition-colors cursor-pointer"
+            >
+              Capabilities
+            </button>
+            <button 
+              onClick={() => scrollToSection('workflows')}
+              className="hover:text-foreground transition-colors cursor-pointer"
+            >
+              How It Connects
+            </button>
           </nav>
 
-          <div className="ml-auto flex items-center gap-4">
-            <button 
+          {/* Action Buttons */}
+          <div className="hidden md:flex items-center gap-3">
+            <button
               onClick={() => navigate('/login')}
-              className="text-[12px] text-[#cccccc] hover:text-white transition-colors cursor-pointer"
+              className="text-sm font-medium text-foreground hover:text-primary px-3 py-1.5 transition-colors cursor-pointer"
             >
               Sign In
             </button>
-            <button 
+            <Button
               onClick={() => navigate('/login')}
-              className="text-[12px] bg-[#1d1d1f] hover:bg-[#333333] border border-[#333333] text-white font-medium px-3.5 py-1 rounded-[8px] active:scale-95 transition-all cursor-pointer"
+              className="bg-primary hover:bg-primary/95 text-primary-foreground font-medium px-4 py-2 rounded-xl text-sm shadow-xs transition-all cursor-pointer"
             >
-              Login
+              Access Platform
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Mobile Menu Hamburger Toggle */}
+          <div className="flex md:hidden items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => navigate('/login')}
+              className="bg-primary hover:bg-primary/95 text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-lg"
+            >
+              Sign In
+            </Button>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted focus:outline-none"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-b border-border bg-background px-4 pt-2 pb-6 space-y-3 animate-fadeIn">
+            <button
+              onClick={() => scrollToSection('overview')}
+              className="block w-full text-left py-2 text-sm font-medium text-foreground hover:text-primary"
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => scrollToSection('showcase')}
+              className="block w-full text-left py-2 text-sm font-medium text-foreground hover:text-primary"
+            >
+              Live Interface
+            </button>
+            <button
+              onClick={() => scrollToSection('capabilities')}
+              className="block w-full text-left py-2 text-sm font-medium text-foreground hover:text-primary"
+            >
+              Capabilities
+            </button>
+            <button
+              onClick={() => scrollToSection('workflows')}
+              className="block w-full text-left py-2 text-sm font-medium text-foreground hover:text-primary"
+            >
+              How It Connects
+            </button>
+            <div className="pt-2 border-t border-border flex flex-col gap-2">
+              <Button
+                onClick={() => navigate('/login')}
+                className="w-full bg-primary text-primary-foreground justify-center py-2.5 rounded-xl font-medium"
+              >
+                Access Platform
+              </Button>
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* 2. Sub-Navigation Bar (Apple Style: Sticky, Frosted Glass, Parchment) */}
-      <div className="h-[52px] w-full bg-canvas-parchment/80 backdrop-blur-md border-b border-[#e0e0e0] flex items-center sticky top-[44px] z-40">
-        <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
-          <span className="text-[20px] font-semibold tracking-tight text-ink">Intelligent Campus Assistant</span>
-          <div className="flex items-center gap-4">
-            <a href="#overview" className="text-xs text-ink-muted-80 hover:text-action-blue transition-colors">Overview</a>
-            <a href="#features" className="text-xs text-ink-muted-80 hover:text-action-blue transition-colors">Features</a>
-            <Button size="sm" onClick={() => navigate('/login')} className="bg-action-blue hover:opacity-95 text-white">
-              Access Platform
-            </Button>
-          </div>
-        </div>
-      </div>
-
       <main className="flex-1">
-        {/* 3. Hero Section (Canvas, Typography-First) */}
-        <section id="overview" className="w-full pt-20 pb-28 bg-background flex flex-col items-center border-b border-[#e0e0e0]">
-          <div className="max-w-4xl px-6 text-center flex flex-col items-center">
-            <span className="text-xs uppercase text-action-blue tracking-widest font-semibold mb-4">Comprehensive Campus Solution</span>
-            
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold tracking-tight text-ink leading-[1.07] mb-6">
-              <span className="text-action-blue">Everything You Need</span> <br />
-              <span className="text-ink">In One Smart App</span>
-            </h1>
-            
-            <p className="max-w-[680px] text-lg sm:text-xl text-[#86868b] font-normal leading-relaxed mb-8">
-              From AI-powered academics to campus life management — discover how our intelligent features transform your university experience.
-            </p>
+        {/* 2. Hero Section */}
+        <section id="overview" className="relative pt-12 pb-20 md:pt-20 md:pb-28 border-b border-border/80 bg-background overflow-hidden">
+          {/* Subtle Institutional Geometric Accents */}
+          <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
 
-            <div className="flex flex-col sm:flex-row gap-4 mb-16">
-              <Button size="lg" className="bg-action-blue text-white group" onClick={() => navigate('/login')}>
-                Get Started
-                <ChevronRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              <Button variant="outline" size="lg" className="border-action-blue text-action-blue hover:bg-action-blue/5">
-                View Documentation
-              </Button>
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            {/* Centered on mobile, balanced on desktop */}
+            <div className="text-center flex flex-col items-center">
+              {/* Category pill */}
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary border border-border text-xs font-medium text-muted-foreground mb-6 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Integrated Campus Operations Platform</span>
+              </div>
+
+              {/* Main Headline */}
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.12] mb-6 max-w-4xl text-balance">
+                One campus. <br className="hidden sm:inline" />
+                <span className="text-primary">One connected system.</span>
+              </h1>
+
+              {/* Supporting Subhead */}
+              <p className="max-w-2xl text-base sm:text-lg text-muted-foreground font-normal leading-relaxed mb-8 text-balance">
+                Unify academic scheduling, real-time attendance tracking, institutional notices, course notes, and peer campus services into a single, cohesive operating system.
+              </p>
+
+              {/* Primary Calls to Action */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full sm:w-auto mb-14">
+                <Button 
+                  size="lg" 
+                  className="w-full sm:w-auto bg-primary hover:bg-primary/95 text-primary-foreground font-medium px-6 py-2.5 rounded-xl text-base shadow-xs group cursor-pointer"
+                  onClick={() => navigate('/login')}
+                >
+                  Access Platform
+                  <ChevronRight className="ml-1.5 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="w-full sm:w-auto border-border text-foreground hover:bg-secondary font-medium px-6 py-2.5 rounded-xl text-base cursor-pointer"
+                  onClick={() => scrollToSection('showcase')}
+                >
+                  Explore Interface
+                </Button>
+              </div>
+
+              {/* Operational Verification Highlights */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-border/80 w-full max-w-3xl text-left">
+                <div className="p-3 rounded-lg bg-card border border-border/60">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Timetables</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">Automated PDF Sync</div>
+                </div>
+                <div className="p-3 rounded-lg bg-card border border-border/60">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attendance</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">Swipe & Roster Audit</div>
+                </div>
+                <div className="p-3 rounded-lg bg-card border border-border/60">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Circulars</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">Targeted Audience</div>
+                </div>
+                <div className="p-3 rounded-lg bg-card border border-border/60">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Security</div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">Multi-Role RBAC</div>
+                </div>
+              </div>
             </div>
           </div>
+        </section>
 
-          {/* Platform Mockup resting on surface with shadow */}
-          <div className="w-full max-w-5xl px-6">
-            <div className="w-full aspect-[16/9] bg-canvas-parchment rounded-[18px] border border-[#e0e0e0] shadow-[0_20px_50px_rgba(0,0,0,0.12)] p-4 md:p-6 overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between pb-4 border-b border-[#e0e0e0] mb-4">
+        {/* 3. Product Showcase (Authentic Live Interface Views) */}
+        <section id="showcase" className="py-20 md:py-28 bg-secondary/50 border-b border-border">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-3xl mx-auto mb-10">
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Product Experience
+              </span>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-foreground mt-2 mb-4">
+                Designed for faculty, administrators, and students.
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground">
+                Explore the genuine interfaces powering everyday operations across university departments.
+              </p>
+            </div>
+
+            {/* Showcase Tab Switcher */}
+            <div className="flex items-center justify-center mb-8 overflow-x-auto pb-2 scrollbar-none">
+              <div className="inline-flex p-1 rounded-xl bg-card border border-border shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setActiveShowcaseTab('attendance')}
+                  className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                    activeShowcaseTab === 'attendance'
+                      ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Clock className="w-4 h-4" />
+                  Smart Attendance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveShowcaseTab('scheduling')}
+                  className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                    activeShowcaseTab === 'scheduling'
+                      ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4" />
+                  Timetable & Scheduling
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveShowcaseTab('notices')}
+                  className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                    activeShowcaseTab === 'notices'
+                      ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Bell className="w-4 h-4" />
+                  Notice Board
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveShowcaseTab('notes')}
+                  className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                    activeShowcaseTab === 'notes'
+                      ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  AI Notes & Tutor
+                </button>
+              </div>
+            </div>
+
+            {/* Showcase Display Container */}
+            <div className="w-full bg-card rounded-2xl border border-border shadow-md overflow-hidden">
+              {/* Browser / Application Top Frame */}
+              <div className="bg-muted/60 border-b border-border px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
-                  <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
-                  <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-                  <span className="text-xs font-semibold text-ink-muted-80 ml-2">INCA Hub</span>
+                  <div className="w-3 h-3 rounded-full bg-border" />
+                  <div className="w-3 h-3 rounded-full bg-border" />
+                  <div className="w-3 h-3 rounded-full bg-border" />
+                  <span className="text-xs font-mono text-muted-foreground ml-2 hidden sm:inline-block">
+                    app.inca.campus/{activeShowcaseTab}
+                  </span>
                 </div>
-                <div className="h-6 w-24 rounded-full bg-white border border-[#e0e0e0]" />
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[11px] font-medium bg-background text-muted-foreground border-border">
+                    Production Role: Faculty / Administrator
+                  </Badge>
+                </div>
               </div>
-              <div className="flex-1 grid grid-cols-3 gap-4 overflow-hidden">
-                <div className="bg-white border border-[#e0e0e0] p-4 rounded-xl flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] text-action-blue font-bold uppercase tracking-wide">ASSAM</span>
-                    <h3 className="text-sm font-semibold text-ink mt-1">Smart Attendance</h3>
-                    <p className="text-[11px] text-[#86868b] mt-1">Conflict-free timetables & real-time roster marking.</p>
+
+              {/* Screen Content View */}
+              <div className="p-4 sm:p-6 md:p-8 min-h-[420px] flex flex-col justify-center">
+                {activeShowcaseTab === 'attendance' && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-primary uppercase tracking-wide">CS-302</span>
+                          <span className="text-xs text-muted-foreground">• Section A (Semester 6)</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-foreground mt-0.5">Database Management Systems Lab</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-emerald-100 text-emerald-800 border-none text-xs font-medium">
+                          Session In Progress
+                        </Badge>
+                        <span className="text-xs text-muted-foreground font-mono">10:00 AM - 11:40 AM</span>
+                      </div>
+                    </div>
+
+                    {/* Authentic Attendance Session Roster View */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 rounded-xl bg-muted/40 border border-border">
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Attendance Rate</span>
+                        <div className="text-2xl font-bold text-foreground mt-1">88.9%</div>
+                        <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Above 75% institutional threshold
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-muted/40 border border-border">
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Headcount Verified</span>
+                        <div className="text-2xl font-bold text-foreground mt-1">40 / 45</div>
+                        <p className="text-xs text-muted-foreground mt-1">5 absentees flagged for audit log</p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-muted/40 border border-border">
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Mode</span>
+                        <div className="text-2xl font-bold text-foreground mt-1">Swipe Card</div>
+                        <p className="text-xs text-muted-foreground mt-1">Instant photo identification enabled</p>
+                      </div>
+                    </div>
+
+                    {/* Mock Student Table Segment */}
+                    <div className="border border-border rounded-xl overflow-hidden text-xs">
+                      <div className="bg-muted/50 px-4 py-2.5 font-semibold text-muted-foreground grid grid-cols-12 gap-2">
+                        <div className="col-span-5 sm:col-span-4">Student Name & Roll No</div>
+                        <div className="col-span-4 sm:col-span-5">Program & Batch</div>
+                        <div className="col-span-3 text-right">Status</div>
+                      </div>
+                      <div className="divide-y divide-border/60 bg-card">
+                        <div className="px-4 py-2.5 grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-5 sm:col-span-4 font-medium text-foreground">
+                            Aarav Sharma <span className="text-muted-foreground font-mono text-[10px] block sm:inline sm:ml-1">(2023-CS-041)</span>
+                          </div>
+                          <div className="col-span-4 sm:col-span-5 text-muted-foreground">B.Tech CSE-DS (2023-27)</div>
+                          <div className="col-span-3 text-right">
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-semibold text-[10px]">PRESENT</span>
+                          </div>
+                        </div>
+                        <div className="px-4 py-2.5 grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-5 sm:col-span-4 font-medium text-foreground">
+                            Diya Patel <span className="text-muted-foreground font-mono text-[10px] block sm:inline sm:ml-1">(2023-CS-084)</span>
+                          </div>
+                          <div className="col-span-4 sm:col-span-5 text-muted-foreground">B.Tech CSE-DS (2023-27)</div>
+                          <div className="col-span-3 text-right">
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-semibold text-[10px]">PRESENT</span>
+                          </div>
+                        </div>
+                        <div className="px-4 py-2.5 grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-5 sm:col-span-4 font-medium text-foreground">
+                            Rohan Verma <span className="text-muted-foreground font-mono text-[10px] block sm:inline sm:ml-1">(2023-CS-112)</span>
+                          </div>
+                          <div className="col-span-4 sm:col-span-5 text-muted-foreground">B.Tech CSE-DS (2023-27)</div>
+                          <div className="col-span-3 text-right">
+                            <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-semibold text-[10px]">ABSENT</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-6 w-16 bg-action-blue/10 text-action-blue text-[10px] font-semibold flex items-center justify-center rounded-full mt-4">Active</div>
+                )}
+
+                {activeShowcaseTab === 'scheduling' && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
+                      <div>
+                        <span className="text-xs font-bold text-primary uppercase tracking-wide">Weekly Master Grid</span>
+                        <h3 className="text-lg font-bold text-foreground mt-0.5">Department of Computer Science & Engineering</h3>
+                      </div>
+                      <Badge variant="outline" className="border-border text-foreground text-xs self-start sm:self-center">
+                        Semester 6 • Room 304
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div className="p-3.5 rounded-xl border border-border bg-card">
+                        <div className="flex justify-between items-center text-[11px] text-muted-foreground mb-1">
+                          <span>09:10 - 10:00 AM</span>
+                          <span className="font-mono text-primary font-semibold">LEC-1</span>
+                        </div>
+                        <div className="font-semibold text-sm text-foreground">Machine Learning</div>
+                        <div className="text-xs text-muted-foreground mt-1">Dr. S. K. Roy • LH-201</div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl border border-primary/30 bg-primary/5">
+                        <div className="flex justify-between items-center text-[11px] text-primary mb-1">
+                          <span>10:00 - 10:50 AM</span>
+                          <span className="font-mono font-semibold">LEC-2</span>
+                        </div>
+                        <div className="font-semibold text-sm text-foreground">Compiler Design</div>
+                        <div className="text-xs text-muted-foreground mt-1">Prof. A. Sengupta • LH-201</div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl border border-border bg-card">
+                        <div className="flex justify-between items-center text-[11px] text-muted-foreground mb-1">
+                          <span>11:00 - 12:40 PM</span>
+                          <span className="font-mono text-amber-700 font-semibold">LAB (2 Slots)</span>
+                        </div>
+                        <div className="font-semibold text-sm text-foreground">Cloud Computing Lab</div>
+                        <div className="text-xs text-muted-foreground mt-1">Lab Group B • Server Lab</div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl border border-border bg-card">
+                        <div className="flex justify-between items-center text-[11px] text-muted-foreground mb-1">
+                          <span>01:30 - 02:20 PM</span>
+                          <span className="font-mono text-primary font-semibold">LEC-3</span>
+                        </div>
+                        <div className="font-semibold text-sm text-foreground">Network Security</div>
+                        <div className="text-xs text-muted-foreground mt-1">Dr. M. Bannerjee • LH-201</div>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-secondary/80 border border-border flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-primary" />
+                        <span className="font-medium text-foreground">
+                          PDF Import Pipeline: Automatic extraction, faculty conflict resolution, and schedule synchronization.
+                        </span>
+                      </div>
+                      <Badge className="bg-primary text-primary-foreground text-[10px]">Verified</Badge>
+                    </div>
+                  </div>
+                )}
+
+                {activeShowcaseTab === 'notices' && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
+                      <div>
+                        <span className="text-xs font-bold text-primary uppercase tracking-wide">Official Circulars</span>
+                        <h3 className="text-lg font-bold text-foreground mt-0.5">Smart Targeted Notice Board</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-rose-100 text-rose-800 border-none text-xs">Urgent Priority</Badge>
+                        <Badge variant="outline" className="border-border text-xs">Target: CSE 3rd Year</Badge>
+                      </div>
+                    </div>
+
+                    <div className="p-5 rounded-xl border border-rose-200/80 bg-rose-50/30">
+                      <div className="flex justify-between items-start gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider">
+                              CRITICAL ALERT
+                            </span>
+                            <span className="text-xs text-muted-foreground font-medium">Published by Dean Academics</span>
+                          </div>
+                          <h4 className="text-base font-bold text-foreground">
+                            Mid-Semester Examination Schedule & Room Allocations - Spring 2027
+                          </h4>
+                          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                            Official guidelines for the upcoming mid-semester examinations. All students are required to verify their seating assignments and carry their institutional smart cards.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-rose-200/50 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <span className="flex items-center gap-1 font-medium">
+                            <FileText className="w-3.5 h-3.5 text-primary" /> exam-schedule-spring2027.pdf (1.2 MB)
+                          </span>
+                          <span>•</span>
+                          <span>Acknowledged by 384 students</span>
+                        </div>
+                        <span className="text-primary font-semibold hover:underline cursor-pointer">
+                          View Attachment & Rules →
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeShowcaseTab === 'notes' && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
+                      <div>
+                        <span className="text-xs font-bold text-primary uppercase tracking-wide">Academic Workspace</span>
+                        <h3 className="text-lg font-bold text-foreground mt-0.5">Course-Grounded AI Study Space</h3>
+                      </div>
+                      <Badge variant="outline" className="border-border text-foreground text-xs">
+                        Subject: Data Structures & Algorithms
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Note Card */}
+                      <div className="p-4 rounded-xl border border-border bg-card">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">
+                            UNIT 3: BALANCED TREES
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">PDF • 4.8 MB</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-foreground">AVL Trees & Red-Black Balancing Principles</h4>
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                          Rotations, height balance invariants, insertion algorithms, and asymptotic complexity proofs.
+                        </p>
+                        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Prof. V. Sharma</span>
+                          <span className="text-primary font-semibold">Tutor Index Ready</span>
+                        </div>
+                      </div>
+
+                      {/* AI Tutor Panel */}
+                      <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-1.5 text-primary text-xs font-semibold mb-2">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Grounded Tutor Query</span>
+                          </div>
+                          <p className="text-xs text-foreground font-medium bg-background/80 p-2.5 rounded-lg border border-border">
+                            "When is a Left-Right (LR) double rotation required in an AVL tree?"
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                            <strong className="text-foreground">Tutor:</strong> An LR rotation occurs when a node is inserted into the right subtree of the left child, causing a balance factor of +2 with child balance factor of -1.
+                          </p>
+                        </div>
+                        <div className="mt-3 pt-2 flex items-center justify-between text-[11px] text-primary font-medium">
+                          <span>Source: Unit-3-Lecture-Notes.pdf (Page 14)</span>
+                          <span className="underline cursor-pointer">Generate Practice Quiz</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Verified Capabilities Grid (Showcase ONLY Category A Features) */}
+        <section id="capabilities" className="py-20 md:py-28 bg-background border-b border-border">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-3xl mx-auto mb-16">
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Platform Capabilities
+              </span>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-foreground mt-2 mb-4">
+                Built specifically for higher-education operations.
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground">
+                Every feature below is implemented and active in INCA today. No speculative roadmaps, no placeholder modules.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Capability 1: Academic Scheduling & Timetables */}
+              <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/40 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-2">Timetable PDF Import & Scheduling</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-6">
+                    Import institutional timetable PDFs with automatic slot extraction, professor mapping, classroom conflict checks, and direct synchronization into live daily lectures.
+                  </p>
                 </div>
-                <div className="bg-white border border-[#e0e0e0] p-4 rounded-xl flex flex-col justify-between opacity-80">
-                  <div>
-                    <span className="text-[10px] text-[#86868b] font-bold uppercase tracking-wide">TUTOR</span>
-                    <h3 className="text-sm font-semibold text-ink mt-1">AI Notes & Tutor</h3>
-                    <p className="text-[11px] text-[#86868b] mt-1">Automated transcripts, quiz generation & smart search.</p>
-                  </div>
-                  <div className="h-6 w-24 bg-canvas-parchment text-ink-muted-80 text-[10px] font-semibold flex items-center justify-center rounded-full mt-4">Coming Soon</div>
+                <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-primary font-semibold">
+                  <span>Academic Operations</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 </div>
-                <div className="bg-white border border-[#e0e0e0] p-4 rounded-xl flex flex-col justify-between opacity-80">
-                  <div>
-                    <span className="text-[10px] text-[#86868b] font-bold uppercase tracking-wide">STORE</span>
-                    <h3 className="text-sm font-semibold text-ink mt-1">Marketplace</h3>
-                    <p className="text-[11px] text-[#86868b] mt-1">Peer-to-peer student marketplace for local exchanges.</p>
+              </div>
+
+              {/* Capability 2: Smart Attendance & Auditing */}
+              <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/40 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+                    <Clock className="w-5 h-5" />
                   </div>
-                  <div className="h-6 w-24 bg-canvas-parchment text-ink-muted-80 text-[10px] font-semibold flex items-center justify-center rounded-full mt-4">Coming Soon</div>
+                  <h3 className="text-lg font-bold text-foreground mb-2">Smart Attendance & Auditing</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-6">
+                    Multi-mode attendance logging with card swipe and list views. Real-time 75% threshold tracking, automated absence flags, and complete audit history for faculty edits.
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-primary font-semibold">
+                  <span>Faculty & HOD Tools</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+
+              {/* Capability 3: Digital Notice Board */}
+              <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/40 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-2">Targeted Notice Board</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-6">
+                    Publish official circulars with granular targeting by department, degree program, semester, and batch. Supports critical priorities, PDF attachments, and read tracking.
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-primary font-semibold">
+                  <span>Campus Communication</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+
+              {/* Capability 4: Course Notes & AI Tutor */}
+              <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/40 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-2">AI Notes & Interactive Tutor</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-6">
+                    Course-scoped learning library where faculty upload lecture materials. Students query an AI study assistant grounded exclusively in official course notes with practice quizzes.
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-primary font-semibold">
+                  <span>Academic Learning</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+
+              {/* Capability 5: Campus Marketplace */}
+              <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/40 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+                    <ShoppingBag className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-2">Verified Campus Marketplace</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-6">
+                    Restricted peer-to-peer exchange for textbooks, electronics, dorm essentials, and lab gear. Includes real-time buyer-seller chat, negotiation, and admin moderation.
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-primary font-semibold">
+                  <span>Student Commerce</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+
+              {/* Capability 6: AI-Powered Lost & Found */}
+              <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/40 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+                    <Search className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-2">AI Lost & Found with OTP Handover</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-6">
+                    Report misplaced items with photo uploads. Multi-stage semantic matching connects lost and found reports, while secure 6-digit OTP verification ensures safe physical handovers.
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-primary font-semibold">
+                  <span>Campus Utilities</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* 4. Flagship Features (Alternating Tiles) */}
-        <section id="features" className="w-full flex flex-col">
-          {/* Tile 1: Smart Attendance System (Light Tile) */}
-          <div className="w-full py-24 bg-white flex flex-col items-center border-b border-[#e0e0e0]">
-            <div className="max-w-4xl px-6 w-full text-center flex flex-col items-center">
-              <span className="text-xs uppercase text-action-blue tracking-widest font-semibold mb-3">Core Module</span>
-              <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-ink mb-4">Smart Attendance System</h2>
-              <p className="text-base text-ink-muted-80 max-w-xl mb-6">
-                Say goodbye to manual registers. Generate conflict-free schedules, log classroom check-ins in seconds, and track real-time attendance thresholds.
+        {/* 5. How It Fits Together (Unified Operational Flow) */}
+        <section id="workflows" className="py-20 md:py-28 bg-secondary/50 border-b border-border">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-3xl mx-auto mb-16">
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Connected Workflows
+              </span>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-foreground mt-2 mb-4">
+                How academic data flows seamlessly across INCA.
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground">
+                Eliminate isolated data silos. See how master timetables power daily operations from classroom to dean's reports.
               </p>
-              <Button onClick={() => navigate('/login')} className="bg-action-blue text-white rounded-full mb-12">Learn More</Button>
-              
-              <div className="w-full max-w-2xl aspect-[16/10] bg-canvas-parchment border border-[#e0e0e0] rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.08)] p-6 overflow-hidden flex flex-col justify-between">
-                <div className="flex justify-between items-center pb-2 border-b">
-                  <span className="text-xs font-bold text-ink">Active Session: CS-301 Computer Networks</span>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">In Progress</span>
-                </div>
-                <div className="flex-1 flex items-center justify-center gap-6 py-4">
-                  <div className="text-center">
-                    <span className="text-4xl font-extrabold text-action-blue">42</span>
-                    <p className="text-[10px] text-[#86868b] font-medium uppercase mt-1">Students Present</p>
-                  </div>
-                  <div className="h-12 w-px bg-[#e0e0e0]" />
-                  <div className="text-center">
-                    <span className="text-4xl font-extrabold text-ink">45</span>
-                    <p className="text-[10px] text-[#86868b] font-medium uppercase mt-1">Total Enrolled</p>
-                  </div>
-                </div>
-                <div className="flex justify-center gap-2">
-                  <div className="h-6 w-20 rounded-full bg-action-blue text-white text-[10px] flex items-center justify-center font-medium">Verify Roster</div>
-                  <div className="h-6 w-20 rounded-full bg-white border text-ink text-[10px] flex items-center justify-center font-medium">Export Log</div>
-                </div>
-              </div>
             </div>
-          </div>
 
-          {/* Tile 2: AI Notes & Tutor (Dark Tile) */}
-          <div className="w-full py-24 bg-surface-tile-1 text-white flex flex-col items-center border-b border-[#333333]">
-            <div className="max-w-4xl px-6 w-full text-center flex flex-col items-center">
-              <span className="text-xs uppercase text-sky-blue tracking-widest font-semibold mb-3">AI Engine</span>
-              <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white mb-4">AI Notes & Tutor</h2>
-              <p className="text-base text-body-muted max-w-xl mb-6">
-                Convert lectures to organized study guides automatically. Ask questions to your classroom AI assistant and generate summary quizzes dynamically.
-              </p>
-              <Button onClick={() => navigate('/login')} className="bg-[#2997ff] text-white rounded-full mb-12">Learn More</Button>
-              
-              <div className="w-full max-w-2xl bg-surface-tile-2 border border-[#333333] rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.22)] p-6 overflow-hidden flex flex-col text-left">
-                <div className="flex items-center gap-2 pb-4 border-b border-[#333333] mb-4">
-                  <Sparkles className="h-4 w-4 text-sky-blue" />
-                  <span className="text-xs font-semibold">Tutor AI Transcript Assistant</span>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-card border border-border relative">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm flex items-center justify-center mb-3">
+                  01
                 </div>
-                <div className="space-y-3 flex-1 text-xs">
-                  <p className="text-[#a1a1a6]"><strong className="text-white">AI Summary:</strong> Today's class focused on the TCP/IP handshake protocol...</p>
-                  <div className="bg-surface-tile-3 p-3 rounded-lg border border-[#333333] space-y-2">
-                    <p className="font-semibold">Practice Question:</p>
-                    <p className="text-[#a1a1a6]">What flag sequence marks the initial client handshake?</p>
-                    <div className="flex gap-2 pt-1">
-                      <span className="px-2.5 py-1 rounded bg-[#333] text-white cursor-pointer hover:bg-[#444]">SYN</span>
-                      <span className="px-2.5 py-1 rounded bg-[#333] text-white cursor-pointer hover:bg-[#444]">ACK</span>
-                      <span className="px-2.5 py-1 rounded bg-[#333] text-[#777]">SYN-ACK</span>
-                    </div>
-                  </div>
-                </div>
+                <h4 className="text-base font-bold text-foreground mb-1.5">Master Schedule</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Administrator uploads semester timetable PDF. System resolves faculty workloads and commits conflict-free lecture slots.
+                </p>
               </div>
-            </div>
-          </div>
 
-          {/* Tile 3: Smart Timetable & Events (Parchment Tile) */}
-          <div className="w-full py-24 bg-canvas-parchment flex flex-col items-center border-b border-[#e0e0e0]">
-            <div className="max-w-4xl px-6 w-full text-center flex flex-col items-center">
-              <span className="text-xs uppercase text-action-blue tracking-widest font-semibold mb-3">Event Hub</span>
-              <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-ink mb-4">Smart Timetable & Events</h2>
-              <p className="text-base text-ink-muted-80 max-w-xl mb-6">
-                Receive real-time schedule conflict resolutions, automatic makeup classes listings, and university announcement integrations.
-              </p>
-              <Button onClick={() => navigate('/login')} className="bg-action-blue text-white rounded-full mb-12">Learn More</Button>
-              
-              <div className="w-full max-w-2xl bg-white border border-[#e0e0e0] rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.06)] p-6 overflow-hidden flex flex-col text-left">
-                <div className="flex items-center justify-between pb-3 border-b mb-3">
-                  <span className="text-xs font-bold text-ink">Today's Conflicts Detected</span>
-                  <Badge className="bg-amber-100 text-amber-800 border-none text-[9px]">Resolved</Badge>
+              <div className="p-5 rounded-2xl bg-card border border-border relative">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm flex items-center justify-center mb-3">
+                  02
                 </div>
-                <div className="space-y-2 text-xs">
-                  <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-lg flex justify-between items-center">
-                    <div>
-                      <p className="font-semibold text-amber-950">Room Clash (Room-302)</p>
-                      <p className="text-[10px] text-amber-800">Advanced Networks (Prof. Roy) / Mathematics (Dr. Sen)</p>
-                    </div>
-                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Rerouted to Room-304</span>
-                  </div>
-                </div>
+                <h4 className="text-base font-bold text-foreground mb-1.5">Daily Sessions</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Lectures automatically activate in faculty portals. Professors launch swipe-card or roster sessions in seconds.
+                </p>
               </div>
-            </div>
-          </div>
 
-          {/* Tile 4: Campus Marketplace (Dark Tile 2) */}
-          <div className="w-full py-24 bg-surface-tile-2 text-white flex flex-col items-center border-b border-[#333333]">
-            <div className="max-w-4xl px-6 w-full text-center flex flex-col items-center">
-              <span className="text-xs uppercase text-sky-blue tracking-widest font-semibold mb-3">Student Hub</span>
-              <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white mb-4">Campus Marketplace</h2>
-              <p className="text-base text-body-muted max-w-xl mb-6">
-                Buy, sell, or rent textbooks, lab gear, and dorm essentials directly within your verified student network. Safe, peer-to-peer commerce.
-              </p>
-              <Button onClick={() => navigate('/login')} className="bg-[#2997ff] text-white rounded-full mb-12">Learn More</Button>
-              
-              <div className="w-full max-w-2xl bg-surface-tile-3 border border-[#444] rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.18)] p-6 overflow-hidden grid grid-cols-2 gap-4 text-left text-xs">
-                <div className="bg-[#333] p-3 rounded-lg border border-[#444]">
-                  <div className="aspect-square bg-surface-tile-1 rounded mb-2 flex items-center justify-center text-body-muted">[Book Mockup]</div>
-                  <p className="font-semibold text-white">Networking Basics (8th Ed)</p>
-                  <p className="text-[#a1a1a6] mt-0.5">$35.00</p>
+              <div className="p-5 rounded-2xl bg-card border border-border relative">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm flex items-center justify-center mb-3">
+                  03
                 </div>
-                <div className="bg-[#333] p-3 rounded-lg border border-[#444]">
-                  <div className="aspect-square bg-surface-tile-1 rounded mb-2 flex items-center justify-center text-body-muted">[Calculator Mockup]</div>
-                  <p className="font-semibold text-white">Scientific Calculator (CASIO)</p>
-                  <p className="text-[#a1a1a6] mt-0.5">$18.00</p>
+                <h4 className="text-base font-bold text-foreground mb-1.5">Real-time Thresholds</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Attendance records immediately update student analytics. Threshold deficits generate alerts before exam eligibility cutoffs.
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-card border border-border relative">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm flex items-center justify-center mb-3">
+                  04
                 </div>
+                <h4 className="text-base font-bold text-foreground mb-1.5">Institutional Insights</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Deans and HODs review program-wide attendance metrics, export compliance audit logs, and issue targeted circulars.
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* 5. Utility Grid (Core Modules / Other Platform Features) */}
-        <section id="utility-grid" className="w-full py-24 bg-background flex flex-col items-center border-b border-[#e0e0e0]">
-          <div className="max-w-6xl px-6 w-full flex flex-col items-center">
-            <span className="text-xs uppercase text-action-blue tracking-widest font-semibold mb-3">Core Modules</span>
-            <h2 className="text-3xl font-semibold tracking-tight text-ink text-center mb-16">Platform Expansion Suite</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-              {/* Card 1: Notice Board */}
-              <div className="border border-[#e0e0e0] bg-white p-6 rounded-[18px] flex flex-col justify-between shadow-none hover:border-[#b9b9bc] transition-all">
-                <div>
-                  <div className="w-9 h-9 rounded-full bg-action-blue/10 flex items-center justify-center mb-6">
-                    <MessageSquare className="h-4.5 w-4.5 text-action-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-ink mb-1.5">Digital Notice Board</h3>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed mb-6">
-                    Departmental announcements, scheduling shifts, and official academic notices in a single digital grid.
-                  </p>
-                </div>
-                <span className="text-xs text-action-blue font-semibold uppercase tracking-wide">Communication</span>
-              </div>
-
-              {/* Card 2: Lost & Found */}
-              <div className="border border-[#e0e0e0] bg-white p-6 rounded-[18px] flex flex-col justify-between shadow-none hover:border-[#b9b9bc] transition-all">
-                <div>
-                  <div className="w-9 h-9 rounded-full bg-action-blue/10 flex items-center justify-center mb-6">
-                    <SearchIcon className="h-4.5 w-4.5 text-action-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-ink mb-1.5">AI-Powered Lost & Found</h3>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed mb-6">
-                    Snap a photo of found items. Our smart search matches listings to reports, keeping dorms organized.
-                  </p>
-                </div>
-                <span className="text-xs text-action-blue font-semibold uppercase tracking-wide">Utility</span>
-              </div>
-
-              {/* Card 3: Performance Insights */}
-              <div className="border border-[#e0e0e0] bg-white p-6 rounded-[18px] flex flex-col justify-between shadow-none hover:border-[#b9b9bc] transition-all">
-                <div>
-                  <div className="w-9 h-9 rounded-full bg-action-blue/10 flex items-center justify-center mb-6">
-                    <BarChart3 className="h-4.5 w-4.5 text-action-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-ink mb-1.5">Performance Insights</h3>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed mb-6">
-                    Role-specific analytics mapping course attendance patterns to academic marks performance.
-                  </p>
-                </div>
-                <span className="text-xs text-action-blue font-semibold uppercase tracking-wide">Analytics</span>
-              </div>
-
-              {/* Card 4: Gamification */}
-              <div className="border border-[#e0e0e0] bg-white p-6 rounded-[18px] flex flex-col justify-between shadow-none hover:border-[#b9b9bc] transition-all">
-                <div>
-                  <div className="w-9 h-9 rounded-full bg-action-blue/10 flex items-center justify-center mb-6">
-                    <Award className="h-4.5 w-4.5 text-action-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-ink mb-1.5">Gamification & Badges</h3>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed mb-6">
-                    Incentivize on-time attendance and academic milestones with student badges and profile unlocks.
-                  </p>
-                </div>
-                <span className="text-xs text-action-blue font-semibold uppercase tracking-wide">Engagement</span>
-              </div>
-
-              {/* Card 5: Polls */}
-              <div className="border border-[#e0e0e0] bg-white p-6 rounded-[18px] flex flex-col justify-between shadow-none hover:border-[#b9b9bc] transition-all">
-                <div>
-                  <div className="w-9 h-9 rounded-full bg-action-blue/10 flex items-center justify-center mb-6">
-                    <PieChart className="h-4.5 w-4.5 text-action-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-ink mb-1.5">Community Polls</h3>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed mb-6">
-                    Instantly create campus opinion surveys, student votes, and coordinator feedback boards.
-                  </p>
-                </div>
-                <span className="text-xs text-action-blue font-semibold uppercase tracking-wide">Community</span>
-              </div>
-
-              {/* Card 6: AR Navigation */}
-              <div className="border border-[#e0e0e0] bg-white p-6 rounded-[18px] flex flex-col justify-between shadow-none hover:border-[#b9b9bc] transition-all opacity-80">
-                <div>
-                  <div className="w-9 h-9 rounded-full bg-[#f0f0f0] flex items-center justify-center mb-6">
-                    <Map className="h-4.5 w-4.5 text-ink-muted-80" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-ink mb-1.5">AR Campus Navigation</h3>
-                    <span className="text-[9px] bg-canvas-parchment border text-ink font-semibold px-2 py-0.5 rounded-full">Coming Soon</span>
-                  </div>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed mb-6">
-                    Augmented reality routes showing conflict-free walking directions directly to assigned class sections.
-                  </p>
-                </div>
-                <span className="text-xs text-ink-muted-80 font-semibold uppercase tracking-wide">Navigation</span>
-              </div>
-
-              {/* Card 7: Green Credits */}
-              <div className="border border-[#e0e0e0] bg-white p-6 rounded-[18px] flex flex-col justify-between shadow-none hover:border-[#b9b9bc] transition-all">
-                <div>
-                  <div className="w-9 h-9 rounded-full bg-action-blue/10 flex items-center justify-center mb-6">
-                    <Leaf className="h-4.5 w-4.5 text-action-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-ink mb-1.5">Green Credits System</h3>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed mb-6">
-                    Earn credits for eco-friendly campus habits, transit pooling, and sustainability task participations.
-                  </p>
-                </div>
-                <span className="text-xs text-action-blue font-semibold uppercase tracking-wide">Sustainability</span>
-              </div>
+        {/* 6. Final Call to Action */}
+        <section className="py-20 md:py-24 bg-background">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-4">
+              Ready to streamline your campus operations?
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto mb-8 text-balance">
+              Sign in with your institutional credentials or contact administration for platform onboarding.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
+              <Button
+                size="lg"
+                onClick={() => navigate('/login')}
+                className="w-full sm:w-auto bg-primary hover:bg-primary/95 text-primary-foreground font-medium px-8 py-3 rounded-xl text-base shadow-xs cursor-pointer"
+              >
+                Access Platform
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           </div>
         </section>
       </main>
 
-      {/* 6. Footer (Apple Style: Parchment Canvas, Muted Ink, 2.41 Line Height Links) */}
-      <footer id="about" className="bg-canvas-parchment border-t border-[#e0e0e0] pt-16 pb-12 text-[#7a7a7a]">
-        <div className="max-w-6xl px-6 mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
-          <div className="col-span-2 md:col-span-1 space-y-4">
-            <div className="flex items-center gap-2 text-ink">
-              <ShieldCheck className="h-5 w-5 text-ink" />
-              <span className="font-bold">INCA</span>
+      {/* 7. Refined Footer */}
+      <footer className="bg-secondary/80 border-t border-border pt-16 pb-12 text-muted-foreground text-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+          {/* Brand info */}
+          <div className="col-span-2 space-y-4">
+            <div className="flex items-center gap-2 text-foreground font-bold text-base">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <span>INCA</span>
             </div>
-            <p className="text-xs text-[#86868b] leading-relaxed">
-              Intelligent Campus Assistant Platform. Designed for university administration, lecture scheduling, and student coordination.
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-sm">
+              Intelligent Campus Assistant (INCA) is an institutional SaaS platform uniting timetable scheduling, smart attendance, official circulars, and student services.
             </p>
+            <div className="text-[11px] text-muted-foreground">
+              Architecture: Multi-tenant RBAC • Cloudflare R2 Storage • NestJS & React
+            </div>
           </div>
+
+          {/* Academic modules */}
           <div>
-            <h3 className="text-[12px] font-semibold text-ink mb-3 tracking-wider uppercase">Product</h3>
-            <ul className="text-xs leading-[2.41] font-normal">
-              <li><a href="#" className="hover:text-ink transition-colors">Smart Attendance (ASSAM)</a></li>
-              <li><a href="#" className="hover:text-ink transition-colors">AI Notes & Tutor</a></li>
-              <li><a href="#" className="hover:text-ink transition-colors">Marketplace</a></li>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3">Academic Suite</h4>
+            <ul className="space-y-2">
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Timetables & Schedules</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Smart Attendance (ASSAM)</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Timetable PDF Importer</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Academic Master Data</button></li>
             </ul>
           </div>
+
+          {/* Campus Services */}
           <div>
-            <h3 className="text-[12px] font-semibold text-ink mb-3 tracking-wider uppercase">Company</h3>
-            <ul className="text-xs leading-[2.41] font-normal">
-              <li><a href="#" className="hover:text-ink transition-colors">About Us</a></li>
-              <li><a href="#" className="hover:text-ink transition-colors">Careers</a></li>
-              <li><a href="#" className="hover:text-ink transition-colors">Contact Support</a></li>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3">Campus Services</h4>
+            <ul className="space-y-2">
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Digital Notice Board</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">AI Notes & Tutor</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Campus Marketplace</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">AI Lost & Found</button></li>
             </ul>
           </div>
+
+          {/* Institutional Access */}
           <div>
-            <h3 className="text-[12px] font-semibold text-ink mb-3 tracking-wider uppercase">Legal</h3>
-            <ul className="text-xs leading-[2.41] font-normal">
-              <li><a href="#" className="hover:text-ink transition-colors">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-ink transition-colors">Terms of Service</a></li>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3">Institutional</h4>
+            <ul className="space-y-2">
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Administrator Portal</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Faculty Workspace</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">Student Dashboard</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-foreground transition-colors cursor-pointer">System Status</button></li>
             </ul>
           </div>
         </div>
 
-        <div className="max-w-6xl px-6 mx-auto mt-16 pt-8 border-t border-[#e0e0e0] flex flex-col md:flex-row justify-between items-center text-[10px] tracking-tight">
-          <span>&copy; {new Date().getFullYear()} INCA. Intelligent Campus Assistant. All rights reserved.</span>
-          <div className="flex gap-4 mt-4 md:mt-0">
-            <a href="#" className="hover:underline">Privacy Policy</a>
-            <span>|</span>
-            <a href="#" className="hover:underline">Terms of Use</a>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
+          <div>
+            &copy; {new Date().getFullYear()} INCA. Intelligent Campus Assistant. All rights reserved.
+          </div>
+          <div className="flex items-center gap-6 text-muted-foreground">
+            <span>Enterprise Campus System</span>
+            <span>•</span>
+            <span>Institutional Data Protection</span>
           </div>
         </div>
       </footer>

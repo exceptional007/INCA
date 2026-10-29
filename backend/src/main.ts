@@ -1,3 +1,8 @@
+import dns from 'node:dns';
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
 const rootCanvas = require(require('path').join(process.cwd(), 'node_modules/pdf-to-png-converter/node_modules/@napi-rs/canvas'));
 for (const className of ['Path2D', 'DOMMatrix', 'ImageData']) {
   Object.defineProperty(globalThis, className, {

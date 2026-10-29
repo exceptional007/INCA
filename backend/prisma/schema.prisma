@@ -47,35 +47,41 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  faculty Faculty?
-  student Student?
-  adminProfile AdminProfile?
-  attendanceAudits AttendanceAudit[]
-  timetableImportBatches TimetableImportBatch[]
+  faculty                             Faculty?
+  student                             Student?
+  adminProfile                        AdminProfile?
+  attendanceAudits                    AttendanceAudit[]
+  timetableImportBatches              TimetableImportBatch[]
   notice_audit_logs                   notice_audit_logs[]
   notice_reads                        notice_reads[]
-  notices_notices_approvedByIdTousers notices[]              @relation("notices_approvedByIdTousers")
-  notices_notices_authorIdTousers     notices[]              @relation("notices_authorIdTousers")
+  notices_notices_approvedByIdTousers notices[]                 @relation("notices_approvedByIdTousers")
+  notices_notices_authorIdTousers     notices[]                 @relation("notices_authorIdTousers")
   notifications                       notifications[]
-  sellerListings MarketplaceListing[] @relation("SellerListings")
-  buyerConversations MarketplaceConversation[] @relation("BuyerConversations")
-  sellerConversations MarketplaceConversation[] @relation("SellerConversations")
-  sentMarketplaceMessages MarketplaceMessage[] @relation("SentMarketplaceMessages")
-  buyerOffers MarketplaceOffer[] @relation("BuyerOffers")
-  sellerOffers MarketplaceOffer[] @relation("SellerOffers")
-  buyerTransactions MarketplaceTransaction[] @relation("BuyerTransactions")
-  sellerTransactions MarketplaceTransaction[] @relation("SellerTransactions")
-  buyerReviews MarketplaceReview[] @relation("BuyerReviews")
-  sellerReviews MarketplaceReview[] @relation("SellerReviews")
-  marketplaceReportsFiled MarketplaceReport[] @relation("MarketplaceReportsFiled")
-  marketplaceReportsReceived MarketplaceReport[] @relation("MarketplaceReportsReceived")
-  moderatedReports MarketplaceReport[] @relation("ModeratedReports")
-  lostFoundReports LostFoundReport[] @relation("ReporterLostFoundReports")
-  reviewedLostFoundMatches LostFoundMatch[] @relation("ReviewedMatches")
-  lostFoundClaims LostFoundClaim[] @relation("UserLostFoundClaims")
-  verifiedLostFoundClaims LostFoundClaim[] @relation("VerifiedClaims")
-  lostFoundNotifications LostFoundNotification[] @relation("UserLostFoundNotifications")
-  lostFoundContributions LostFoundContribution[] @relation("UserLostFoundContributions")
+  sellerListings                      MarketplaceListing[]      @relation("SellerListings")
+  buyerConversations                  MarketplaceConversation[] @relation("BuyerConversations")
+  sellerConversations                 MarketplaceConversation[] @relation("SellerConversations")
+  sentMarketplaceMessages             MarketplaceMessage[]      @relation("SentMarketplaceMessages")
+  buyerOffers                         MarketplaceOffer[]        @relation("BuyerOffers")
+  sellerOffers                        MarketplaceOffer[]        @relation("SellerOffers")
+  buyerTransactions                   MarketplaceTransaction[]  @relation("BuyerTransactions")
+  sellerTransactions                  MarketplaceTransaction[]  @relation("SellerTransactions")
+  buyerReviews                        MarketplaceReview[]       @relation("BuyerReviews")
+  sellerReviews                       MarketplaceReview[]       @relation("SellerReviews")
+  marketplaceReportsFiled             MarketplaceReport[]       @relation("MarketplaceReportsFiled")
+  marketplaceReportsReceived          MarketplaceReport[]       @relation("MarketplaceReportsReceived")
+  moderatedReports                    MarketplaceReport[]       @relation("ModeratedReports")
+  lostFoundReports                    LostFoundReport[]         @relation("ReporterLostFoundReports")
+  reviewedLostFoundMatches            LostFoundMatch[]          @relation("ReviewedMatches")
+  lostFoundClaims                     LostFoundClaim[]          @relation("UserLostFoundClaims")
+  verifiedLostFoundClaims             LostFoundClaim[]          @relation("VerifiedClaims")
+  lostFoundNotifications              LostFoundNotification[]   @relation("UserLostFoundNotifications")
+  lostFoundContributions              LostFoundContribution[]   @relation("UserLostFoundContributions")
+  createdPolls                        Poll[]                    @relation("PollCreator")
+  pollParticipations                  PollParticipation[]       @relation("UserPollParticipations")
+  pollAnswers                         PollAnswer[]              @relation("UserPollAnswers")
+  createdPolls           Poll[]                  @relation("PollCreator")
+  pollParticipations     PollParticipation[]     @relation("UserPollParticipations")
+  pollAnswers            PollAnswer[]            @relation("UserPollAnswers")
 
   @@index([roleId])
   @@index([isActive])
@@ -109,13 +115,13 @@ model Faculty {
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  scheduleTemplates  ScheduleTemplate[]
-  scheduleExceptions ScheduleException[]
-  activities         Activity[]
-  attendanceSessions AttendanceSession[]
-  timetableSlots     TimetableSlot[]
+  scheduleTemplates   ScheduleTemplate[]
+  scheduleExceptions  ScheduleException[]
+  activities          Activity[]
+  attendanceSessions  AttendanceSession[]
+  timetableSlots      TimetableSlot[]
   timetableSlotDrafts TimetableSlotDraft[]
-  learningNotes      LearningNote[]
+  learningNotes       LearningNote[]
 
   @@index([departmentId])
   @@index([isActive])
@@ -167,12 +173,12 @@ model Student {
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   sectionId String?
-  section   Section?    @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  section   Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
-  attendanceRecords AttendanceRecord[]
+  attendanceRecords  AttendanceRecord[]
   tutorConversations TutorConversation[]
-  quizAttempts      QuizAttempt[]
-  createdQuizzes    LearningQuiz[]
+  quizAttempts       QuizAttempt[]
+  createdQuizzes     LearningQuiz[]
 
   @@index([departmentId])
   @@index([sectionId])
@@ -194,11 +200,12 @@ model Department {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  programs Program[]
+  programs      Program[]
   adminProfiles AdminProfile[]
-  faculties Faculty[]
-  students  Student[]
-  notices   notices[]
+  faculties     Faculty[]
+  students      Student[]
+  notices       notices[]
+  polls         Poll[]
 
   @@map("departments")
 }
@@ -213,9 +220,10 @@ model Program {
   name      String
   shortName String?
 
-  semesters     Semester[]
-  durationYears Int        @default(4)
+  semesters            Semester[]
+  durationYears        Int                   @default(4)
   learningNotePrograms LearningNoteProgram[]
+  polls                Poll[]
   notices              notices[]
 
   isActive Boolean @default(true)
@@ -280,7 +288,7 @@ model Section {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  scheduleTemplates ScheduleTemplate[]
+  scheduleTemplates   ScheduleTemplate[]
   timetableVersions   TimetableVersion[]
   timetableSlotDrafts TimetableSlotDraft[]
   students            Student[]
@@ -302,14 +310,14 @@ model Subject {
   code String @unique
   name String
 
-  isLab   Boolean @default(false)
+  isLab Boolean @default(false)
 
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  scheduleTemplates ScheduleTemplate[]
+  scheduleTemplates   ScheduleTemplate[]
   timetableSlots      TimetableSlot[]
   timetableSlotDrafts TimetableSlotDraft[]
   learningNotes       LearningNote[]
@@ -336,10 +344,10 @@ model Room {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  scheduleTemplates  ScheduleTemplate[]
-  scheduleExceptions ScheduleException[]
-  activities         Activity[]
-  timetableSlots     TimetableSlot[]
+  scheduleTemplates   ScheduleTemplate[]
+  scheduleExceptions  ScheduleException[]
+  activities          Activity[]
+  timetableSlots      TimetableSlot[]
   timetableSlotDrafts TimetableSlotDraft[]
 
   @@map("rooms")
@@ -391,10 +399,10 @@ model ScheduleTemplate {
   room   Room   @relation(fields: [roomId], references: [id], onDelete: Restrict)
 
   dayOfWeek Int
-  startTime String 
-  endTime   String 
+  startTime String
+  endTime   String
 
-  effectiveFrom DateTime @db.Date
+  effectiveFrom DateTime  @db.Date
   effectiveTo   DateTime? @db.Date
 
   createdAt DateTime @default(now())
@@ -416,7 +424,7 @@ model Schedule {
   templateId String
   template   ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
-  lectureDate DateTime @db.Date
+  lectureDate DateTime       @db.Date
   status      ScheduleStatus @default(SCHEDULED)
   remarks     String?
 
@@ -515,8 +523,8 @@ model AttendanceSession {
   takenBy   Faculty @relation(fields: [takenById], references: [id], onDelete: Restrict)
 
   attendanceDate DateTime @db.Date
-  
-  status String @default("OPEN") 
+
+  status String @default("OPEN")
 
   submittedAt DateTime?
 
@@ -585,60 +593,60 @@ enum ImportBatchStatus {
 }
 
 model TimetableImportBatch {
-  id                 String              @id @default(uuid())
-  uploadedByUserId   String
-  uploadedByUser     User                @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
-  sourceFileR2Key    String
-  status             ImportBatchStatus   @default(UPLOADED)
-  pagesJson          Json?               // Stores page numbers, PNG keys, and extracted raw text metadata
-  createdAt          DateTime            @default(now())
-  committedAt        DateTime?
-  notes              String?
-  slots              TimetableSlotDraft[]
-  timetableVersions  TimetableVersion[]
+  id                String               @id @default(uuid())
+  uploadedByUserId  String
+  uploadedByUser    User                 @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  sourceFileR2Key   String
+  status            ImportBatchStatus    @default(UPLOADED)
+  pagesJson         Json? // Stores page numbers, PNG keys, and extracted raw text metadata
+  createdAt         DateTime             @default(now())
+  committedAt       DateTime?
+  notes             String?
+  slots             TimetableSlotDraft[]
+  timetableVersions TimetableVersion[]
 
   @@map("timetable_import_batches")
 }
 
 model TimetableSlotDraft {
-  id                 String              @id @default(uuid())
-  batchId            String
-  batch              TimetableImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  gridId             String
-  day                String
-  timeSlotStart      String
-  timeSlotEnd        String
-  isMergedSlot       Boolean             @default(false)
-  sectionCodes       String[]            // Scalar list of sections mapped (e.g., ["C1", "C2"])
-  subjectRaw         String
-  facultyRaw         String
-  room               String
-  category           String              // "academic" | "skill_development" | "placement" | "self_learning"
-  matchedSubjectId   String?
-  matchedSubject     Subject?            @relation(fields: [matchedSubjectId], references: [id], onDelete: SetNull)
-  matchedFacultyId   String?
-  matchedFaculty     Faculty?            @relation(fields: [matchedFacultyId], references: [id], onDelete: SetNull)
-  matchedRoomId      String?
-  matchedRoom        Room?               @relation(fields: [matchedRoomId], references: [id], onDelete: SetNull)
-  matchedSectionId   String?
-  matchedSection     Section?            @relation(fields: [matchedSectionId], references: [id], onDelete: SetNull)
-  matchConfidence    Float               @default(0.0)
-  rawCellText        String
-  adminEdited        Boolean             @default(false)
+  id               String               @id @default(uuid())
+  batchId          String
+  batch            TimetableImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  gridId           String
+  day              String
+  timeSlotStart    String
+  timeSlotEnd      String
+  isMergedSlot     Boolean              @default(false)
+  sectionCodes     String[] // Scalar list of sections mapped (e.g., ["C1", "C2"])
+  subjectRaw       String
+  facultyRaw       String
+  room             String
+  category         String // "academic" | "skill_development" | "placement" | "self_learning"
+  matchedSubjectId String?
+  matchedSubject   Subject?             @relation(fields: [matchedSubjectId], references: [id], onDelete: SetNull)
+  matchedFacultyId String?
+  matchedFaculty   Faculty?             @relation(fields: [matchedFacultyId], references: [id], onDelete: SetNull)
+  matchedRoomId    String?
+  matchedRoom      Room?                @relation(fields: [matchedRoomId], references: [id], onDelete: SetNull)
+  matchedSectionId String?
+  matchedSection   Section?             @relation(fields: [matchedSectionId], references: [id], onDelete: SetNull)
+  matchConfidence  Float                @default(0.0)
+  rawCellText      String
+  adminEdited      Boolean              @default(false)
 
   @@map("timetable_slot_drafts")
 }
 
 model TimetableVersion {
-  id                 String              @id @default(uuid())
-  sectionId          String
-  section            Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
-  effectiveFrom      DateTime            @db.Date
-  isActive           Boolean             @default(true)
-  importBatchId      String?
-  importBatch        TimetableImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
-  createdAt          DateTime            @default(now())
-  slots              TimetableSlot[]
+  id            String                @id @default(uuid())
+  sectionId     String
+  section       Section               @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  effectiveFrom DateTime              @db.Date
+  isActive      Boolean               @default(true)
+  importBatchId String?
+  importBatch   TimetableImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdAt     DateTime              @default(now())
+  slots         TimetableSlot[]
 
   @@index([sectionId])
   @@index([isActive])
@@ -646,22 +654,22 @@ model TimetableVersion {
 }
 
 model TimetableSlot {
-  id                 String              @id @default(uuid())
-  versionId          String
-  version            TimetableVersion    @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  day                String
-  lectureNumber      Int                 @default(1)
-  timeSlotStart      String
-  timeSlotEnd        String
-  subjectId          String
-  subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  facultyId          String
-  faculty            Faculty             @relation(fields: [facultyId], references: [id], onDelete: Restrict)
-  roomId             String
-  room               Room                @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  category           String
-  isLab              Boolean             @default(false)
-  batchSection       String?
+  id            String           @id @default(uuid())
+  versionId     String
+  version       TimetableVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  day           String
+  lectureNumber Int              @default(1)
+  timeSlotStart String
+  timeSlotEnd   String
+  subjectId     String
+  subject       Subject          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  facultyId     String
+  faculty       Faculty          @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  roomId        String
+  room          Room             @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  category      String
+  isLab         Boolean          @default(false)
+  batchSection  String?
 
   @@index([versionId])
   @@index([subjectId])
@@ -734,8 +742,6 @@ model AdminProfile {
   @@map("admin_profiles")
 }
 
-
-
 enum NoteSourceType {
   FILE
   DRIVE
@@ -761,26 +767,26 @@ model LearningNote {
   driveUrl            String?
   drivePermissionNote String?
 
-  subjectId           String
-  subject             Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  facultyId           String
-  faculty             Faculty        @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  facultyId String
+  faculty   Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
 
-  semesterNumber      Int?
-  status              NoteStatus     @default(DRAFT)
-  aiReady             Boolean        @default(false)
-  processingError     String?
-  documentVersion     Int            @default(1)
-  tags                String[]       @default([])
+  semesterNumber  Int?
+  status          NoteStatus @default(DRAFT)
+  aiReady         Boolean    @default(false)
+  processingError String?
+  documentVersion Int        @default(1)
+  tags            String[]   @default([])
 
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  programs            LearningNoteProgram[]
-  chunks              LearningNoteChunk[]
-  conversations       TutorConversation[]
-  quizzes             LearningQuiz[]
+  programs      LearningNoteProgram[]
+  chunks        LearningNoteChunk[]
+  conversations TutorConversation[]
+  quizzes       LearningQuiz[]
 
   @@index([facultyId])
   @@index([subjectId])
@@ -818,16 +824,16 @@ model LearningNoteChunk {
 }
 
 model TutorConversation {
-  id        String         @id @default(uuid())
+  id        String       @id @default(uuid())
   studentId String
-  student   Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   noteId    String
-  note      LearningNote   @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  title     String         @default("Study Session")
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  note      LearningNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  title     String       @default("Study Session")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  messages  TutorMessage[]
+  messages TutorMessage[]
 
   @@index([studentId])
   @@index([noteId])
@@ -848,18 +854,18 @@ model TutorMessage {
 }
 
 model LearningQuiz {
-  id                 String        @id @default(uuid())
+  id                 String       @id @default(uuid())
   noteId             String
-  note               LearningNote  @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  note               LearningNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
   title              String
   topic              String?
-  difficulty         String        @default("MEDIUM")
+  difficulty         String       @default("MEDIUM")
   questions          Json
   createdByStudentId String?
-  createdByStudent   Student?      @relation(fields: [createdByStudentId], references: [id], onDelete: SetNull)
-  createdAt          DateTime      @default(now())
+  createdByStudent   Student?     @relation(fields: [createdByStudentId], references: [id], onDelete: SetNull)
+  createdAt          DateTime     @default(now())
 
-  attempts           QuizAttempt[]
+  attempts QuizAttempt[]
 
   @@index([noteId])
   @@index([createdByStudentId])
@@ -882,7 +888,6 @@ model QuizAttempt {
   @@index([studentId])
   @@map("quiz_attempts")
 }
-
 
 enum MarketplaceCategory {
   BOOKS_AND_STUDY
@@ -965,19 +970,19 @@ model MarketplaceListing {
   model             String?
   preferredLocation String?
 
-  sellerId          String
-  seller            User                @relation("SellerListings", fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerId String
+  seller   User   @relation("SellerListings", fields: [sellerId], references: [id], onDelete: Cascade)
 
-  images            MarketplaceImage[]
-  conversations     MarketplaceConversation[]
-  offers            MarketplaceOffer[]
-  transactions      MarketplaceTransaction[]
-  reviews           MarketplaceReview[]
-  reports           MarketplaceReport[]
+  images        MarketplaceImage[]
+  conversations MarketplaceConversation[]
+  offers        MarketplaceOffer[]
+  transactions  MarketplaceTransaction[]
+  reviews       MarketplaceReview[]
+  reports       MarketplaceReport[]
 
-  soldAt            DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  soldAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([sellerId])
   @@index([category])
@@ -1000,19 +1005,19 @@ model MarketplaceImage {
 }
 
 model MarketplaceConversation {
-  id            String              @id @default(uuid())
-  listingId     String
-  listing       MarketplaceListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  buyerId       String
-  buyer         User                @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
-  sellerId      String
-  seller        User                @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
+  id        String             @id @default(uuid())
+  listingId String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User               @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId  String
+  seller    User               @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
 
-  lastMessageAt DateTime            @default(now())
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  messages      MarketplaceMessage[]
+  messages MarketplaceMessage[]
 
   @@unique([listingId, buyerId])
   @@index([buyerId])
@@ -1039,18 +1044,18 @@ model MarketplaceMessage {
 }
 
 model MarketplaceOffer {
-  id            String              @id @default(uuid())
+  id            String             @id @default(uuid())
   listingId     String
-  listing       MarketplaceListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing       MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   buyerId       String
-  buyer         User                @relation("BuyerOffers", fields: [buyerId], references: [id], onDelete: Cascade)
+  buyer         User               @relation("BuyerOffers", fields: [buyerId], references: [id], onDelete: Cascade)
   sellerId      String
-  seller        User                @relation("SellerOffers", fields: [sellerId], references: [id], onDelete: Cascade)
+  seller        User               @relation("SellerOffers", fields: [sellerId], references: [id], onDelete: Cascade)
   amount        Float
-  status        OfferStatus         @default(PENDING)
+  status        OfferStatus        @default(PENDING)
   counterAmount Float?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@index([listingId])
   @@index([buyerId])
@@ -1059,28 +1064,28 @@ model MarketplaceOffer {
 }
 
 model MarketplaceTransaction {
-  id                  String             @id @default(uuid())
-  listingId           String
-  listing             MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  buyerId             String
-  buyer               User               @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
-  sellerId            String
-  seller              User               @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)
-  agreedPrice         Float
-  status              TransactionStatus  @default(INITIATED)
-  handoverOtp         String?
+  id                   String             @id @default(uuid())
+  listingId            String
+  listing              MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId              String
+  buyer                User               @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId             String
+  seller               User               @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)
+  agreedPrice          Float
+  status               TransactionStatus  @default(INITIATED)
+  handoverOtp          String?
   handoverOtpExpiresAt DateTime?
-  handoverOtpAttempts Int                @default(0)
-  buyerConfirmed      Boolean            @default(false)
-  sellerConfirmed     Boolean            @default(false)
-  buyerConfirmedAt    DateTime?
-  sellerConfirmedAt   DateTime?
-  completedAt         DateTime?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  handoverOtpAttempts  Int                @default(0)
+  buyerConfirmed       Boolean            @default(false)
+  sellerConfirmed      Boolean            @default(false)
+  buyerConfirmedAt     DateTime?
+  sellerConfirmedAt    DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
-  review              MarketplaceReview?
-  reports             MarketplaceReport[]
+  review  MarketplaceReview?
+  reports MarketplaceReport[]
 
   @@index([listingId])
   @@index([buyerId])
@@ -1134,7 +1139,6 @@ model MarketplaceReport {
   @@index([status])
   @@map("marketplace_reports")
 }
-
 
 model notice_attachments {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
@@ -1232,7 +1236,6 @@ model notifications {
   @@index([userId, isRead], map: "idx_notifications_user_unread")
 }
 
-
 enum LostFoundType {
   LOST
   FOUND
@@ -1275,29 +1278,29 @@ enum ClaimStatus {
 }
 
 model LostFoundReport {
-  id                     String              @id @default(uuid())
+  id                     String            @id @default(uuid())
   type                   LostFoundType
   title                  String
-  description            String              @db.Text
-  category               LostFoundCategory   @default(OTHER)
+  description            String            @db.Text
+  category               LostFoundCategory @default(OTHER)
   location               String
-  approximateDate        DateTime            @default(now())
+  approximateDate        DateTime          @default(now())
   approximateTime        String?
-  distinguishingFeatures String?             @db.Text
+  distinguishingFeatures String?           @db.Text
   contactPreference      String?
-  status                 LostFoundStatus     @default(OPEN)
-  
-  reporterId             String
-  reporter               User                @relation("ReporterLostFoundReports", fields: [reporterId], references: [id], onDelete: Cascade)
-  
-  resolvedAt             DateTime?
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  status                 LostFoundStatus   @default(OPEN)
 
-  images                 LostFoundImage[]
-  lostMatches            LostFoundMatch[]    @relation("LostReportMatches")
-  foundMatches           LostFoundMatch[]    @relation("FoundReportMatches")
-  claims                 LostFoundClaim[]
+  reporterId String
+  reporter   User   @relation("ReporterLostFoundReports", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  images       LostFoundImage[]
+  lostMatches  LostFoundMatch[] @relation("LostReportMatches")
+  foundMatches LostFoundMatch[] @relation("FoundReportMatches")
+  claims       LostFoundClaim[]
 
   @@index([reporterId])
   @@index([type])
@@ -1326,17 +1329,17 @@ model LostFoundMatch {
   lostReport    LostFoundReport @relation("LostReportMatches", fields: [lostReportId], references: [id], onDelete: Cascade)
   foundReportId String
   foundReport   LostFoundReport @relation("FoundReportMatches", fields: [foundReportId], references: [id], onDelete: Cascade)
-  
+
   matchingScore Float
-  matchReason   String?         @db.Text
-  status        MatchStatus     @default(PENDING_REVIEW)
-  
-  reviewedById  String?
-  reviewedBy    User?           @relation("ReviewedMatches", fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt    DateTime?
-  
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  matchReason   String?     @db.Text
+  status        MatchStatus @default(PENDING_REVIEW)
+
+  reviewedById String?
+  reviewedBy   User?     @relation("ReviewedMatches", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([lostReportId, foundReportId])
   @@index([lostReportId])
@@ -1346,24 +1349,24 @@ model LostFoundMatch {
 }
 
 model LostFoundClaim {
-  id               String          @id @default(uuid())
-  reportId         String
-  report           LostFoundReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  claimantId       String
-  claimant         User            @relation("UserLostFoundClaims", fields: [claimantId], references: [id], onDelete: Cascade)
-  
-  claimDetails     String          @db.Text
+  id         String          @id @default(uuid())
+  reportId   String
+  report     LostFoundReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  claimantId String
+  claimant   User            @relation("UserLostFoundClaims", fields: [claimantId], references: [id], onDelete: Cascade)
+
+  claimDetails     String      @db.Text
   proofImageUrl    String?
   verificationCode String?
-  status           ClaimStatus     @default(PENDING)
-  staffNote        String?         @db.Text
-  
-  verifiedById     String?
-  verifiedBy       User?           @relation("VerifiedClaims", fields: [verifiedById], references: [id], onDelete: SetNull)
-  verifiedAt       DateTime?
-  
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  status           ClaimStatus @default(PENDING)
+  staffNote        String?     @db.Text
+
+  verifiedById String?
+  verifiedBy   User?     @relation("VerifiedClaims", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([reportId])
   @@index([claimantId])
@@ -1402,4 +1405,113 @@ model LostFoundContribution {
   @@unique([userId, reportId, actionType])
   @@index([userId])
   @@map("lost_found_contributions")
+}
+
+// ==========================================
+// COMMUNITY POLLS MODULE
+// ==========================================
+
+enum PollVotingMode {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+}
+
+enum PollResultVisibility {
+  ALWAYS_PUBLIC
+  AFTER_EXPIRY
+}
+
+enum PollStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model Poll {
+  id               String               @id @default(uuid())
+  question         String
+  description      String?
+  votingMode       PollVotingMode       @default(SINGLE_CHOICE)
+  isAnonymous      Boolean              @default(false)
+  resultVisibility PollResultVisibility @default(ALWAYS_PUBLIC)
+  status           PollStatus           @default(ACTIVE)
+
+  expiresAt        DateTime
+  resultsPublishAt DateTime?
+
+  targetScope    String      @default("ALL")
+  departmentId   String?
+  department     Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  programId      String?
+  program        Program?    @relation(fields: [programId], references: [id], onDelete: SetNull)
+  targetYear     Int?
+  targetSemester Int?
+  targetBatch    String?
+  targetAudience Json?
+
+  creatorId String
+  creator   User   @relation("PollCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options        PollOption[]
+  participations PollParticipation[]
+  answers        PollAnswer[]
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([targetScope])
+  @@index([departmentId])
+  @@index([programId])
+  @@map("polls")
+}
+
+model PollOption {
+  id           String   @id @default(uuid())
+  pollId       String
+  poll         Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  text         String
+  displayOrder Int      @default(0)
+  voteCount    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  answers PollAnswer[]
+
+  @@index([pollId])
+  @@map("poll_options")
+}
+
+model PollParticipation {
+  id      String   @id @default(uuid())
+  pollId  String
+  poll    Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User     @relation("UserPollParticipations", fields: [userId], references: [id], onDelete: Cascade)
+  votedAt DateTime @default(now())
+
+  @@unique([pollId, userId])
+  @@index([userId])
+  @@map("poll_participations")
+}
+
+model PollAnswer {
+  id        String     @id @default(uuid())
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  voterId   String? // NULL for anonymous polls, populated ONLY for identified polls
+  voter     User?      @relation("UserPollAnswers", fields: [voterId], references: [id], onDelete: SetNull)
+  createdAt DateTime   @default(now())
+
+  @@index([pollId])
+  @@index([optionId])
+  @@index([voterId])
+  @@map("poll_answers")
 }

@@ -1,8 +1,8 @@
-import { Controller, Get, Query, Param, Res, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, Param, Res, BadRequestException, VERSION_NEUTRAL } from '@nestjs/common';
 import type { Response } from 'express';
 import { StrictR2StorageService } from './strict-r2-storage.service';
 
-@Controller('storage')
+@Controller({ path: 'storage', version: [VERSION_NEUTRAL, '1'] })
 export class StorageController {
   constructor(private readonly r2Storage: StrictR2StorageService) {}
 
@@ -20,15 +20,16 @@ export class StorageController {
     stream.pipe(res);
   }
 
-  @Get('photo/:key(*)')
+  @Get('photo/*key')
   async streamPhoto(
-    @Param('key') key: string,
+    @Param('key') key: string | string[],
     @Res() res: Response,
   ) {
-    if (!key) {
+    const resolvedKey = Array.isArray(key) ? key.join('/') : (key || '');
+    if (!resolvedKey) {
       throw new BadRequestException('Storage key is required');
     }
-    const { stream, contentType } = await this.r2Storage.getObjectStream(key);
+    const { stream, contentType } = await this.r2Storage.getObjectStream(resolvedKey);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     stream.pipe(res);
