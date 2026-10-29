@@ -16,6 +16,7 @@ import { NotesModule } from './modules/notes/notes.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { LostFoundModule } from './modules/lost-found/lost-found.module';
 import { NoticesModule } from './modules/notices/notices.module';
+import { PollsModule } from './modules/polls/polls.module';
 import { HealthModule } from './modules/health/health.module';
 import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware';
 
@@ -42,6 +43,7 @@ import { RequestLoggingMiddleware } from './common/middleware/request-logging.mi
     MarketplaceModule,
     LostFoundModule,
     NoticesModule,
+    PollsModule,
   ],
 })
 export class AppModule implements NestModule {

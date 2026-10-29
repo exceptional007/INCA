@@ -86,9 +86,9 @@ export const FeatureHub: React.FC = () => {
       name: 'Community Polls',
       description: 'Institutional decision voting, academic surveys, and campus feedback boards.',
       icon: PieChart,
-      active: false,
-      badge: 'Coming Soon',
-      url: '#',
+      active: true,
+      badge: 'Active',
+      url: '/polls',
     },
     {
       id: 'sustainability',

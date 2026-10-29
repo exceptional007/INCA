@@ -9,6 +9,7 @@ import {
   Sparkles,
   CheckSquare,
   BarChart3,
+  Vote,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -62,6 +63,11 @@ export const Sidebar: React.FC = () => {
       label: 'Reports & Analytics',
       path: '/reports',
       icon: <BarChart3 className="w-4 h-4" />,
+    },
+    {
+      label: 'Community Polls',
+      path: '/polls',
+      icon: <Vote className="w-4 h-4" />,
     },
   ];
 
