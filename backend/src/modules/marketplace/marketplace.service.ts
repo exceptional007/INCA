@@ -104,6 +104,7 @@ export class MarketplaceService {
                 department: { select: { name: true, code: true } },
               },
             },
+            adminProfile: { select: { name: true } },
           },
         },
       },
@@ -320,6 +321,7 @@ export class MarketplaceService {
                   department: { select: { name: true, code: true } },
                 },
               },
+              adminProfile: { select: { name: true } },
             },
           },
           _count: {
@@ -333,7 +335,7 @@ export class MarketplaceService {
     ]);
 
     // Batch aggregate seller reputation to avoid N+1 query loop
-    const sellerIds = Array.from(new Set(items.map((i) => i.sellerId)));
+    const sellerIds = Array.from(new Set(items.map((i) => i.sellerId))) as string[];
     const reputationMap = new Map<string, { averageRating: number; totalReviews: number; completedSales: number }>();
 
     for (const sId of sellerIds) {
@@ -419,6 +421,7 @@ export class MarketplaceService {
                 department: { select: { name: true, code: true } },
               },
             },
+            adminProfile: { select: { name: true } },
           },
         },
         _count: {
@@ -459,6 +462,7 @@ export class MarketplaceService {
               email: true,
               student: { select: { firstName: true, lastName: true, rollNumber: true } },
               faculty: { select: { firstName: true, lastName: true, designation: true } },
+              adminProfile: { select: { name: true } },
             },
           },
         },
@@ -469,15 +473,33 @@ export class MarketplaceService {
     activeTransaction = await this.prisma.marketplaceTransaction.findFirst({
       where: {
         listingId,
-        status: { in: ['INITIATED', 'PRICE_AGREED', 'HANDOVER_PENDING'] },
+        status: { in: ['INITIATED', 'PRICE_AGREED', 'HANDOVER_PENDING', 'COMPLETED'] },
       },
+      orderBy: { createdAt: 'desc' },
       include: {
         buyer: {
           select: {
             id: true,
             email: true,
-            student: { select: { firstName: true, lastName: true } },
-            faculty: { select: { firstName: true, lastName: true } },
+            student: {
+              select: {
+                firstName: true,
+                lastName: true,
+                rollNumber: true,
+                photoKey: true,
+                department: { select: { name: true, code: true } },
+              },
+            },
+            faculty: {
+              select: {
+                firstName: true,
+                lastName: true,
+                designation: true,
+                photoKey: true,
+                department: { select: { name: true, code: true } },
+              },
+            },
+            adminProfile: { select: { name: true } },
           },
         },
       },
@@ -489,6 +511,7 @@ export class MarketplaceService {
       sellerReputation: reputation,
       sellerOffers,
       activeTransaction,
+      buyer: activeTransaction?.buyer || null,
     };
   }
 
@@ -500,6 +523,31 @@ export class MarketplaceService {
         images: {
           orderBy: { sortOrder: 'asc' },
         },
+        seller: {
+          select: {
+            id: true,
+            email: true,
+            student: {
+              select: {
+                firstName: true,
+                lastName: true,
+                rollNumber: true,
+                photoKey: true,
+                department: { select: { name: true, code: true } },
+              },
+            },
+            faculty: {
+              select: {
+                firstName: true,
+                lastName: true,
+                designation: true,
+                photoKey: true,
+                department: { select: { name: true, code: true } },
+              },
+            },
+            adminProfile: { select: { name: true } },
+          },
+        },
         offers: {
           where: { status: 'PENDING' },
           include: {
@@ -509,6 +557,7 @@ export class MarketplaceService {
                 email: true,
                 student: { select: { firstName: true, lastName: true } },
                 faculty: { select: { firstName: true, lastName: true } },
+                adminProfile: { select: { name: true } },
               },
             },
           },
@@ -516,6 +565,33 @@ export class MarketplaceService {
         transactions: {
           orderBy: { createdAt: 'desc' },
           take: 1,
+          include: {
+            buyer: {
+              select: {
+                id: true,
+                email: true,
+                student: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    rollNumber: true,
+                    photoKey: true,
+                    department: { select: { name: true, code: true } },
+                  },
+                },
+                faculty: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    designation: true,
+                    photoKey: true,
+                    department: { select: { name: true, code: true } },
+                  },
+                },
+                adminProfile: { select: { name: true } },
+              },
+            },
+          },
         },
         _count: {
           select: {
@@ -529,6 +605,8 @@ export class MarketplaceService {
     return listings.map((l) => ({
       ...l,
       images: this.formatListingImages(l.images),
+      activeTransaction: l.transactions?.[0] || null,
+      buyer: l.transactions?.[0]?.buyer || null,
     }));
   }
 
@@ -574,6 +652,7 @@ export class MarketplaceService {
             email: true,
             student: { select: { firstName: true, lastName: true } },
             faculty: { select: { firstName: true, lastName: true } },
+            adminProfile: { select: { name: true } },
           },
         },
       },
@@ -682,6 +761,7 @@ export class MarketplaceService {
             email: true,
             student: { select: { firstName: true, lastName: true, photoKey: true } },
             faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+            adminProfile: { select: { name: true } },
           },
         },
         listing: {

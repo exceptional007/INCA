@@ -1,17 +1,25 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { MemoryCacheService } from '../../../common/cache/memory-cache.service';
 
 @Injectable()
 export class DepartmentRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cache?: MemoryCacheService,
+  ) {}
 
   async findAll(includeInactive: boolean = false) {
-    return this.prisma.department.findMany({
-      where: includeInactive ? undefined : { isActive: true },
-      orderBy: {
-        name: 'asc',
-      },
-    });
+    const key = `academic:departments:includeInactive=${includeInactive}`;
+    const loader = () =>
+      this.prisma.department.findMany({
+        where: includeInactive ? undefined : { isActive: true },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+    return this.cache ? this.cache.getOrSet(key, 600, loader) : loader();
   }
 
   async findById(id: string) {

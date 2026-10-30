@@ -38,79 +38,79 @@ export class MarketplaceChatService {
       throw new BadRequestException('This listing is no longer active');
     }
 
+    const conversationInclude = {
+      listing: {
+        select: {
+          id: true,
+          title: true,
+          price: true,
+          status: true,
+          preferredLocation: true,
+          sellerId: true,
+          images: { take: 1, orderBy: { sortOrder: 'asc' as const } },
+        },
+      },
+      seller: {
+        select: {
+          id: true,
+          email: true,
+          student: { select: { firstName: true, lastName: true, photoKey: true } },
+          faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+          adminProfile: { select: { name: true } },
+        },
+      },
+      buyer: {
+        select: {
+          id: true,
+          email: true,
+          student: { select: { firstName: true, lastName: true, photoKey: true } },
+          faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+          adminProfile: { select: { name: true } },
+        },
+      },
+    };
+
     let conv = await this.prisma.marketplaceConversation.findFirst({
       where: {
         listingId,
         buyerId,
         sellerId: listing.sellerId,
       },
-      include: {
-        listing: {
-          select: {
-            id: true,
-            title: true,
-            price: true,
-            status: true,
-            images: { take: 1, orderBy: { sortOrder: 'asc' } },
-          },
-        },
-        seller: {
-          select: {
-            id: true,
-            email: true,
-            student: { select: { firstName: true, lastName: true, photoKey: true } },
-            faculty: { select: { firstName: true, lastName: true, photoKey: true } },
-          },
-        },
-        buyer: {
-          select: {
-            id: true,
-            email: true,
-            student: { select: { firstName: true, lastName: true, photoKey: true } },
-            faculty: { select: { firstName: true, lastName: true, photoKey: true } },
-          },
-        },
-      },
+      include: conversationInclude,
     });
 
     if (!conv) {
-      conv = await this.prisma.marketplaceConversation.create({
-        data: {
-          listingId,
-          buyerId,
-          sellerId: listing.sellerId,
-        },
-        include: {
-          listing: {
-            select: {
-              id: true,
-              title: true,
-              price: true,
-              status: true,
-              images: { take: 1, orderBy: { sortOrder: 'asc' } },
-            },
+      try {
+        conv = await this.prisma.marketplaceConversation.create({
+          data: {
+            listingId,
+            buyerId,
+            sellerId: listing.sellerId,
           },
-          seller: {
-            select: {
-              id: true,
-              email: true,
-              student: { select: { firstName: true, lastName: true, photoKey: true } },
-              faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+          include: conversationInclude,
+        });
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          conv = await this.prisma.marketplaceConversation.findUnique({
+            where: {
+              listingId_buyerId: { listingId, buyerId },
             },
-          },
-          buyer: {
-            select: {
-              id: true,
-              email: true,
-              student: { select: { firstName: true, lastName: true, photoKey: true } },
-              faculty: { select: { firstName: true, lastName: true, photoKey: true } },
-            },
-          },
-        },
-      });
+            include: conversationInclude,
+          });
+          if (!conv) {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
     }
 
-    return conv;
+    const isUserBuyer = conv.buyerId === buyerId;
+    return {
+      ...conv,
+      otherParty: isUserBuyer ? conv.seller : conv.buyer,
+    };
   }
 
   async getUserConversations(userId: string) {
@@ -135,6 +135,7 @@ export class MarketplaceChatService {
             email: true,
             student: { select: { firstName: true, lastName: true, photoKey: true } },
             faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+            adminProfile: { select: { name: true } },
           },
         },
         seller: {
@@ -143,6 +144,7 @@ export class MarketplaceChatService {
             email: true,
             student: { select: { firstName: true, lastName: true, photoKey: true } },
             faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+            adminProfile: { select: { name: true } },
           },
         },
         messages: {
@@ -214,16 +216,18 @@ export class MarketplaceChatService {
           select: {
             id: true,
             email: true,
-            student: { select: { firstName: true, lastName: true } },
-            faculty: { select: { firstName: true, lastName: true } },
+            student: { select: { firstName: true, lastName: true, photoKey: true } },
+            faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+            adminProfile: { select: { name: true } },
           },
         },
         seller: {
           select: {
             id: true,
             email: true,
-            student: { select: { firstName: true, lastName: true } },
-            faculty: { select: { firstName: true, lastName: true } },
+            student: { select: { firstName: true, lastName: true, photoKey: true } },
+            faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+            adminProfile: { select: { name: true } },
           },
         },
       },
@@ -244,8 +248,10 @@ export class MarketplaceChatService {
         sender: {
           select: {
             id: true,
-            student: { select: { firstName: true, lastName: true } },
-            faculty: { select: { firstName: true, lastName: true } },
+            email: true,
+            student: { select: { firstName: true, lastName: true, photoKey: true } },
+            faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+            adminProfile: { select: { name: true } },
           },
         },
       },
@@ -285,8 +291,12 @@ export class MarketplaceChatService {
       },
     });
 
+    const isUserBuyer = conv.buyerId === userId;
     return {
-      conversation: conv,
+      conversation: {
+        ...conv,
+        otherParty: isUserBuyer ? conv.seller : conv.buyer,
+      },
       messages,
       activeOffer,
       activeTransaction,
@@ -294,6 +304,9 @@ export class MarketplaceChatService {
   }
 
   async saveMessage(userId: string, dto: SendMessageDto) {
+    if (!dto.conversationId) {
+      throw new BadRequestException('conversationId is required');
+    }
     const conv = await this.prisma.marketplaceConversation.findUnique({
       where: { id: dto.conversationId },
     });
@@ -319,8 +332,10 @@ export class MarketplaceChatService {
           sender: {
             select: {
               id: true,
-              student: { select: { firstName: true, lastName: true } },
-              faculty: { select: { firstName: true, lastName: true } },
+              email: true,
+              student: { select: { firstName: true, lastName: true, photoKey: true } },
+              faculty: { select: { firstName: true, lastName: true, photoKey: true } },
+              adminProfile: { select: { name: true } },
             },
           },
         },

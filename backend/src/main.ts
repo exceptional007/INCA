@@ -1,20 +1,14 @@
 import dns from 'node:dns';
+import { performance } from 'node:perf_hooks';
+
+// High-resolution entry point timer
+const processEntryTime = performance.now();
+const nodeUptimeAtEntryMs = Math.round(process.uptime() * 1000);
+
 try {
   dns.setDefaultResultOrder('ipv4first');
 } catch {}
 
-const rootCanvas = require(require('path').join(process.cwd(), 'node_modules/pdf-to-png-converter/node_modules/@napi-rs/canvas'));
-for (const className of ['Path2D', 'DOMMatrix', 'ImageData']) {
-  Object.defineProperty(globalThis, className, {
-    get() {
-      return rootCanvas[className];
-    },
-    set(val) {
-      // Ignore setting to prevent older module versions from overwriting
-    },
-    configurable: false,
-  });
-}
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -22,15 +16,25 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const bootstrapLogger = new Logger('BootstrapDiagnostics');
 
+  // Phase 1: NestFactory.create (Module resolution, DI graph construction, provider onModuleInit hooks)
+  const tCreateStart = performance.now();
+  const app = await NestFactory.create(AppModule);
+  const tCreateDuration = performance.now() - tCreateStart;
+
+  // Enable graceful shutdown hooks so Prisma.$disconnect and cleanup hooks run on SIGINT/SIGTERM
+  app.enableShutdownHooks();
+
+  // Phase 2: Configuration & Global Middleware
+  const tConfigStart = performance.now();
   app.enableCors({
     origin: process.env.FRONTEND_URL,
     credentials: true,
   });
 
   app.setGlobalPrefix('api', {
-    exclude: ['health'],
+    exclude: ['health', 'health/(.*)'],
   });
 
   app.enableVersioning({
@@ -47,7 +51,10 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new HttpExceptionFilter());
+  const tConfigDuration = performance.now() - tConfigStart;
 
+  // Phase 3: Swagger documentation setup (lazy factory generation)
+  const tSwaggerStart = performance.now();
   const config = new DocumentBuilder()
     .setTitle('INCA API')
     .setDescription('Intelligent Campus Assistant')
@@ -59,29 +66,49 @@ async function bootstrap() {
         bearerFormat: 'JWT',
         description: 'Enter JWT Token',
       },
-      'JWT-auth'
+      'JWT-auth',
     )
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  // Lazy document factory: document is generated on-demand only when /docs is requested
+  SwaggerModule.setup('docs', app, () =>
+    SwaggerModule.createDocument(app, config),
+  );
+  const tSwaggerDuration = performance.now() - tSwaggerStart;
 
-  SwaggerModule.setup('docs', app, document);
+  // Phase 4: HTTP server startup
+  const tListenStart = performance.now();
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  const tListenDuration = performance.now() - tListenStart;
 
-  await app.listen(process.env.PORT || 3000);
+  const totalProcessBootstrapMs = performance.now() - processEntryTime;
 
-  console.log(`🚀 Server running at http://localhost:${process.env.PORT || 3000}`);
+  bootstrapLogger.log(
+    `Backend Startup Diagnostics Breakdown:\n` +
+      `  ├─ Node.js Process & Engine Init   : ${nodeUptimeAtEntryMs}ms\n` +
+      `  ├─ NestFactory.create(AppModule)  : ${tCreateDuration.toFixed(2)}ms\n` +
+      `  ├─ App Configuration & Pipes      : ${tConfigDuration.toFixed(2)}ms\n` +
+      `  ├─ Swagger Setup (Lazy Factory)   : ${tSwaggerDuration.toFixed(2)}ms\n` +
+      `  ├─ HTTP Server Listen (Port ${port}) : ${tListenDuration.toFixed(2)}ms\n` +
+      `  └─ Total Process Startup Time     : ${totalProcessBootstrapMs.toFixed(2)}ms\n` +
+      `  [Note: Process startup measures internal execution from Node.js process entry to listen. Host/container provisioning, network routing, and platform cold-starts occur outside and prior to process entry.]`,
+  );
+
+  console.log(`🚀 Server running at http://localhost:${port}`);
 }
 
 bootstrap().catch((err: any) => {
   const logger = new Logger('Bootstrap');
   const errorCode = err?.errorCode || err?.code || err?.name || 'UNKNOWN';
-  const errorMessage = err?.message?.split('\n')[0] || err?.message || String(err);
+  const errorMessage =
+    err?.message?.split('\n')[0] || err?.message || String(err);
 
   const isDbError =
     String(errorCode).startsWith('P1') ||
     errorCode === 'PrismaClientInitializationError' ||
     errorMessage.toLowerCase().includes('database') ||
-    errorMessage.toLowerCase().includes('can\'t reach');
+    errorMessage.toLowerCase().includes("can't reach");
 
   if (isDbError) {
     logger.error(
@@ -96,4 +123,3 @@ bootstrap().catch((err: any) => {
   }
   process.exit(1);
 });
-

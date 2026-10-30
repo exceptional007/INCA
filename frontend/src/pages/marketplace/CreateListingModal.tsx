@@ -139,7 +139,17 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
       });
 
       if (selectedFiles.length > 0) {
-        await marketplaceApi.uploadListingImages(listing.id, selectedFiles);
+        try {
+          await marketplaceApi.uploadListingImages(listing.id, selectedFiles);
+        } catch (uploadErr: any) {
+          setError(
+            uploadErr?.response?.data?.message ||
+              uploadErr.message ||
+              'Item created, but photos failed to upload. Please try re-uploading from your listing.',
+          );
+          setLoading(false);
+          return;
+        }
       }
 
       setTitle('');

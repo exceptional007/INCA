@@ -754,8 +754,8 @@ describe('TimetableImport Testing Suite', () => {
       const res = await importService.approveAndCommit(mockBatchId);
 
       expect(res.success).toBe(false);
-      expect(res.conflicts.length).toBeGreaterThan(0);
-      expect(res.conflicts[0].type).toBe('FACULTY');
+      expect(res.conflicts?.length).toBeGreaterThan(0);
+      expect(res.conflicts?.[0].type).toBe('FACULTY');
       // Verify database was NOT updated
       expect(prismaMock.timetableImportBatch.update).not.toHaveBeenCalled();
       expect(prismaMock.timetableVersion.create).not.toHaveBeenCalled();

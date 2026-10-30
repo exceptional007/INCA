@@ -199,13 +199,23 @@ export class MatchingService {
       }
       // Strategy D: Keyword / Token overlap (e.g. "Dharamveer Patel", "Dr. Shashank")
       else if (queryTokens.length > 0 && facTokens.length > 0) {
+        const STOPWORDS = new Set([
+          'mr', 'mrs', 'ms', 'dr', 'prof', 'er', 'shri', 'smt',
+          'kumar', 'singh', 'sharma', 'devi', 'lal', 'chand', 'verma',
+        ]);
+        const distinctiveQueryTokens = queryTokens.filter((t) => !STOPWORDS.has(t));
+        const distinctiveFacTokens = facTokens.filter((t) => !STOPWORDS.has(t));
+
         const matchingTokens = queryTokens.filter((qt) =>
           facTokens.some((ft) => ft === qt || (ft.length >= 4 && qt.length >= 4 && (ft.includes(qt) || qt.includes(ft))))
         );
-        const tokenOverlapRatio = matchingTokens.length / Math.min(queryTokens.length, facTokens.length);
-        if (matchingTokens.length >= 2) {
+        const distinctiveMatches = distinctiveQueryTokens.filter((qt) =>
+          distinctiveFacTokens.some((ft) => ft === qt || (ft.length >= 4 && qt.length >= 4 && (ft.includes(qt) || qt.includes(ft))))
+        );
+
+        if (matchingTokens.length >= 2 && distinctiveMatches.length >= 1) {
           score = 0.92;
-        } else if (matchingTokens.length === 1 && matchingTokens[0].length >= 4) {
+        } else if (distinctiveMatches.length >= 1 && distinctiveMatches[0].length >= 4) {
           score = Math.max(score, 0.85);
         }
       }

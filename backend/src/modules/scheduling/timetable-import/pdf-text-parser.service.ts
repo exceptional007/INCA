@@ -156,6 +156,29 @@ export class PdfTextParserService {
       const line = lines[i];
       const upperLine = line.toUpperCase();
 
+      // Check for legend table or footer boundaries — grid has ended
+      if (
+        upperLine.includes('SUBJECT CODE') ||
+        upperLine.includes('FACULTY NAME') ||
+        upperLine.includes('LECTURE / WEEK') ||
+        upperLine.includes('LECTURE/WEEK') ||
+        upperLine.includes('ACADEMIC CALENDAR') ||
+        upperLine.startsWith('NOTE:') ||
+        upperLine.startsWith('LEGEND')
+      ) {
+        this.logger.log(`Reached timetable legend or footer boundary at line: "${line}". Stopping grid parsing.`);
+        break;
+      }
+
+      // Skip non-grid banner lines
+      if (
+        upperLine.includes('CLASS TIME TABLE') ||
+        upperLine.includes('DEPARTMENT OF') ||
+        upperLine.includes('BUDDHA INSTITUTE')
+      ) {
+        continue;
+      }
+
       // Check if this line starts with a day name
       const dayMatch = this.matchDay(upperLine);
       if (dayMatch) {
@@ -252,8 +275,8 @@ export class PdfTextParserService {
     for (let idx = 0; idx < cells.length; idx++) {
       const cell = cells[idx];
 
-      // Skip break/lunch cells
-      if (/\b(BREAK|LUNCH|RECESS)\b/i.test(cell)) continue;
+      // Skip break/lunch cells or header text
+      if (/\b(BREAK|LUNCH|RECESS|SUBJECT CODE|SUBJECT NAME|FACULTY NAME|LECTURE\s*\/|CLASS TIME)\b/i.test(cell)) continue;
 
       // Extract subject code
       const subCodeMatch = cell.match(/\b([A-Z]{2,4}\s*\d{3,4}[A-Z]?)\b/);

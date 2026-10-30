@@ -24,41 +24,37 @@ export class SuperAdminService {
   ) {}
 
   async getStats() {
-    const totalAdmins = await this.prisma.user.count({
-      where: {
-        role: {
-          code: 'ADMIN',
+    const [totalAdmins, totalActiveUsers, distinctDepts, healthCheck] = await Promise.all([
+      this.prisma.user.count({
+        where: {
+          role: { code: 'ADMIN' },
+          isActive: true,
         },
-        isActive: true,
-      },
-    });
+      }),
+      this.prisma.user.count({
+        where: { isActive: true },
+      }),
+      this.prisma.adminProfile.findMany({
+        where: {
+          user: { isActive: true },
+          department: { isActive: true },
+        },
+        select: { departmentId: true },
+        distinct: ['departmentId'],
+      }),
+      (async () => {
+        const pingStart = Date.now();
+        try {
+          await this.prisma.$queryRaw`SELECT 1`;
+          return { isHealthy: true, latencyMs: Date.now() - pingStart };
+        } catch {
+          return { isHealthy: false, latencyMs: 0 };
+        }
+      })(),
+    ]);
 
-    const totalActiveUsers = await this.prisma.user.count({
-      where: { isActive: true },
-    });
-
-    // Distinct connected/assigned departments from active Admin profiles
-    const distinctDepts = await this.prisma.adminProfile.findMany({
-      where: {
-        user: { isActive: true },
-        department: { isActive: true },
-      },
-      select: { departmentId: true },
-      distinct: ['departmentId'],
-    });
     const connectedDeptsCount = distinctDepts.length;
-
-    // Real system health check (Database ping & response latency)
-    const startTime = Date.now();
-    let isHealthy = false;
-    let latencyMs = 0;
-    try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      latencyMs = Date.now() - startTime;
-      isHealthy = true;
-    } catch {
-      isHealthy = false;
-    }
+    const { isHealthy, latencyMs } = healthCheck;
 
     return {
       connectedDepartments: {

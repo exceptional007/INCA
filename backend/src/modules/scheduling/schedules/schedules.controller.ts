@@ -45,10 +45,14 @@ export class SchedulesController {
   @Get('today')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'FACULTY', 'SUPER_ADMIN', 'STUDENT', 'HOD', 'COORDINATOR')
-  @ApiOperation({ summary: 'Get today\'s schedules' })
-  getTodaySchedules(@Req() req: any, @Query('facultyId') facultyIdQuery?: string) {
+  @ApiOperation({ summary: 'Get today\'s or specified date schedules' })
+  getTodaySchedules(
+    @Req() req: any,
+    @Query('facultyId') facultyIdQuery?: string,
+    @Query('date') dateQuery?: string,
+  ) {
     const userRole = req.user?.role?.code || req.user?.role;
-    return this.schedulesService.getTodaySchedules(req.user?.id, userRole, facultyIdQuery);
+    return this.schedulesService.getTodaySchedules(req.user?.id, userRole, facultyIdQuery, dateQuery);
   }
 
   @Get(':id')

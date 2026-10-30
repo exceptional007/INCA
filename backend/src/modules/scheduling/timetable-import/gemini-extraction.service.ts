@@ -49,17 +49,65 @@ export class GeminiExtractionService {
   private readonly logger = new Logger(GeminiExtractionService.name);
   private ai: GoogleGenAI | null = null;
   private readonly modelName: string;
+  private readonly fallbackModels: string[] = [
+    'gemini-3.1-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-lite-latest',
+    'gemini-3.5-flash',
+  ];
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-3.6-flash';
+    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-3.1-flash-lite';
 
     if (apiKey) {
-      this.logger.log(`Initializing Google Gemini AI client (model: ${this.modelName})...`);
+      this.logger.log(`Initializing Google Gemini AI client (primary model: ${this.modelName})...`);
       this.ai = new GoogleGenAI({ apiKey });
     } else {
       this.logger.warn('GEMINI_API_KEY is not configured. AI extraction will be unavailable.');
     }
+  }
+
+  /**
+   * Robust model caller with automatic fallback cascade across working models.
+   */
+  private async generateWithFallback(
+    params: { parts: any[]; config: any },
+    contextDescription = 'AI Extraction',
+  ): Promise<any> {
+    if (!this.ai) {
+      throw new Error('Gemini AI client is not configured. Set GEMINI_API_KEY.');
+    }
+
+    const candidateModels = [
+      this.modelName,
+      ...this.fallbackModels,
+    ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+
+    let lastError: any = null;
+
+    for (const model of candidateModels) {
+      try {
+        this.logger.log(`[${contextDescription}] Attempting model: ${model}...`);
+        const response = await this.ai.models.generateContent({
+          model,
+          contents: { parts: params.parts },
+          config: params.config,
+        });
+
+        if (response && response.text) {
+          this.logger.log(`[${contextDescription}] Successfully generated output with model: ${model}`);
+          return response;
+        }
+      } catch (err: any) {
+        lastError = err;
+        this.logger.warn(
+          `[${contextDescription}] Model ${model} failed (${err.status || err.message}). Checking next fallback...`,
+        );
+      }
+    }
+
+    throw lastError || new Error(`All Gemini models failed for ${contextDescription}`);
   }
 
   /**
@@ -138,58 +186,60 @@ ${rawTextContext}`;
       { text: promptText },
     ];
 
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: { parts },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            header: {
-              type: Type.OBJECT,
-              properties: {
-                institute: { type: Type.STRING },
-                department: { type: Type.STRING },
-                effectiveFrom: { type: Type.STRING },
-                semester: { type: Type.STRING },
-                section: { type: Type.STRING },
-                room: { type: Type.STRING },
-              },
-              required: ['institute', 'department', 'effectiveFrom', 'semester', 'section', 'room'],
-            },
-            slots: {
-              type: Type.ARRAY,
-              items: {
+    const response = await this.generateWithFallback(
+      {
+        parts,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              header: {
                 type: Type.OBJECT,
                 properties: {
-                  day: { type: Type.STRING },
-                  timeSlotStart: { type: Type.STRING },
-                  timeSlotEnd: { type: Type.STRING },
-                  isMergedSlot: { type: Type.BOOLEAN },
-                  mergedTimeSlotEnd: { type: Type.STRING },
-                  sectionCodes: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  subjectCode: { type: Type.STRING },
-                  subjectName: { type: Type.STRING },
-                  facultyShortCode: { type: Type.STRING },
-                  facultyFullName: { type: Type.STRING },
+                  institute: { type: Type.STRING },
+                  department: { type: Type.STRING },
+                  effectiveFrom: { type: Type.STRING },
+                  semester: { type: Type.STRING },
+                  section: { type: Type.STRING },
                   room: { type: Type.STRING },
-                  category: { type: Type.STRING },
-                  rawCellText: { type: Type.STRING },
                 },
-                required: [
-                  'day', 'timeSlotStart', 'timeSlotEnd', 'isMergedSlot',
-                  'sectionCodes', 'subjectCode', 'subjectName',
-                  'facultyShortCode', 'facultyFullName', 'room',
-                  'category', 'rawCellText',
-                ],
+                required: ['institute', 'department', 'effectiveFrom', 'semester', 'section', 'room'],
+              },
+              slots: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    day: { type: Type.STRING },
+                    timeSlotStart: { type: Type.STRING },
+                    timeSlotEnd: { type: Type.STRING },
+                    isMergedSlot: { type: Type.BOOLEAN },
+                    mergedTimeSlotEnd: { type: Type.STRING },
+                    sectionCodes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    subjectCode: { type: Type.STRING },
+                    subjectName: { type: Type.STRING },
+                    facultyShortCode: { type: Type.STRING },
+                    facultyFullName: { type: Type.STRING },
+                    room: { type: Type.STRING },
+                    category: { type: Type.STRING },
+                    rawCellText: { type: Type.STRING },
+                  },
+                  required: [
+                    'day', 'timeSlotStart', 'timeSlotEnd', 'isMergedSlot',
+                    'sectionCodes', 'subjectCode', 'subjectName',
+                    'facultyShortCode', 'facultyFullName', 'room',
+                    'category', 'rawCellText',
+                  ],
+                },
               },
             },
+            required: ['header', 'slots'],
           },
-          required: ['header', 'slots'],
         },
       },
-    });
+      'Direct PDF Extraction',
+    );
 
     const responseText = response.text || '';
     this.logger.log(`Direct PDF extraction response length: ${responseText.length}`);
@@ -276,25 +326,27 @@ ${rawTextContext}`;
       { text: prompt },
     ];
 
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: { parts },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            institute: { type: Type.STRING, description: 'Name of the institute' },
-            department: { type: Type.STRING, description: 'Department code, e.g. CSE-DS' },
-            effectiveFrom: { type: Type.STRING, description: 'Date the timetable is effective from' },
-            semester: { type: Type.STRING, description: 'Semester, e.g., 7TH' },
-            section: { type: Type.STRING, description: 'Section code, e.g., C' },
-            room: { type: Type.STRING, description: 'Room number, e.g., 416' },
+    const response = await this.generateWithFallback(
+      {
+        parts,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              institute: { type: Type.STRING, description: 'Name of the institute' },
+              department: { type: Type.STRING, description: 'Department code, e.g. CSE-DS' },
+              effectiveFrom: { type: Type.STRING, description: 'Date the timetable is effective from' },
+              semester: { type: Type.STRING, description: 'Semester, e.g., 7TH' },
+              section: { type: Type.STRING, description: 'Section code, e.g., C' },
+              room: { type: Type.STRING, description: 'Room number, e.g., 416' },
+            },
+            required: ['institute', 'department', 'effectiveFrom', 'semester', 'section', 'room'],
           },
-          required: ['institute', 'department', 'effectiveFrom', 'semester', 'section', 'room'],
         },
       },
-    });
+      'Image Header Extraction',
+    );
 
     const responseText = response.text || '';
     this.logger.log(`Gemini Header Extraction response: ${responseText}`);
@@ -369,21 +421,23 @@ ${rawTextContext}`;
       ],
     };
 
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: { parts },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            gridId: { type: Type.STRING },
-            slots: { type: Type.ARRAY, items: slotSchema },
+    const response = await this.generateWithFallback(
+      {
+        parts,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              gridId: { type: Type.STRING },
+              slots: { type: Type.ARRAY, items: slotSchema },
+            },
+            required: ['gridId', 'slots'],
           },
-          required: ['gridId', 'slots'],
         },
       },
-    });
+      'Image Grid Extraction',
+    );
 
     const responseText = response.text || '';
     this.logger.log(`Gemini Grid slots response length: ${responseText.length}`);

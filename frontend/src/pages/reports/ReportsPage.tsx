@@ -16,6 +16,8 @@ import { StudentReportView } from './StudentReportView';
 import { SubjectReportView } from './SubjectReportView';
 import { SectionReportView } from './SectionReportView';
 import { FacultyReportView } from './FacultyReportView';
+import { FacultyReportsWorkspace } from './FacultyReportsWorkspace';
+import { useAuth } from '@/context/AuthContext';
 
 interface BreadcrumbItem {
   type: ReportType;
@@ -24,6 +26,14 @@ interface BreadcrumbItem {
 }
 
 export const ReportsPage: React.FC = () => {
+  const { user } = useAuth();
+  const roleCode = user?.role?.code || (typeof (user as any)?.role === 'string' ? (user as any).role : '');
+  const isFaculty = roleCode === 'FACULTY' || !!user?.faculty;
+
+  if (isFaculty) {
+    return <FacultyReportsWorkspace />;
+  }
+
   const [reportType, setReportType] = useState<ReportType>('overview');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [selectedEntityId, setSelectedEntityId] = useState<string>('');

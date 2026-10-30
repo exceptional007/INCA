@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { DepartmentRepository } from './repositories/department.repository';
 import { ProgramRepository } from './repositories/program.repository';
@@ -12,6 +13,7 @@ import { SubjectRepository } from './repositories/subject.repository';
 import { AcademicSessionRepository } from './repositories/academic-session.repository';
 import { RoomRepository } from './repositories/room.repository';
 import { TimeSlotRepository } from './repositories/time-slot.repository';
+import { MemoryCacheService } from '../../common/cache/memory-cache.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
@@ -43,7 +45,16 @@ export class AcademicService {
     private readonly academicSessionRepository: AcademicSessionRepository,
     private readonly roomRepository: RoomRepository,
     private readonly timeSlotRepository: TimeSlotRepository,
+    @Optional() private readonly cacheService?: MemoryCacheService,
   ) {}
+
+  private invalidateAcademicCaches() {
+    if (this.cacheService) {
+      this.cacheService.invalidatePattern('academic:');
+      this.cacheService.invalidatePattern('reports:filter-options:');
+      this.cacheService.invalidate('polls:academic-scopes');
+    }
+  }
 
   async createDepartment(dto: CreateDepartmentDto) {
     const existingCode = await this.departmentRepository.findByCode(dto.code);
@@ -52,12 +63,14 @@ export class AcademicService {
       throw new ConflictException('Department code already exists.');
     }
 
-    return this.departmentRepository.create({
+    const dept = await this.departmentRepository.create({
       code: dto.code,
       name: dto.name ?? '',
       shortName: dto.shortName ?? '',
       description: dto.description ?? '',
     });
+    this.invalidateAcademicCaches();
+    return dept;
   }
 
   async getAllDepartments(includeInactive: boolean = false) {
@@ -89,7 +102,9 @@ export class AcademicService {
       }
     }
 
-    return this.departmentRepository.update(id, dto);
+    const updated = await this.departmentRepository.update(id, dto);
+    this.invalidateAcademicCaches();
+    return updated;
   }
   async deactivateDepartment(id: string) {
     const department = await this.departmentRepository.findById(id);
@@ -102,7 +117,9 @@ export class AcademicService {
       throw new ConflictException('Department is already inactive.');
     }
 
-    return this.departmentRepository.deactivate(id);
+    const res = await this.departmentRepository.deactivate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async activateDepartment(id: string) {
@@ -116,7 +133,9 @@ export class AcademicService {
       throw new ConflictException('Department is already active.');
     }
 
-    return this.departmentRepository.activate(id);
+    const res = await this.departmentRepository.activate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async getAdminDepartmentId(userId: string): Promise<string | null> {
@@ -169,13 +188,15 @@ export class AcademicService {
       throw new ConflictException('Program already exists in this department.');
     }
 
-    return this.programRepository.create({
+    const created = await this.programRepository.create({
       departmentId: dto.departmentId,
       code: dto.code,
       name: dto.name,
       shortName: dto.shortName,
       durationYears: dto.durationYears,
     });
+    this.invalidateAcademicCaches();
+    return created;
   }
 
     async getAllPrograms(
@@ -261,7 +282,9 @@ export class AcademicService {
         }
       }
 
-      return this.programRepository.update(id, dto);
+      const updated = await this.programRepository.update(id, dto);
+      this.invalidateAcademicCaches();
+      return updated;
     }
 
     async deactivateProgram(id: string, userRole?: string, userId?: string) {
@@ -284,7 +307,9 @@ export class AcademicService {
         throw new ConflictException('Program is already inactive.');
       }
 
-      return this.programRepository.deactivate(id);
+      const res = await this.programRepository.deactivate(id);
+      this.invalidateAcademicCaches();
+      return res;
     }
 
     async activateProgram(id: string, userRole?: string, userId?: string) {
@@ -317,7 +342,9 @@ export class AcademicService {
       );
     }
 
-    return this.programRepository.activate(id);
+    const res = await this.programRepository.activate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async deleteProgram(id: string) {
@@ -327,7 +354,9 @@ export class AcademicService {
       throw new NotFoundException('Program not found.');
     }
 
-    return this.programRepository.delete(id);
+    const res = await this.programRepository.delete(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async createSemester(dto: CreateSemesterDto) {
@@ -387,10 +416,12 @@ export class AcademicService {
       );
     }
 
-    return this.sectionRepository.create({
+    const result = await this.sectionRepository.create({
       semesterId: dto.semesterId,
       name: dto.name,
     });
+    this.invalidateAcademicCaches();
+    return result;
   }
 
   async getAllSections(includeInactive: boolean = false, semesterId?: string) {
@@ -442,10 +473,12 @@ export class AcademicService {
       );
     }
 
-    return this.sectionRepository.update(id, {
+    const result = await this.sectionRepository.update(id, {
       semesterId,
       name,
     });
+    this.invalidateAcademicCaches();
+    return result;
   }
 
   async deactivateSection(id: string) {
@@ -459,7 +492,9 @@ export class AcademicService {
       throw new ConflictException('Section is already inactive.');
     }
 
-    return this.sectionRepository.deactivate(id);
+    const res = await this.sectionRepository.deactivate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async createSubject(dto: CreateSubjectDto) {
@@ -492,13 +527,15 @@ export class AcademicService {
       );
     }
 
-    return this.subjectRepository.create({
+    const result = await this.subjectRepository.create({
       year: dto.year,
       semesterId: dto.semesterId,
       code: dto.code,
       name: dto.name,
       isLab: dto.isLab,
     });
+    this.invalidateAcademicCaches();
+    return result;
   }
 
   async getAllSubjects(includeInactive: boolean = false) {
@@ -559,7 +596,9 @@ export class AcademicService {
       );
     }
 
-    return this.subjectRepository.update(id, dto);
+    const result = await this.subjectRepository.update(id, dto);
+    this.invalidateAcademicCaches();
+    return result;
   }
 
   async deactivateSubject(id: string) {
@@ -573,7 +612,9 @@ export class AcademicService {
       throw new ConflictException('Subject is already inactive.');
     }
 
-    return this.subjectRepository.deactivate(id);
+    const res = await this.subjectRepository.deactivate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async activateSubject(id: string) {
@@ -587,7 +628,9 @@ export class AcademicService {
       throw new ConflictException('Subject is already active.');
     }
 
-    return this.subjectRepository.activate(id);
+    const res = await this.subjectRepository.activate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async createAcademicSession(dto: CreateAcademicSessionDto) {
@@ -608,12 +651,14 @@ export class AcademicService {
 
     const activeSession = await this.academicSessionRepository.findActive();
 
-    return this.academicSessionRepository.create({
+    const created = await this.academicSessionRepository.create({
       name: dto.name,
       startDate,
       endDate,
       isActive: !activeSession,
     });
+    this.invalidateAcademicCaches();
+    return created;
   }
 
   async getAllAcademicSessions() {
@@ -669,11 +714,13 @@ export class AcademicService {
       }
     }
 
-    return this.academicSessionRepository.update(id, {
+    const updated = await this.academicSessionRepository.update(id, {
       name,
       startDate,
       endDate,
     });
+    this.invalidateAcademicCaches();
+    return updated;
   }
 
   async deactivateAcademicSession(id: string) {
@@ -687,7 +734,9 @@ export class AcademicService {
       throw new ConflictException('Academic session is already inactive.');
     }
 
-    return this.academicSessionRepository.deactivate(id);
+    const res = await this.academicSessionRepository.deactivate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async activateAcademicSession(id: string) {
@@ -701,7 +750,9 @@ export class AcademicService {
       throw new ConflictException('Academic session is already active.');
     }
 
-    return this.academicSessionRepository.activate(id);
+    const res = await this.academicSessionRepository.activate(id);
+    this.invalidateAcademicCaches();
+    return res;
   }
 
   async createRoom(dto: CreateRoomDto) {

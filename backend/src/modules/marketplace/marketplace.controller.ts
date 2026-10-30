@@ -13,6 +13,7 @@ import {
   UploadedFiles,
   HttpStatus,
   HttpCode,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FilesInterceptor } from '@nestjs/platform-express';
@@ -32,6 +33,7 @@ import { QueryListingsDto } from './dto/query-listings.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { RespondOfferDto } from './dto/respond-offer.dto';
 import { InitiateTransactionDto } from './dto/initiate-transaction.dto';
+import { ConfirmScheduleDto } from './dto/confirm-schedule.dto';
 import { VerifyHandoverDto } from './dto/verify-handover.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { CreateReportDto } from './dto/create-report.dto';
@@ -142,8 +144,11 @@ export class MarketplaceController {
 
   @Post('conversations')
   getOrCreateConversation(@Req() req: any, @Body('listingId') listingId: string) {
+    if (!listingId || !listingId.trim()) {
+      throw new BadRequestException('listingId is required to start a conversation');
+    }
     const userRole = this.extractUserRole(req);
-    return this.chatService.getOrCreateConversation(req.user.id, userRole, listingId);
+    return this.chatService.getOrCreateConversation(req.user.id, userRole, listingId.trim());
   }
 
   @Get('conversations')
@@ -158,7 +163,10 @@ export class MarketplaceController {
 
   @Get('conversations/:id')
   getConversationMessages(@Req() req: any, @Param('id') conversationId: string) {
-    return this.chatService.getConversationMessages(req.user.id, conversationId);
+    if (!conversationId || !conversationId.trim()) {
+      throw new BadRequestException('conversationId is required');
+    }
+    return this.chatService.getConversationMessages(req.user.id, conversationId.trim());
   }
 
   @Post('conversations/:id/messages')
@@ -167,14 +175,18 @@ export class MarketplaceController {
     @Param('id') conversationId: string,
     @Body() dto: SendMessageDto,
   ) {
-    dto.conversationId = conversationId;
+    const targetConvId = conversationId?.trim() || dto.conversationId?.trim();
+    if (!targetConvId) {
+      throw new BadRequestException('conversationId route parameter is required');
+    }
+    dto.conversationId = targetConvId;
     const { message, recipientId } = await this.chatService.saveMessage(req.user.id, dto);
 
     // Broadcast in real-time
-    this.gateway.notifyConversation(conversationId, 'newMessage', message);
+    this.gateway.notifyConversation(targetConvId, 'newMessage', message);
     this.gateway.notifyUser(recipientId, 'unreadNotification', {
       type: 'MARKETPLACE_MESSAGE',
-      conversationId,
+      conversationId: targetConvId,
       message,
     });
 
@@ -207,6 +219,21 @@ export class MarketplaceController {
     const offer = await this.negotiationService.respondOffer(req.user.id, offerId, dto);
     const otherUserId = offer.buyerId === req.user.id ? offer.sellerId : offer.buyerId;
     this.gateway.notifyUser(otherUserId, 'offerUpdate', { type: 'OFFER_STATUS', offer });
+
+    if (offer.status === 'ACCEPTED') {
+      const activeTx = await this.transactionService.findActiveTransaction(offer.listingId, offer.buyerId);
+      if (activeTx) {
+        this.gateway.notifyUser(offer.buyerId, 'transactionUpdate', {
+          type: 'DEAL_AWAITING_CONFIRMATION',
+          tx: activeTx,
+        });
+        this.gateway.notifyUser(offer.sellerId, 'transactionUpdate', {
+          type: 'DEAL_AWAITING_CONFIRMATION',
+          tx: { ...activeTx, handoverOtp: undefined },
+        });
+      }
+    }
+
     return offer;
   }
 
@@ -218,7 +245,25 @@ export class MarketplaceController {
   async initiateTransaction(@Req() req: any, @Body() dto: InitiateTransactionDto) {
     const userRole = this.extractUserRole(req);
     const tx = await this.transactionService.initiateTransaction(req.user.id, userRole, dto);
-    this.gateway.notifyUser(tx.sellerId, 'transactionUpdate', { type: 'TX_INITIATED', tx });
+    this.gateway.notifyUser(tx.sellerId, 'transactionUpdate', {
+      type: 'TX_INITIATED',
+      tx: { ...tx, handoverOtp: undefined },
+    });
+    return tx;
+  }
+
+  @Post('transactions/:id/schedule')
+  async confirmSchedule(
+    @Req() req: any,
+    @Param('id') transactionId: string,
+    @Body() dto: ConfirmScheduleDto,
+  ) {
+    const tx = await this.transactionService.confirmSchedule(req.user.id, transactionId, dto);
+    const otherUserId = tx.buyerId === req.user.id ? tx.sellerId : tx.buyerId;
+    this.gateway.notifyUser(otherUserId, 'transactionUpdate', {
+      type: tx.status === 'HANDOVER_PENDING' ? 'HANDOVER_SCHEDULED' : 'SCHEDULE_PROPOSED',
+      tx: { ...tx, handoverOtp: undefined },
+    });
     return tx;
   }
 
@@ -250,11 +295,25 @@ export class MarketplaceController {
       dto,
     );
     const tx = result.transaction;
-    const otherUserId = tx.buyerId === req.user.id ? tx.sellerId : tx.buyerId;
-    this.gateway.notifyUser(otherUserId, 'transactionUpdate', {
+
+    // Real-time notification with explicit role statuses
+    this.gateway.notifyUser(tx.buyerId, 'transactionUpdate', {
       type: 'TX_COMPLETED',
+      orderStatus: 'ORDER_RECEIVED',
       tx,
     });
+    this.gateway.notifyUser(tx.sellerId, 'transactionUpdate', {
+      type: 'TX_COMPLETED',
+      salesStatus: 'HANDOVER_COMPLETED',
+      tx,
+    });
+
+    // Broadcast listing unlisting to entire marketplace
+    this.gateway.broadcast('catalogUpdate', {
+      type: 'LISTING_SOLD',
+      listingId: tx.listingId,
+    });
+
     return result;
   }
 
@@ -275,6 +334,12 @@ export class MarketplaceController {
       type: 'TX_CANCELLED',
       tx,
     });
+
+    this.gateway.broadcast('catalogUpdate', {
+      type: 'LISTING_AVAILABLE',
+      listingId: tx.listingId,
+    });
+
     return result;
   }
 

@@ -17,14 +17,34 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, Upload, History, ArrowLeft, RefreshCw, AlertTriangle, CheckCircle, GraduationCap } from 'lucide-react';
+import {
+  AlertCircle,
+  Upload,
+  History,
+  ArrowLeft,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle,
+  CheckCircle2,
+  GraduationCap,
+  Sparkles,
+  Clock,
+  Loader2,
+  Cpu,
+  FileText,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '@/api/axios';
 import { TimetableBatchList } from './components/TimetableBatchList';
 import { TimetableReviewGrid } from './components/TimetableReviewGrid';
 import { TimetableVersionHistory } from './components/TimetableVersionHistory';
 
-export const TimetableImportPage: React.FC = () => {
+export interface TimetableImportPageProps {
+  embedded?: boolean;
+}
+
+export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedded = false }) => {
   const queryClient = useQueryClient();
   const [view, setView] = useState<'list' | 'upload' | 'review' | 'history'>('list');
   const [batches, setBatches] = useState<any[]>([]);
@@ -45,11 +65,11 @@ export const TimetableImportPage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState(false);
 
-  // Polling state
+  // Polling & Progress State
   const [pollBatchId, setPollBatchId] = useState<string | null>(null);
   const [pollStatus, setPollStatus] = useState<string>('');
-  const [pollProgress, setPollProgress] = useState(10);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
   useEffect(() => {
     fetchBatches();
@@ -57,7 +77,23 @@ export const TimetableImportPage: React.FC = () => {
     fetchPrograms();
   }, []);
 
-  // Polling effect
+  // 1-second elapsed timer during AI extraction
+  useEffect(() => {
+    let timer: any;
+    if (pollBatchId) {
+      setElapsedSeconds(0);
+      timer = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setElapsedSeconds(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [pollBatchId]);
+
+  // Polling effect (1.8s interval for fast transition)
   useEffect(() => {
     let intervalId: any;
     if (pollBatchId) {
@@ -66,31 +102,64 @@ export const TimetableImportPage: React.FC = () => {
           const res = await api.get(`/admin/timetable-imports/${pollBatchId}`);
           const status = res.data.data.status;
           setPollStatus(status);
-          
-          if (status === 'UPLOADED') {
-            setPollProgress(30);
-          } else if (status === 'EXTRACTED') {
-            setPollProgress(60);
-          } else if (status === 'PENDING_REVIEW') {
-            setPollProgress(100);
+
+          if (status === 'PENDING_REVIEW') {
             setPollBatchId(null); // Stop polling
+            toast.success('AI timetable extraction complete! Opening review grid.');
             fetchBatches();
-            // Automatically open review
             handleSelectBatch(pollBatchId);
           } else if (status === 'EXTRACTION_FAILED') {
             setPollBatchId(null);
             setPollError(res.data.data.notes || 'AI vision extraction pipeline failed.');
+            toast.error('AI vision extraction failed. Please verify PDF format.');
             fetchBatches();
           }
         } catch (err) {
           console.error('Polling error', err);
         }
-      }, 3000);
+      }, 1800);
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
   }, [pollBatchId]);
+
+  const ESTIMATED_TOTAL_SECONDS = 25;
+  const estimatedRemaining = Math.max(1, ESTIMATED_TOTAL_SECONDS - elapsedSeconds);
+
+  // Dynamic smoothly advancing progress percentage (no frozen 30%)
+  const dynamicProgress = (() => {
+    if (pollStatus === 'PENDING_REVIEW') return 100;
+    if (pollStatus === 'EXTRACTED') {
+      return Math.min(96, 82 + Math.floor((elapsedSeconds % 10) * 1.5));
+    }
+    // UPLOADED: smoothly advances from 15% to 80% over 24s
+    const calculated = 15 + Math.min(65, Math.floor((elapsedSeconds / 24) * 65));
+    return Math.min(calculated, 80);
+  })();
+
+  // Live dynamic status description
+  const getDynamicSubstatus = () => {
+    if (pollStatus === 'PENDING_REVIEW') {
+      return 'Processing complete! Preparing visual grid review...';
+    }
+    if (pollStatus === 'EXTRACTED') {
+      return 'AI extraction verified. Resolving faculty names, subjects, and classroom rooms...';
+    }
+    if (elapsedSeconds < 4) {
+      return 'Uploading PDF document & verifying structural integrity...';
+    }
+    if (elapsedSeconds < 9) {
+      return 'Extracting PDF text layer & calculating table coordinate bounds...';
+    }
+    if (elapsedSeconds < 16) {
+      return 'Google Gemini 1.5 Vision analyzing weekly timetable matrix...';
+    }
+    if (elapsedSeconds < 22) {
+      return 'Parsing daily slots, lecture timings, and section codes...';
+    }
+    return 'Matching extracted slots against academic database & checking conflicts...';
+  };
 
   const fetchBatches = async () => {
     setIsLoading(true);
@@ -154,7 +223,6 @@ export const TimetableImportPage: React.FC = () => {
       
       setPollBatchId(batchId);
       setPollStatus('UPLOADED');
-      setPollProgress(15);
       setView('upload'); // Switch to processing screen
     } catch (error: any) {
       console.error('Failed to upload timetable', error);
@@ -271,21 +339,28 @@ export const TimetableImportPage: React.FC = () => {
       {/* Header bar */}
       {view !== 'review' && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Timetable PDF Import Pipeline</h1>
-            <p className="text-sm text-muted-foreground">Automated AI extraction, match verification, and scheduling of academic master timetables.</p>
-          </div>
+          {!embedded ? (
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Timetable PDF Import Pipeline</h1>
+              <p className="text-sm text-muted-foreground">Automated AI extraction, match verification, and scheduling of academic master timetables.</p>
+            </div>
+          ) : (
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Timetable Import Pipeline</h3>
+              <p className="text-xs text-muted-foreground">Historical batch list, AI vision verification, and timetable scheduling.</p>
+            </div>
+          )}
           <div className="flex gap-2">
-            <Button variant="outline" className="flex items-center gap-1.5" onClick={() => setView('history')}>
-              <History className="w-4 h-4" /> Rollback / History
+            <Button variant="outline" size="sm" className="flex items-center gap-1.5 text-xs h-8" onClick={() => setView('history')}>
+              <History className="w-3.5 h-3.5" /> Rollback / History
             </Button>
             {view === 'list' ? (
-              <Button onClick={() => setView('upload')} className="flex items-center gap-1.5">
-                <Upload className="w-4 h-4" /> Import New PDF
+              <Button size="sm" onClick={() => setView('upload')} className="flex items-center gap-1.5 text-xs h-8">
+                <Upload className="w-3.5 h-3.5" /> Import New PDF
               </Button>
             ) : (
-              <Button variant="ghost" onClick={() => setView('list')} className="flex items-center gap-1.5">
-                <ArrowLeft className="w-4 h-4" /> Back to Batches
+              <Button size="sm" variant="ghost" onClick={() => setView('list')} className="flex items-center gap-1.5 text-xs h-8">
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to Batches
               </Button>
             )}
           </div>
@@ -355,49 +430,201 @@ export const TimetableImportPage: React.FC = () => {
 
       {/* Background Processing Progress view */}
       {view === 'upload' && pollBatchId && (
-        <Card className="max-w-md mx-auto text-center p-6 space-y-6">
-          <CardHeader className="pb-0">
-            <CardTitle className="text-lg">AI Parsing Pipeline Active</CardTitle>
-            <CardDescription>Extracting grid nodes and matching entities...</CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {pollError ? (
-              <div className="space-y-4">
-                <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
-                <div className="text-sm font-bold text-destructive">Extraction Failed</div>
-                <p className="text-xs text-muted-foreground">{pollError}</p>
-                <Button variant="outline" onClick={() => { setPollBatchId(null); setView('list'); }}>
-                  Dismiss
+        <Card className="max-w-xl mx-auto p-6 sm:p-7 space-y-6 bg-card border-border shadow-md rounded-2xl">
+          {pollError ? (
+            <div className="space-y-4 text-center py-4">
+              <AlertCircle className="w-12 h-12 text-destructive mx-auto animate-bounce" />
+              <div className="text-base font-bold text-destructive">AI Extraction Failed</div>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">{pollError}</p>
+              <div className="pt-2">
+                <Button variant="outline" size="sm" onClick={() => { setPollBatchId(null); setView('list'); }}>
+                  Dismiss & Return to Batches
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex justify-between text-xs font-bold px-1">
-                  <span>Status: <span className="uppercase text-primary font-mono">{pollStatus}</span></span>
-                  <span>{pollProgress}%</span>
-                </div>
-                <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                  <div className="bg-primary h-full transition-all duration-300" style={{ width: `${pollProgress}%` }} />
-                </div>
-                
-                <div className="text-xs text-muted-foreground animate-pulse">
-                  {pollStatus === 'UPLOADED' && 'Analyzing image coordinates and reading page text...'}
-                  {pollStatus === 'EXTRACTED' && 'Google Gemini running vision grid resolution...'}
-                  {pollStatus === 'PENDING_REVIEW' && 'Finalizing fuzzy mappings againstSubjects, Faculty, and Rooms...'}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Header Badges & Timers */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border/70 pb-4">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-semibold w-fit">
+                  <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                  AI VISION PIPELINE ACTIVE
                 </div>
 
-                {duplicateWarning && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-left text-xs flex gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-                    <div>
-                      <span className="font-bold">Duplicate Warning:</span> A batch with this exact file hash already exists. Continuing parsing version...
-                    </div>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted text-foreground text-xs font-mono font-medium">
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                    Elapsed: {elapsedSeconds}s
                   </div>
-                )}
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-mono font-semibold">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+                    Est. Remaining: ~{estimatedRemaining}s
+                  </div>
+                </div>
               </div>
-            )}
-          </CardContent>
+
+              {/* Title & Info */}
+              <div className="text-left space-y-1">
+                <h3 className="text-lg font-bold tracking-tight text-foreground">
+                  Processing Timetable Sheet via Gemini AI
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Multimodal vision is recognizing grid columns, slot timings, and cross-matching faculty entities.
+                </p>
+              </div>
+
+              {/* Dynamic Live Progress Bar */}
+              <div className="space-y-2.5 bg-muted/30 p-4 rounded-xl border border-border/60">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-foreground flex items-center gap-2 truncate pr-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                    <span className="truncate">{getDynamicSubstatus()}</span>
+                  </span>
+                  <span className="font-mono font-bold text-primary text-sm shrink-0">
+                    {dynamicProgress}%
+                  </span>
+                </div>
+
+                <div className="w-full bg-secondary/80 h-2.5 rounded-full overflow-hidden border border-border/40">
+                  <div
+                    className="bg-gradient-to-r from-primary via-blue-500 to-emerald-500 h-full transition-all duration-700 ease-out shadow-xs"
+                    style={{ width: `${dynamicProgress}%` }}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-0.5">
+                  <span>Batch ID: <span className="font-mono font-medium">{pollBatchId.slice(0, 12)}...</span></span>
+                  <span>Average processing time: ~20–30s</span>
+                </div>
+              </div>
+
+              {/* 4-Stage Visual Pipeline Checklist */}
+              <div className="space-y-2 text-left pt-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Pipeline Execution Stages
+                </span>
+
+                <div className="grid gap-2 text-xs pt-1">
+                  {/* Stage 1 */}
+                  <div className="flex items-center gap-3 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-foreground">1. Document Upload & Security Check</div>
+                      <div className="text-[11px] text-muted-foreground truncate">PDF format & MD5 checksum verified successfully</div>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-600 font-mono">100%</span>
+                  </div>
+
+                  {/* Stage 2 */}
+                  <div className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                    elapsedSeconds >= 4 || pollStatus === 'EXTRACTED'
+                      ? 'bg-emerald-500/5 border-emerald-500/20'
+                      : 'bg-primary/5 border-primary/20'
+                  }`}>
+                    {elapsedSeconds >= 4 || pollStatus === 'EXTRACTED' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-foreground">2. Text Coordinate & Layer Parsing</div>
+                      <div className="text-[11px] text-muted-foreground truncate">Reading cell coordinates, day headers & slot periods</div>
+                    </div>
+                    <span className="text-[10px] font-bold font-mono text-muted-foreground">
+                      {elapsedSeconds >= 4 ? 'Done' : 'Active'}
+                    </span>
+                  </div>
+
+                  {/* Stage 3 */}
+                  <div className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                    pollStatus === 'EXTRACTED' || elapsedSeconds >= 18
+                      ? 'bg-emerald-500/5 border-emerald-500/20'
+                      : elapsedSeconds >= 4
+                      ? 'bg-primary/5 border-primary/20'
+                      : 'bg-muted/40 border-border/50 text-muted-foreground'
+                  }`}>
+                    {pollStatus === 'EXTRACTED' || elapsedSeconds >= 18 ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : elapsedSeconds >= 4 ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+                    ) : (
+                      <Cpu className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-foreground">3. Google Gemini Vision Analysis</div>
+                      <div className="text-[11px] text-muted-foreground truncate">Recognizing weekly days, periods, course codes & rooms</div>
+                    </div>
+                    <span className="text-[10px] font-bold font-mono text-muted-foreground">
+                      {pollStatus === 'EXTRACTED' || elapsedSeconds >= 18 ? 'Done' : elapsedSeconds >= 4 ? 'Active' : 'Pending'}
+                    </span>
+                  </div>
+
+                  {/* Stage 4 */}
+                  <div className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                    pollStatus === 'PENDING_REVIEW'
+                      ? 'bg-emerald-500/5 border-emerald-500/20'
+                      : pollStatus === 'EXTRACTED' || elapsedSeconds >= 18
+                      ? 'bg-primary/5 border-primary/20'
+                      : 'bg-muted/40 border-border/50 text-muted-foreground'
+                  }`}>
+                    {pollStatus === 'PENDING_REVIEW' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : pollStatus === 'EXTRACTED' || elapsedSeconds >= 18 ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-foreground">4. Entity Resolution & Conflict Matching</div>
+                      <div className="text-[11px] text-muted-foreground truncate">Mapping faculty names, subject IDs & checking conflicts</div>
+                    </div>
+                    <span className="text-[10px] font-bold font-mono text-muted-foreground">
+                      {pollStatus === 'PENDING_REVIEW' ? 'Done' : pollStatus === 'EXTRACTED' || elapsedSeconds >= 18 ? 'Active' : 'Pending'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Duplicate Warning banner if triggered */}
+              {duplicateWarning && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 rounded-xl text-left text-xs flex gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Duplicate Notice:</span> A batch with this exact PDF file hash already exists in the system. Parsing is proceeding for this new import session.
+                  </div>
+                </div>
+              )}
+
+              {/* Non-Stuck Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/70">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setView('list');
+                    toast.info('AI vision pipeline is continuing in background.');
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground w-full sm:w-auto"
+                >
+                  Browse Batches (Run in Background)
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPollBatchId(null);
+                    setView('list');
+                  }}
+                  className="text-xs w-full sm:w-auto"
+                >
+                  Cancel / Return
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

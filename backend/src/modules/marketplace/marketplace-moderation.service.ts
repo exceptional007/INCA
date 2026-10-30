@@ -197,7 +197,7 @@ export class MarketplaceModerationService {
       }
 
       return resolved;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     return updated;
   }

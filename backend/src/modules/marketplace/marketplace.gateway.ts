@@ -169,5 +169,11 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
       this.server.to(`conv_${conversationId}`).emit(event, payload);
     }
   }
+
+  broadcast(event: string, payload: any) {
+    if (this.server) {
+      this.server.emit(event, payload);
+    }
+  }
 }
 

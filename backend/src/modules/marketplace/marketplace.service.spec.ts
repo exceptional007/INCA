@@ -236,7 +236,7 @@ describe('Marketplace Services Unit Tests', () => {
   });
 
   describe('Transaction Lifecycle & Handover OTP', () => {
-    it('should generate a 6-digit OTP when transaction is initiated', async () => {
+    it('should generate a 6-digit OTP when transaction is initiated with schedule', async () => {
       mockPrisma.marketplaceListing.findUnique.mockResolvedValue({
         id: 'list-1',
         sellerId: 'seller-1',
@@ -247,6 +247,34 @@ describe('Marketplace Services Unit Tests', () => {
       mockPrisma.marketplaceTransaction.findFirst.mockResolvedValue(null);
       mockPrisma.marketplaceTransaction.create.mockImplementation((args) => Promise.resolve({
         id: 'tx-1',
+        buyerId: 'buyer-1',
+        ...args.data,
+      }));
+      mockPrisma.marketplaceListing.update.mockResolvedValue({});
+
+      const tx = await transactionService.initiateTransaction('buyer-1', 'STUDENT', {
+        listingId: 'list-1',
+        location: 'Campus Center',
+        date: '2026-10-30',
+        time: '14:00',
+      });
+
+      expect(tx.handoverOtp).toMatch(/^\d{6}$/);
+      expect(tx.status).toBe(TransactionStatus.HANDOVER_PENDING);
+    });
+
+    it('should initiate transaction in PRICE_AGREED without premature OTP when schedule is not provided', async () => {
+      mockPrisma.marketplaceListing.findUnique.mockResolvedValue({
+        id: 'list-1',
+        sellerId: 'seller-1',
+        price: 500,
+        status: ListingStatus.ACTIVE,
+        visibility: ListingVisibility.ALL,
+      });
+      mockPrisma.marketplaceTransaction.findFirst.mockResolvedValue(null);
+      mockPrisma.marketplaceTransaction.create.mockImplementation((args) => Promise.resolve({
+        id: 'tx-1',
+        buyerId: 'buyer-1',
         ...args.data,
       }));
       mockPrisma.marketplaceListing.update.mockResolvedValue({});
@@ -255,8 +283,8 @@ describe('Marketplace Services Unit Tests', () => {
         listingId: 'list-1',
       });
 
-      expect(tx.handoverOtp).toMatch(/^\d{6}$/);
-      expect(tx.status).toBe(TransactionStatus.HANDOVER_PENDING);
+      expect(tx.handoverOtp).toBeNull();
+      expect(tx.status).toBe(TransactionStatus.PRICE_AGREED);
     });
 
     it('should reject handover verification if OTP is invalid', async () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import type {
   MarketplaceMessage,
   MarketplaceOffer,
   MarketplaceTransaction,
+  SellerProfile,
 } from '@/types/marketplace';
 import { marketplaceApi, getMarketplaceSocket } from '@/services/marketplace';
 import {
@@ -27,6 +28,10 @@ import {
   RefreshCw,
   Star,
   MapPin,
+  Calendar,
+  Clock,
+  Check,
+  PackageCheck,
 } from 'lucide-react';
 
 interface ChatDealModalProps {
@@ -60,6 +65,10 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
   const [counterInput, setCounterInput] = useState('');
   const [showCounterForm, setShowCounterForm] = useState(false);
   const [otpInput, setOtpInput] = useState('');
+  const [scheduleLocation, setScheduleLocation] = useState('');
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [schedulingLoading, setSchedulingLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [sendingMsg, setSendingMsg] = useState(false);
@@ -69,6 +78,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<any>(null);
+  const initializingRef = useRef<boolean>(false);
 
   const effectiveConvId = internalConvId || conversationId;
 
@@ -76,7 +86,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const loadData = async (convId: string) => {
+  const loadData = useCallback(async (convId: string) => {
     try {
       setLoading(true);
       setActionError(null);
@@ -91,7 +101,31 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const initConversation = useCallback(() => {
+    if (conversationId) {
+      loadData(conversationId);
+    } else if (listing?.id && !initializingRef.current) {
+      initializingRef.current = true;
+      setLoading(true);
+      setActionError(null);
+      marketplaceApi
+        .getOrCreateConversation(listing.id)
+        .then((conv) => {
+          setInternalConvId(conv.id);
+          setConversation(conv);
+          return loadData(conv.id);
+        })
+        .catch((err: any) => {
+          setActionError(err?.response?.data?.message || 'Failed to initialize conversation');
+          setLoading(false);
+        })
+        .finally(() => {
+          initializingRef.current = false;
+        });
+    }
+  }, [conversationId, listing?.id, loadData]);
 
   // Sync internalConvId when prop changes
   useEffect(() => {
@@ -101,30 +135,18 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
   // Load conversation on open
   useEffect(() => {
     if (!isOpen) {
+      initializingRef.current = false;
       setMessages([]);
       setConversation(null);
       setActiveOffer(null);
       setActiveTransaction(null);
       setActionError(null);
+      setInternalConvId(null);
       return;
     }
 
-    if (conversationId) {
-      loadData(conversationId);
-    } else if (listing?.id) {
-      setLoading(true);
-      marketplaceApi
-        .getOrCreateConversation(listing.id)
-        .then((conv) => {
-          setInternalConvId(conv.id);
-          loadData(conv.id);
-        })
-        .catch((err: any) => {
-          setActionError(err?.response?.data?.message || 'Failed to initialize conversation');
-          setLoading(false);
-        });
-    }
-  }, [isOpen, conversationId, listing?.id]);
+    initConversation();
+  }, [isOpen, initConversation]);
 
   // Socket room and event listeners
   useEffect(() => {
@@ -221,15 +243,18 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
 
   const handleMakeOffer = async () => {
     const amount = parseFloat(offerInput);
-    if (isNaN(amount) || amount <= 0 || !conversation) return;
+    const listingId = conversation?.listingId || listing?.id;
+    if (isNaN(amount) || amount <= 0 || !listingId) return;
 
     try {
       setActionError(null);
-      const offer = await marketplaceApi.createOffer(conversation.listingId, amount);
+      const offer = await marketplaceApi.createOffer(listingId, amount);
       setActiveOffer(offer);
       setShowOfferForm(false);
       setOfferInput('');
-      loadData(conversation.id);
+      if (effectiveConvId) {
+        loadData(effectiveConvId);
+      }
     } catch (err: any) {
       setActionError(err?.response?.data?.message || 'Failed to submit offer');
     }
@@ -247,11 +272,9 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
       setShowCounterForm(false);
       setCounterInput('');
 
-      if (action === 'ACCEPT' && conversation) {
-        const tx = await marketplaceApi.initiateTransaction(conversation.listingId, activeOffer.id);
-        setActiveTransaction(tx);
+      if (effectiveConvId) {
+        await loadData(effectiveConvId);
       }
-      loadData(conversation!.id);
     } catch (err: any) {
       setActionError(err?.response?.data?.message || 'Failed to respond to offer');
     }
@@ -284,17 +307,100 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (activeTransaction) {
+      setScheduleLocation(
+        activeTransaction.handoverLocation ||
+          conversation?.listing?.preferredLocation ||
+          listing?.preferredLocation ||
+          'Campus Center',
+      );
+      if (activeTransaction.handoverDate) {
+        setScheduleDate(activeTransaction.handoverDate);
+      } else {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        setScheduleDate(tomorrow.toISOString().split('T')[0]);
+      }
+      if (activeTransaction.handoverTime) {
+        setScheduleTime(activeTransaction.handoverTime);
+      } else {
+        setScheduleTime('14:00');
+      }
+    }
+  }, [activeTransaction, conversation?.listing?.preferredLocation, listing?.preferredLocation]);
+
+  const handleConfirmSchedule = async () => {
+    if (!activeTransaction) return;
+    if (!scheduleLocation.trim() || !scheduleDate.trim() || !scheduleTime.trim()) {
+      setActionError('Please enter a location, date, and time for the handover');
+      return;
+    }
+    try {
+      setSchedulingLoading(true);
+      setActionError(null);
+      const updated = await marketplaceApi.confirmSchedule(activeTransaction.id, {
+        location: scheduleLocation.trim(),
+        date: scheduleDate.trim(),
+        time: scheduleTime.trim(),
+      });
+      setActiveTransaction(updated);
+      if (effectiveConvId) {
+        loadData(effectiveConvId);
+      }
+    } catch (err: any) {
+      setActionError(err?.response?.data?.message || 'Failed to confirm schedule');
+    } finally {
+      setSchedulingLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const currentListing = conversation?.listing || listing;
-  const isSeller = conversation ? conversation.sellerId === currentUserId : false;
-  const isBuyer = conversation ? conversation.buyerId === currentUserId : false;
-  const otherParty = conversation?.otherParty;
-  const otherPartyName = otherParty?.student
-    ? `${otherParty.student.firstName} ${otherParty.student.lastName || ''}`.trim()
+  const isSeller = conversation
+    ? conversation.sellerId === currentUserId
+    : (listing ? listing.sellerId === currentUserId : false);
+  const isBuyer = !isSeller;
+
+  const otherParty: SellerProfile | null | undefined =
+    conversation?.otherParty ||
+    (conversation
+      ? (isSeller ? conversation.buyer : (conversation.seller || listing?.seller))
+      : (isSeller ? null : listing?.seller));
+
+  const getParticipantName = (party: SellerProfile | null | undefined, fallback: string) => {
+    if (!party) return fallback;
+    if (party.student) {
+      const name = `${party.student.firstName} ${party.student.lastName || ''}`.trim();
+      if (name) return name;
+    }
+    if (party.faculty) {
+      const name = `${party.faculty.firstName} ${party.faculty.lastName || ''}`.trim();
+      if (name) return name;
+    }
+    if (party.adminProfile?.name) {
+      const name = party.adminProfile.name.trim();
+      if (name) return name;
+    }
+    if (party.email) {
+      return party.email.split('@')[0];
+    }
+    return fallback;
+  };
+
+  const otherPartyName = getParticipantName(
+    otherParty,
+    isSeller ? 'Prospective Buyer' : 'Seller'
+  );
+
+  const otherPartyBadge = otherParty?.student
+    ? 'Student'
     : otherParty?.faculty
-    ? `${otherParty.faculty.firstName} ${otherParty.faculty.lastName || ''}`.trim()
-    : 'Campus Peer';
+    ? 'Faculty'
+    : otherParty?.adminProfile
+    ? 'Admin'
+    : (isSeller ? 'Buyer' : 'Seller');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -311,7 +417,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                 <DialogTitle className="text-sm font-semibold flex items-center gap-2">
                   <span>{otherPartyName}</span>
                   <Badge variant="outline" className="text-[10px]">
-                    {isSeller ? 'Buyer' : 'Seller'}
+                    {otherPartyBadge}
                   </Badge>
                 </DialogTitle>
                 <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -334,9 +440,21 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
         </DialogHeader>
 
         {actionError && (
-          <div className="bg-red-50 text-red-700 border-b border-red-200 px-4 py-2 text-xs flex items-center gap-2">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{actionError}</span>
+          <div className="bg-red-50 text-red-700 border-b border-red-200 px-4 py-2.5 text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>{actionError}</span>
+            </div>
+            {!effectiveConvId && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={initConversation}
+                className="h-6 text-[11px] px-2 bg-white text-red-700 hover:bg-red-100 border-red-300"
+              >
+                Retry
+              </Button>
+            )}
           </div>
         )}
 
@@ -352,55 +470,175 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                   </Badge>
                 </span>
                 <span className="font-bold text-sm">
-                  Agreed: ₹{activeTransaction.agreedPrice.toLocaleString('en-IN')}
+                  Agreed Price: ₹{activeTransaction.agreedPrice.toLocaleString('en-IN')}
                 </span>
               </div>
 
+              {/* STEP 2: DEAL FINALIZATION & SCHEDULING (PRICE_AGREED / INITIATED) */}
+              {(activeTransaction.status === 'PRICE_AGREED' || activeTransaction.status === 'INITIATED') && (
+                <div className="pt-2 border-t border-primary/10 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between text-xs gap-1.5">
+                    <span className="font-semibold text-foreground flex items-center gap-1.5">
+                      <Calendar className="size-3.5 text-primary" />
+                      Step 2: Finalize Handover Arrangement
+                    </span>
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <Badge
+                        variant={activeTransaction.buyerConfirmed ? 'default' : 'secondary'}
+                        className={`text-[10px] ${activeTransaction.buyerConfirmed ? 'bg-emerald-600 hover:bg-emerald-600' : ''}`}
+                      >
+                        {activeTransaction.buyerConfirmed ? '✓ Buyer Confirmed' : 'Buyer Pending'}
+                      </Badge>
+                      <Badge
+                        variant={activeTransaction.sellerConfirmed ? 'default' : 'secondary'}
+                        className={`text-[10px] ${activeTransaction.sellerConfirmed ? 'bg-emerald-600 hover:bg-emerald-600' : ''}`}
+                      >
+                        {activeTransaction.sellerConfirmed ? '✓ Seller Confirmed' : 'Seller Pending'}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground">
+                    Confirm a safe campus meeting spot and time. Once both parties confirm, the buyer's 6-digit verification OTP will be unlocked.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1 mb-1">
+                        <MapPin className="size-3 text-primary" /> Location
+                      </label>
+                      <Input
+                        value={scheduleLocation}
+                        onChange={(e) => setScheduleLocation(e.target.value)}
+                        placeholder="e.g. Central Library"
+                        className="h-7 text-xs bg-background"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1 mb-1">
+                        <Calendar className="size-3 text-primary" /> Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={scheduleDate}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        className="h-7 text-xs bg-background"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1 mb-1">
+                        <Clock className="size-3 text-primary" /> Time
+                      </label>
+                      <Input
+                        type="time"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        className="h-7 text-xs bg-background"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      size="sm"
+                      onClick={handleConfirmSchedule}
+                      disabled={schedulingLoading || !scheduleLocation.trim() || !scheduleDate.trim() || !scheduleTime.trim()}
+                      className="h-7 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                    >
+                      {schedulingLoading ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Check className="size-3.5" />
+                      )}
+                      {(isBuyer && activeTransaction.buyerConfirmed) || (isSeller && activeTransaction.sellerConfirmed)
+                        ? 'Update Meeting Details'
+                        : 'Confirm Handover Arrangement'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: PHYSICAL HANDOVER & OTP VERIFICATION */}
               {activeTransaction.status === 'HANDOVER_PENDING' && (
-                <div className="pt-1 border-t border-primary/10">
+                <div className="pt-2 border-t border-primary/10 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between text-xs bg-background/80 p-2 rounded-lg border gap-2">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <MapPin className="size-3.5 text-primary shrink-0" />
+                      <span className="font-medium text-foreground">
+                        {activeTransaction.handoverLocation || 'Campus Meeting Point'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-muted-foreground text-[11px]">
+                      {activeTransaction.handoverDate && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="size-3 text-primary" />
+                          {activeTransaction.handoverDate}
+                        </span>
+                      )}
+                      {activeTransaction.handoverTime && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="size-3 text-primary" />
+                          {activeTransaction.handoverTime}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                   {isBuyer ? (
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-2.5 bg-primary/10 rounded-lg border border-primary/20">
                       <div>
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-primary flex items-center gap-1">
+                          <ShieldCheck className="size-3.5" />
                           Your 6-Digit Handover Code
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          Present this code to the seller when receiving the item:
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          Inspect item physically first. Disclose code to seller only upon receiving the item.
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="bg-primary text-primary-foreground font-mono font-bold text-lg px-3 py-1 rounded-md tracking-widest shadow-2xs">
+                        <div className="bg-primary text-primary-foreground font-mono font-bold text-xl px-4 py-1.5 rounded-lg tracking-widest shadow-sm select-all">
                           {activeTransaction.handoverOtp || '••••••'}
                         </div>
                         <Button
                           size="icon"
-                          variant="ghost"
+                          variant="outline"
                           onClick={handleRegenerateOtp}
                           title="Generate new OTP"
-                          className="size-8"
+                          className="size-8 shrink-0 bg-background"
                         >
                           <RefreshCw className="size-3.5" />
                         </Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-1.5">
-                      <div className="text-xs font-medium text-foreground">
-                        Hand over the item and enter the buyer's 6-digit OTP code to complete sale:
+                    <div className="space-y-1.5 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                      <div className="text-xs font-semibold text-foreground flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <PackageCheck className="size-4 text-emerald-600" />
+                          Enter Buyer's 6-Digit Handover OTP:
+                        </span>
+                        {typeof activeTransaction.handoverOtpAttempts === 'number' && (
+                          <span className="text-[10px] text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            {5 - activeTransaction.handoverOtpAttempts} attempts left
+                          </span>
+                        )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="text-[11px] text-muted-foreground">
+                        Hand over the item and enter the 6-digit OTP given by the buyer to complete this sale.
+                      </div>
+                      <div className="flex gap-2 pt-1">
                         <Input
-                          placeholder="Enter 6-digit OTP"
+                          placeholder="000000"
                           maxLength={6}
                           value={otpInput}
                           onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
-                          className="font-mono tracking-widest text-center h-8 text-sm"
+                          className="font-mono tracking-widest text-center h-8 text-base font-bold bg-background"
                         />
                         <Button
                           size="sm"
                           onClick={handleVerifyOtp}
                           disabled={otpLoading || otpInput.length !== 6}
-                          className="gap-1 h-8 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                          className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shrink-0"
                         >
                           {otpLoading && <Loader2 className="size-3.5 animate-spin" />}
                           Verify & Complete
@@ -411,22 +649,38 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                 </div>
               )}
 
+              {/* STEP 4: DEAL COMPLETED */}
               {activeTransaction.status === 'COMPLETED' && (
-                <div className="flex items-center justify-between pt-1 border-t border-emerald-200 text-emerald-800 text-xs font-medium">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="size-4 text-emerald-600" />
-                    Deal finalized on campus! Both parties confirmed.
-                  </span>
-                  {isBuyer && !activeTransaction.review && onOpenReviewModal && (
-                    <Button
-                      size="sm"
-                      onClick={() => onOpenReviewModal(activeTransaction.id)}
-                      className="gap-1 h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold"
-                    >
-                      <Star className="size-3 fill-white" />
-                      Rate & Review Seller
-                    </Button>
-                  )}
+                <div className="pt-2 border-t border-emerald-200 text-emerald-950 text-xs">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-emerald-600 text-white font-bold text-[11px] px-2.5 py-0.5">
+                          {isBuyer ? 'Order Received' : 'Sold / Handover Completed'}
+                        </Badge>
+                        <span className="font-semibold text-emerald-900 flex items-center gap-1">
+                          <CheckCircle2 className="size-4 text-emerald-600" />
+                          Handover Verified
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-800">
+                        {isBuyer
+                          ? 'You have verified receipt of this item on campus. The transaction is complete.'
+                          : 'OTP successfully verified. The listing is marked SOLD and automatically unlisted from the marketplace.'}
+                      </p>
+                    </div>
+
+                    {isBuyer && !activeTransaction.review && onOpenReviewModal && (
+                      <Button
+                        size="sm"
+                        onClick={() => onOpenReviewModal(activeTransaction.id)}
+                        className="gap-1.5 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold shrink-0 shadow-xs"
+                      >
+                        <Star className="size-3.5 fill-white" />
+                        Rate & Review Seller
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -669,15 +923,20 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
           className="p-3 border-t bg-background flex items-center gap-2 shrink-0"
         >
           <Input
-            placeholder="Type a message or proposed meeting spot..."
+            placeholder={
+              !effectiveConvId
+                ? 'Initializing conversation...'
+                : 'Type a message or proposed meeting spot...'
+            }
             value={inputMessage}
             onChange={handleInputChange}
+            disabled={!effectiveConvId || loading}
             className="flex-1 text-sm rounded-full bg-muted/30 focus-visible:ring-1"
           />
           <Button
             type="submit"
             size="icon"
-            disabled={sendingMsg || !inputMessage.trim()}
+            disabled={sendingMsg || !inputMessage.trim() || !effectiveConvId || loading}
             className="rounded-full shrink-0 shadow-xs"
           >
             {sendingMsg ? (

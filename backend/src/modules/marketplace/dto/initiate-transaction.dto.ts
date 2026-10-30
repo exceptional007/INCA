@@ -8,5 +8,17 @@ export class InitiateTransactionDto {
   @IsOptional()
   @IsString()
   offerId?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  date?: string;
+
+  @IsOptional()
+  @IsString()
+  time?: string;
 }
 

@@ -1,16 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { MemoryCacheService } from '../../../common/cache/memory-cache.service';
 
 @Injectable()
 export class AcademicSessionRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cache?: MemoryCacheService,
+  ) {}
 
   async findAll() {
-    return this.prisma.academicSession.findMany({
-      orderBy: {
-        startDate: 'desc',
-      },
-    });
+    const key = 'academic:sessions:all';
+    const loader = () =>
+      this.prisma.academicSession.findMany({
+        orderBy: {
+          startDate: 'desc',
+        },
+      });
+
+    return this.cache ? this.cache.getOrSet(key, 900, loader) : loader();
   }
 
   async findById(id: string) {
@@ -26,11 +34,15 @@ export class AcademicSessionRepository {
   }
 
   async findActive() {
-    return this.prisma.academicSession.findFirst({
-      where: {
-        isActive: true,
-      },
-    });
+    const key = 'academic:sessions:active';
+    const loader = () =>
+      this.prisma.academicSession.findFirst({
+        where: {
+          isActive: true,
+        },
+      });
+
+    return this.cache ? this.cache.getOrSet(key, 900, loader) : loader();
   }
 
   async create(data: {

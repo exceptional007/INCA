@@ -1,9 +1,10 @@
 import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class SendMessageDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  conversationId: string;
+  conversationId?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -17,4 +18,3 @@ export class SendMessageDto {
   @IsOptional()
   metadata?: any;
 }
-

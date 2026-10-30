@@ -36,8 +36,8 @@ export const VoterReportModal: React.FC<VoterReportModalProps> = ({
         .catch((err) => {
           setError(
             err?.response?.data?.message ||
-              err?.message ||
-              'Failed to retrieve voter roster.',
+            err?.message ||
+            'Failed to retrieve voter roster.',
           );
         })
         .finally(() => setIsLoading(false));

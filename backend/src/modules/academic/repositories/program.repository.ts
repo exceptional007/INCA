@@ -1,47 +1,59 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { MemoryCacheService } from '../../../common/cache/memory-cache.service';
 
 @Injectable()
 export class ProgramRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cache?: MemoryCacheService,
+  ) {}
 
   async findAll(includeInactive: boolean = false) {
-    return this.prisma.program.findMany({
-      where: includeInactive
-        ? undefined
-        : {
-            isActive: true,
-            department: {
+    const key = `academic:programs:all:includeInactive=${includeInactive}`;
+    const loader = () =>
+      this.prisma.program.findMany({
+        where: includeInactive
+          ? undefined
+          : {
               isActive: true,
+              department: {
+                isActive: true,
+              },
             },
-          },
-      include: {
-        department: true,
-      },
-      orderBy: {
-        name: 'asc',
-      },
-    });
+        include: {
+          department: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+    return this.cache ? this.cache.getOrSet(key, 600, loader) : loader();
   }
 
   async findByDepartmentId(departmentId: string, includeInactive: boolean = false) {
-    return this.prisma.program.findMany({
-      where: includeInactive
-        ? { departmentId }
-        : {
-            departmentId,
-            isActive: true,
-            department: {
+    const key = `academic:programs:dept=${departmentId}:includeInactive=${includeInactive}`;
+    const loader = () =>
+      this.prisma.program.findMany({
+        where: includeInactive
+          ? { departmentId }
+          : {
+              departmentId,
               isActive: true,
+              department: {
+                isActive: true,
+              },
             },
-          },
-      include: {
-        department: true,
-      },
-      orderBy: {
-        name: 'asc',
-      },
-    });
+        include: {
+          department: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+    return this.cache ? this.cache.getOrSet(key, 600, loader) : loader();
   }
 
   async findById(id: string) {

@@ -10,6 +10,7 @@ import type {
 import {
   marketplaceApi,
   getMarketplaceImageUrl,
+  getMarketplaceSocket,
   type ListingQueryParams,
 } from '@/services/marketplace';
 import { CreateListingModal } from './CreateListingModal';
@@ -35,6 +36,9 @@ import {
   MapPin,
   Loader2,
   CheckCircle2,
+  Calendar,
+  Clock,
+  UserCheck,
 } from 'lucide-react';
 
 const CATEGORIES: { label: string; value: MarketplaceCategory | 'ALL' }[] = [
@@ -171,6 +175,49 @@ export const MarketplacePage: React.FC = () => {
     }
   };
 
+  // Real-time socket updates for marketplace catalog and transactions
+  useEffect(() => {
+    const socket = getMarketplaceSocket();
+
+    const handleCatalogUpdate = () => {
+      loadListings();
+      loadMyListings();
+    };
+
+    const handleTransactionUpdate = () => {
+      loadMyDeals();
+      loadListings();
+      loadMyListings();
+    };
+
+    socket.on('catalogUpdate', handleCatalogUpdate);
+    socket.on('transactionUpdate', handleTransactionUpdate);
+
+    return () => {
+      socket.off('catalogUpdate', handleCatalogUpdate);
+      socket.off('transactionUpdate', handleTransactionUpdate);
+    };
+  }, []);
+
+  const getPartyName = (party: any, fallback: string) => {
+    if (!party) return fallback;
+    if (party.student) {
+      const name = `${party.student.firstName} ${party.student.lastName || ''}`.trim();
+      if (name) return name;
+    }
+    if (party.faculty) {
+      const name = `${party.faculty.firstName} ${party.faculty.lastName || ''}`.trim();
+      if (name) return name;
+    }
+    if (party.adminProfile?.name) {
+      return party.adminProfile.name.trim();
+    }
+    if (party.email) {
+      return party.email.split('@')[0];
+    }
+    return fallback;
+  };
+
   useEffect(() => {
     if (activeTab === 'explore') loadListings();
     else if (activeTab === 'my-listings') loadMyListings();
@@ -189,32 +236,21 @@ export const MarketplacePage: React.FC = () => {
     setDetailModalOpen(true);
   };
 
-  const handleStartChat = async (listing: MarketplaceListing) => {
-    // Immediate visual feedback: open chat modal right away with listing context
+  const handleStartChat = (listing: MarketplaceListing) => {
+    // Open chat modal with listing context; ChatDealModal safely manages conversation initialization
     setDetailModalOpen(false);
     setActiveChatListing(listing);
     setActiveChatConvId(null);
     setChatModalOpen(true);
-
-    try {
-      const conv = await marketplaceApi.getOrCreateConversation(listing.id);
-      setActiveChatConvId(conv.id);
-    } catch (err: any) {
-      console.error('Failed to pre-fetch conversation in parent', err);
-      // ChatDealModal also attempts self-initialization gracefully
-    }
   };
 
   const handleInitiateBuy = async (listing: MarketplaceListing) => {
-    // Immediate visual feedback
     setDetailModalOpen(false);
     setActiveChatListing(listing);
     setActiveChatConvId(null);
     setChatModalOpen(true);
 
     try {
-      const conv = await marketplaceApi.getOrCreateConversation(listing.id);
-      setActiveChatConvId(conv.id);
       await marketplaceApi.initiateTransaction(listing.id);
     } catch (err: any) {
       console.error('Failed to initiate deal transaction', err);
@@ -439,6 +475,10 @@ export const MarketplacePage: React.FC = () => {
                   ? `${item.seller.student.firstName} ${item.seller.student.lastName || ''}`.trim()
                   : item.seller?.faculty
                   ? `${item.seller.faculty.firstName} ${item.seller.faculty.lastName || ''}`.trim()
+                  : item.seller?.adminProfile?.name
+                  ? item.seller.adminProfile.name
+                  : item.seller?.email
+                  ? item.seller.email.split('@')[0]
                   : 'Campus Member';
 
                 return (
@@ -645,6 +685,10 @@ export const MarketplacePage: React.FC = () => {
                   ? `${other.student.firstName} ${other.student.lastName || ''}`.trim()
                   : other?.faculty
                   ? `${other.faculty.firstName} ${other.faculty.lastName || ''}`.trim()
+                  : other?.adminProfile?.name
+                  ? other.adminProfile.name
+                  : other?.email
+                  ? other.email.split('@')[0]
                   : 'Campus Member';
 
                 return (
@@ -735,18 +779,44 @@ export const MarketplacePage: React.FC = () => {
                             </h3>
                             <Badge
                               variant={tx.status === 'COMPLETED' ? 'default' : 'outline'}
-                              className="text-[10px]"
+                              className={`text-[10px] ${
+                                tx.status === 'COMPLETED'
+                                  ? 'bg-emerald-600 hover:bg-emerald-600 text-white font-bold'
+                                  : tx.status === 'HANDOVER_PENDING'
+                                  ? 'border-primary text-primary font-semibold'
+                                  : ''
+                              }`}
                             >
-                              {tx.status}
+                              {tx.status === 'COMPLETED' ? 'Order Received' : tx.status}
                             </Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Agreed Price:{' '}
-                            <strong className="text-foreground">
-                              ₹{tx.agreedPrice.toLocaleString('en-IN')}
-                            </strong>{' '}
-                            • Handover:{' '}
-                            {tx.listing?.preferredLocation || 'Campus Center'}
+                          <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span>
+                              Agreed Price:{' '}
+                              <strong className="text-foreground">
+                                ₹{tx.agreedPrice.toLocaleString('en-IN')}
+                              </strong>
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="size-3 text-primary" />
+                              {tx.handoverLocation || tx.listing?.preferredLocation || 'Campus Center'}
+                            </span>
+                            {tx.handoverDate && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="size-3 text-primary" />
+                                  {tx.handoverDate}
+                                </span>
+                                {tx.handoverTime && (
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="size-3 text-primary" />
+                                    {tx.handoverTime}
+                                  </span>
+                                )}
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -767,7 +837,7 @@ export const MarketplacePage: React.FC = () => {
                                 setReviewTransactionId(tx.id);
                                 setReviewModalOpen(true);
                               }}
-                              className="gap-1.5 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white"
+                              className="gap-1.5 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white shadow-xs"
                             >
                               <Star className="size-3 fill-white" />
                               Rate & Review
@@ -805,23 +875,39 @@ export const MarketplacePage: React.FC = () => {
                             </h3>
                             <Badge
                               variant={tx.status === 'COMPLETED' ? 'default' : 'outline'}
-                              className="text-[10px]"
+                              className={`text-[10px] ${
+                                tx.status === 'COMPLETED'
+                                  ? 'bg-emerald-600 hover:bg-emerald-600 text-white font-bold'
+                                  : 'border-emerald-600 text-emerald-700 font-semibold'
+                              }`}
                             >
-                              {tx.status}
+                              {tx.status === 'COMPLETED' ? 'Sold / Handover Completed' : tx.status}
                             </Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Agreed Price:{' '}
-                            <strong className="text-foreground">
-                              ₹{tx.agreedPrice.toLocaleString('en-IN')}
-                            </strong>
+                          <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span>
+                              Agreed Price:{' '}
+                              <strong className="text-foreground">
+                                ₹{tx.agreedPrice.toLocaleString('en-IN')}
+                              </strong>
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <UserCheck className="size-3 text-emerald-600" />
+                              Buyer: {getPartyName(tx.buyer, 'Campus Buyer')}
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="size-3 text-emerald-600" />
+                              {tx.handoverLocation || tx.listing?.preferredLocation || 'Campus Center'}
+                            </span>
                           </div>
                         </div>
 
                         {tx.status === 'COMPLETED' && (
-                          <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
+                          <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1.5 shrink-0 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
                             <CheckCircle2 className="size-4 text-emerald-600" />
-                            Completed on {new Date(tx.completedAt || tx.createdAt).toLocaleDateString()}
+                            Verified on {new Date(tx.completedAt || tx.createdAt).toLocaleDateString()}
                           </span>
                         )}
                       </div>

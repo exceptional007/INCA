@@ -30,36 +30,39 @@ export class HttpExceptionFilter implements ExceptionFilter {
           ? exceptionResponse
           : (exceptionResponse as any).message;
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      if (exception.code === 'P2002') {
+      const prismaError = exception as Prisma.PrismaClientKnownRequestError;
+      if (prismaError.code === 'P2002') {
         status = HttpStatus.CONFLICT;
-        const target = (exception.meta?.target as string[])?.join(', ') || 'unique field';
+        const target = (prismaError.meta?.target as string[])?.join(', ') || 'unique field';
         message = `A record with this ${target} already exists.`;
-      } else if (exception.code === 'P2025') {
+      } else if (prismaError.code === 'P2025') {
         status = HttpStatus.NOT_FOUND;
         message = 'Requested record not found.';
-      } else if (exception.code === 'P2003') {
+      } else if (prismaError.code === 'P2003') {
         status = HttpStatus.BAD_REQUEST;
         message = 'Operation failed due to a related record constraint.';
-      } else if (exception.code === 'P2028') {
+      } else if (prismaError.code === 'P2028') {
         status = HttpStatus.REQUEST_TIMEOUT;
         message = 'Database operation timed out. Please try again.';
       } else {
         status = HttpStatus.BAD_REQUEST;
         message = 'A database constraint error occurred.';
       }
-      this.logger.warn(`Prisma Known Error [${exception.code}]: ${exception.message.split('\n').pop()} on ${request.method} ${request.url}`);
+      this.logger.warn(`Prisma Known Error [${prismaError.code}]: ${prismaError.message.split('\n').pop()} on ${request.method} ${request.url}`);
     } else if (exception instanceof Prisma.PrismaClientInitializationError) {
+      const initError = exception as Prisma.PrismaClientInitializationError;
       status = HttpStatus.SERVICE_UNAVAILABLE;
       message = 'Database temporarily unreachable. Please try again shortly.';
-      const errorCode = (exception as any).errorCode || 'UNKNOWN';
+      const errorCode = (initError as any).errorCode || 'UNKNOWN';
       this.logger.error(
-        `Prisma Initialization/Connection Error [${errorCode}] on ${request.method} ${request.url}: ${exception.message}`,
+        `Prisma Initialization/Connection Error [${errorCode}] on ${request.method} ${request.url}: ${initError.message}`,
       );
     } else if (exception instanceof Prisma.PrismaClientRustPanicError) {
+      const panicError = exception as Prisma.PrismaClientRustPanicError;
       status = HttpStatus.SERVICE_UNAVAILABLE;
       message = 'Database service temporarily unavailable. Please try again shortly.';
       this.logger.error(
-        `Prisma Engine Panic Error on ${request.method} ${request.url}: ${exception.message}`,
+        `Prisma Engine Panic Error on ${request.method} ${request.url}: ${panicError.message}`,
       );
     } else {
       this.logger.error(

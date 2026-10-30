@@ -1,38 +1,46 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { MemoryCacheService } from '../../../common/cache/memory-cache.service';
 
 @Injectable()
 export class SemesterRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cache?: MemoryCacheService,
+  ) {}
 
   async findAll(includeInactive: boolean = false, programId?: string) {
-    return this.prisma.semester.findMany({
-      where: {
-        ...(programId ? { programId } : {}),
-        ...(includeInactive
-          ? {}
-          : {
-              isActive: true,
-              program: {
+    const key = `academic:semesters:prog=${programId || 'all'}:includeInactive=${includeInactive}`;
+    const loader = () =>
+      this.prisma.semester.findMany({
+        where: {
+          ...(programId ? { programId } : {}),
+          ...(includeInactive
+            ? {}
+            : {
                 isActive: true,
-                department: {
+                program: {
                   isActive: true,
+                  department: {
+                    isActive: true,
+                  },
                 },
-              },
-            }),
-      },
-      include: {
-        program: {
-          include: {
-            department: true,
+              }),
+        },
+        include: {
+          program: {
+            include: {
+              department: true,
+            },
           },
         },
-      },
-      orderBy: [
-        { program: { name: 'asc' } },
-        { number: 'asc' },
-      ],
-    });
+        orderBy: [
+          { program: { name: 'asc' } },
+          { number: 'asc' },
+        ],
+      });
+
+    return this.cache ? this.cache.getOrSet(key, 600, loader) : loader();
   }
 
   async findById(id: string) {
