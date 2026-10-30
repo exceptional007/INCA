@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MemoryCacheService } from '../../common/cache/memory-cache.service';
 
 @Injectable()
 export class ReportsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cache?: MemoryCacheService,
+  ) {}
 
   // ── Student: all records for a student ───────────────────────────────────
   async getStudentRecords(
@@ -201,168 +205,171 @@ export class ReportsRepository {
 
   // ── Filter Options Discovery ─────────────────────────────────────────────
   async getFilterOptions(departmentId?: string, programId?: string, semesterId?: string) {
-    const departments = await this.prisma.department.findMany({
-      where: { isActive: true },
-      select: { id: true, code: true, name: true, shortName: true },
-      orderBy: { name: 'asc' },
-    });
+    const key = `reports:filter-options:${departmentId || 'all'}:${programId || 'all'}:${semesterId || 'all'}`;
 
-    const programs = await this.prisma.program.findMany({
-      where: {
-        isActive: true,
-        ...(departmentId ? { departmentId } : {}),
-      },
-      select: { id: true, code: true, name: true, shortName: true, departmentId: true },
-      orderBy: { name: 'asc' },
-    });
-
-    const semesters = await this.prisma.semester.findMany({
-      where: {
-        isActive: true,
-        ...(programId ? { programId } : {}),
-        ...(departmentId && !programId
-          ? { program: { departmentId } }
-          : {}),
-      },
-      select: { id: true, number: true, programId: true },
-      orderBy: { number: 'asc' },
-    });
-
-    const sections = await this.prisma.section.findMany({
-      where: {
-        isActive: true,
-        ...(semesterId ? { semesterId } : {}),
-        ...(programId && !semesterId ? { semester: { programId } } : {}),
-        ...(departmentId && !programId && !semesterId
-          ? { semester: { program: { departmentId } } }
-          : {}),
-      },
-      include: {
-        semester: {
-          include: {
-            program: {
-              select: { id: true, name: true, shortName: true, departmentId: true },
+    const loader = async () => {
+      const [departments, programs, semesters, sections, subjects, faculty, students] =
+        await Promise.all([
+          this.prisma.department.findMany({
+            where: { isActive: true },
+            select: { id: true, code: true, name: true, shortName: true },
+            orderBy: { name: 'asc' },
+          }),
+          this.prisma.program.findMany({
+            where: {
+              isActive: true,
+              ...(departmentId ? { departmentId } : {}),
             },
-          },
-        },
-      },
-      orderBy: { name: 'asc' },
-    });
-
-    const subjects = await this.prisma.subject.findMany({
-      where: {
-        isActive: true,
-        ...(semesterId ? { semesterId } : {}),
-        ...(programId && !semesterId ? { semester: { programId } } : {}),
-        ...(departmentId && !programId && !semesterId
-          ? { semester: { program: { departmentId } } }
-          : {}),
-      },
-      include: {
-        semester: {
-          include: {
-            program: {
-              select: { id: true, name: true, shortName: true, departmentId: true },
+            select: { id: true, code: true, name: true, shortName: true, departmentId: true },
+            orderBy: { name: 'asc' },
+          }),
+          this.prisma.semester.findMany({
+            where: {
+              isActive: true,
+              ...(programId ? { programId } : {}),
+              ...(departmentId && !programId
+                ? { program: { departmentId } }
+                : {}),
             },
-          },
-        },
-      },
-      orderBy: { name: 'asc' },
-    });
-
-    const faculty = await this.prisma.faculty.findMany({
-      where: {
-        isActive: true,
-        ...(departmentId ? { departmentId } : {}),
-      },
-      select: {
-        id: true,
-        employeeCode: true,
-        firstName: true,
-        lastName: true,
-        designation: true,
-        departmentId: true,
-        department: { select: { id: true, name: true, shortName: true } },
-      },
-      orderBy: { firstName: 'asc' },
-    });
-
-    const students = await this.prisma.student.findMany({
-      where: {
-        isActive: true,
-        ...(departmentId ? { departmentId } : {}),
-        ...(semesterId ? { section: { semesterId } } : {}),
-      },
-      select: {
-        id: true,
-        rollNumber: true,
-        firstName: true,
-        lastName: true,
-        collegeId: true,
-        sectionId: true,
-        section: {
-          select: {
-            id: true,
-            name: true,
-            semester: {
-              select: {
-                number: true,
-                program: { select: { name: true, shortName: true } },
+            select: { id: true, number: true, programId: true },
+            orderBy: { number: 'asc' },
+          }),
+          this.prisma.section.findMany({
+            where: {
+              isActive: true,
+              ...(semesterId ? { semesterId } : {}),
+              ...(programId && !semesterId ? { semester: { programId } } : {}),
+              ...(departmentId && !programId && !semesterId
+                ? { semester: { program: { departmentId } } }
+                : {}),
+            },
+            include: {
+              semester: {
+                include: {
+                  program: {
+                    select: { id: true, name: true, shortName: true, departmentId: true },
+                  },
+                },
               },
             },
-          },
-        },
-      },
-      orderBy: { rollNumber: 'asc' },
-      take: 200,
-    });
+            orderBy: { name: 'asc' },
+          }),
+          this.prisma.subject.findMany({
+            where: {
+              isActive: true,
+              ...(semesterId ? { semesterId } : {}),
+              ...(programId && !semesterId ? { semester: { programId } } : {}),
+              ...(departmentId && !programId && !semesterId
+                ? { semester: { program: { departmentId } } }
+                : {}),
+            },
+            include: {
+              semester: {
+                include: {
+                  program: {
+                    select: { id: true, name: true, shortName: true, departmentId: true },
+                  },
+                },
+              },
+            },
+            orderBy: { name: 'asc' },
+          }),
+          this.prisma.faculty.findMany({
+            where: {
+              isActive: true,
+              ...(departmentId ? { departmentId } : {}),
+            },
+            select: {
+              id: true,
+              employeeCode: true,
+              firstName: true,
+              lastName: true,
+              designation: true,
+              departmentId: true,
+              department: { select: { id: true, name: true, shortName: true } },
+            },
+            orderBy: { firstName: 'asc' },
+          }),
+          this.prisma.student.findMany({
+            where: {
+              isActive: true,
+              ...(departmentId ? { departmentId } : {}),
+              ...(semesterId ? { section: { semesterId } } : {}),
+            },
+            select: {
+              id: true,
+              rollNumber: true,
+              firstName: true,
+              lastName: true,
+              collegeId: true,
+              sectionId: true,
+              section: {
+                select: {
+                  id: true,
+                  name: true,
+                  semester: {
+                    select: {
+                      number: true,
+                      program: { select: { name: true, shortName: true } },
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: { rollNumber: 'asc' },
+            take: 200,
+          }),
+        ]);
 
-    return {
-      departments,
-      programs,
-      semesters,
-      sections: sections.map((s) => ({
-        id: s.id,
-        name: s.name,
-        semesterId: s.semesterId,
-        semesterNumber: s.semester?.number,
-        programName: s.semester?.program?.name,
-        programShortName: s.semester?.program?.shortName,
-        departmentId: s.semester?.program?.departmentId,
-        displayName: `${s.semester?.program?.shortName || s.semester?.program?.name || 'Prog'} Sem ${s.semester?.number} (${s.name})`,
-      })),
-      subjects: subjects.map((sub) => ({
-        id: sub.id,
-        code: sub.code,
-        name: sub.name,
-        type: sub.isLab ? 'LAB' : 'THEORY',
-        isLab: sub.isLab,
-        semesterId: sub.semesterId,
-        semesterNumber: sub.semester?.number,
-        programName: sub.semester?.program?.name,
-        programShortName: sub.semester?.program?.shortName,
-        departmentId: sub.semester?.program?.departmentId,
-        displayName: `${sub.name} (${sub.code})`,
-      })),
-      faculty: faculty.map((f) => ({
-        id: f.id,
-        employeeCode: f.employeeCode,
-        name: `${f.firstName} ${f.lastName ?? ''}`.trim(),
-        designation: f.designation,
-        departmentId: f.departmentId,
-        departmentName: f.department?.name || f.department?.shortName || 'General',
-        displayName: `${f.firstName} ${f.lastName ?? ''}`.trim() + (f.employeeCode ? ` [${f.employeeCode}]` : ''),
-      })),
-      students: students.map((st) => ({
-        id: st.id,
-        rollNumber: st.rollNumber,
-        collegeId: st.collegeId,
-        name: `${st.firstName} ${st.lastName ?? ''}`.trim(),
-        sectionId: st.sectionId,
-        sectionName: st.section?.name,
-        displayName: `${st.rollNumber} - ${st.firstName} ${st.lastName ?? ''}`.trim(),
-      })),
+      return {
+        departments,
+        programs,
+        semesters,
+        sections: sections.map((s) => ({
+          id: s.id,
+          name: s.name,
+          semesterId: s.semesterId,
+          semesterNumber: s.semester?.number,
+          programName: s.semester?.program?.name,
+          programShortName: s.semester?.program?.shortName,
+          departmentId: s.semester?.program?.departmentId,
+          displayName: `${s.semester?.program?.shortName || s.semester?.program?.name || 'Prog'} Sem ${s.semester?.number} (${s.name})`,
+        })),
+        subjects: subjects.map((sub) => ({
+          id: sub.id,
+          code: sub.code,
+          name: sub.name,
+          type: sub.isLab ? 'LAB' : 'THEORY',
+          isLab: sub.isLab,
+          semesterId: sub.semesterId,
+          semesterNumber: sub.semester?.number,
+          programName: sub.semester?.program?.name,
+          programShortName: sub.semester?.program?.shortName,
+          departmentId: sub.semester?.program?.departmentId,
+          displayName: `${sub.name} (${sub.code})`,
+        })),
+        faculty: faculty.map((f) => ({
+          id: f.id,
+          employeeCode: f.employeeCode,
+          name: `${f.firstName} ${f.lastName ?? ''}`.trim(),
+          designation: f.designation,
+          departmentId: f.departmentId,
+          departmentName: f.department?.name || f.department?.shortName || 'General',
+          displayName: `${f.firstName} ${f.lastName ?? ''}`.trim() + (f.employeeCode ? ` [${f.employeeCode}]` : ''),
+        })),
+        students: students.map((st) => ({
+          id: st.id,
+          rollNumber: st.rollNumber,
+          collegeId: st.collegeId,
+          name: `${st.firstName} ${st.lastName ?? ''}`.trim(),
+          sectionId: st.sectionId,
+          sectionName: st.section?.name,
+          displayName: `${st.rollNumber} - ${st.firstName} ${st.lastName ?? ''}`.trim(),
+        })),
+      };
     };
+
+    return this.cache ? this.cache.getOrSet(key, 300, loader) : loader();
   }
 
   // ── Institutional Overview Data Aggregation ──────────────────────────────

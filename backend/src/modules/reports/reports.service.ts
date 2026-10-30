@@ -316,7 +316,7 @@ export class ReportsService {
       if (session.schedule?.template?.subject) {
         subId = session.schedule.template.subject.id;
         code = session.schedule.template.subject.code;
-        key = subId;
+        key = subId || 'unknown';
         label = session.schedule.template.subject.name;
       } else if (session.activity?.activityType) {
         key = `activity_${session.activity.activityType.id}`;
@@ -1142,46 +1142,20 @@ export class ReportsService {
     if (userRole === 'ADMIN' && userId) {
       const adminProfile = await this.prisma.adminProfile.findUnique({
         where: { userId },
-        include: { department: true },
+        select: { departmentId: true },
       });
       targetDeptId = adminProfile?.departmentId;
     } else if (userRole === 'HOD' && userId) {
       const faculty = await this.prisma.faculty.findUnique({
         where: { userId },
-        include: { department: true },
+        select: { departmentId: true },
       });
       targetDeptId = faculty?.departmentId || undefined;
     } else if (userRole === 'SUPER_ADMIN') {
       targetDeptId = departmentIdQuery || undefined;
     }
 
-    const dept = targetDeptId
-      ? await this.prisma.department.findUnique({
-          where: { id: targetDeptId },
-          select: { id: true, code: true, name: true, shortName: true },
-        })
-      : null;
-
-    // Faculty & Student counts
-    const activeFacultyCount = await this.prisma.faculty.count({
-      where: {
-        isActive: true,
-        ...(targetDeptId ? { departmentId: targetDeptId } : {}),
-      },
-    });
-
-    const activeStudentsCount = await this.prisma.student.count({
-      where: {
-        isActive: true,
-        ...(targetDeptId ? { departmentId: targetDeptId } : {}),
-      },
-    });
-
-    const totalDepartmentsCount = await this.prisma.department.count({
-      where: { isActive: true },
-    });
-
-    // Today's schedule & conducted session counts
+    // Today's schedule & conducted session boundaries
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(todayStart);
@@ -1195,9 +1169,135 @@ export class ReportsService {
         section: { semester: { program: { departmentId: targetDeptId } } },
       };
     }
-    let todaySchedulesCount = await this.prisma.schedule.count({
-      where: todaySchedWhere,
-    });
+
+    const todaySessionsWhere: any = {
+      attendanceDate: { gte: todayStart, lt: todayEnd },
+    };
+    if (targetDeptId) {
+      todaySessionsWhere.OR = [
+        { schedule: { template: { section: { semester: { program: { departmentId: targetDeptId } } } } } },
+        { takenBy: { departmentId: targetDeptId } },
+      ];
+    }
+
+    const sessionScope: any = {
+      status: 'SUBMITTED',
+    };
+    if (targetDeptId) {
+      sessionScope.OR = [
+        { schedule: { template: { section: { semester: { program: { departmentId: targetDeptId } } } } } },
+        { takenBy: { departmentId: targetDeptId } },
+      ];
+    }
+
+    // Execute independent dashboard metrics in parallel using Promise.all
+    const [
+      dept,
+      activeFacultyCount,
+      activeStudentsCount,
+      totalDepartmentsCount,
+      todaySchedulesCountRaw,
+      todaySessionsCount,
+      submittedSessions,
+      deptStudents,
+      pendingRequestsCount,
+      recentSessions,
+      trendSessions,
+    ] = await Promise.all([
+      targetDeptId
+        ? this.prisma.department.findUnique({
+            where: { id: targetDeptId },
+            select: { id: true, code: true, name: true, shortName: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.faculty.count({
+        where: {
+          isActive: true,
+          ...(targetDeptId ? { departmentId: targetDeptId } : {}),
+        },
+      }),
+      this.prisma.student.count({
+        where: {
+          isActive: true,
+          ...(targetDeptId ? { departmentId: targetDeptId } : {}),
+        },
+      }),
+      this.prisma.department.count({
+        where: { isActive: true },
+      }),
+      this.prisma.schedule.count({
+        where: todaySchedWhere,
+      }),
+      this.prisma.attendanceSession.count({
+        where: todaySessionsWhere,
+      }),
+      this.prisma.attendanceSession.findMany({
+        where: sessionScope,
+        select: {
+          records: {
+            select: { status: true },
+          },
+        },
+      }),
+      this.prisma.student.findMany({
+        where: {
+          isActive: true,
+          ...(targetDeptId ? { departmentId: targetDeptId } : {}),
+        },
+        select: {
+          id: true,
+          attendanceRecords: {
+            where: {
+              attendanceSession: { status: 'SUBMITTED' },
+            },
+            select: { status: true },
+          },
+        },
+      }),
+      this.prisma.request.count({
+        where: { status: 'PENDING' },
+      }),
+      this.prisma.attendanceSession.findMany({
+        where: sessionScope,
+        select: {
+          id: true,
+          attendanceDate: true,
+          status: true,
+          takenBy: {
+            select: { firstName: true, lastName: true },
+          },
+          schedule: {
+            select: {
+              template: {
+                select: {
+                  subject: { select: { name: true, code: true } },
+                  section: { select: { name: true } },
+                },
+              },
+            },
+          },
+          activity: {
+            select: { title: true },
+          },
+          records: {
+            select: { status: true },
+          },
+        },
+        orderBy: { attendanceDate: 'desc' },
+        take: 5,
+      }),
+      this.prisma.attendanceSession.findMany({
+        where: sessionScope,
+        select: {
+          attendanceDate: true,
+          records: { select: { status: true } },
+        },
+        orderBy: { attendanceDate: 'asc' },
+        take: 20,
+      }),
+    ]);
+
+    let todaySchedulesCount = todaySchedulesCountRaw;
     if (todaySchedulesCount === 0) {
       const utcToday = new Date(Date.UTC(todayStart.getUTCFullYear(), todayStart.getUTCMonth(), todayStart.getUTCDate()));
       const utcTomorrow = new Date(utcToday);
@@ -1210,40 +1310,6 @@ export class ReportsService {
       }
       todaySchedulesCount = await this.prisma.schedule.count({ where: utcSchedWhere });
     }
-
-    // Today's attendance sessions taken
-    const todaySessionsWhere: any = {
-      attendanceDate: { gte: todayStart, lt: todayEnd },
-    };
-    if (targetDeptId) {
-      todaySessionsWhere.OR = [
-        { schedule: { template: { section: { semester: { program: { departmentId: targetDeptId } } } } } },
-        { takenBy: { departmentId: targetDeptId } },
-      ];
-    }
-    const todaySessionsCount = await this.prisma.attendanceSession.count({
-      where: todaySessionsWhere,
-    });
-
-    // Department-scoped attendance rate
-    const sessionScope: any = {
-      status: 'SUBMITTED',
-    };
-    if (targetDeptId) {
-      sessionScope.OR = [
-        { schedule: { template: { section: { semester: { program: { departmentId: targetDeptId } } } } } },
-        { takenBy: { departmentId: targetDeptId } },
-      ];
-    }
-
-    const submittedSessions = await this.prisma.attendanceSession.findMany({
-      where: sessionScope,
-      select: {
-        records: {
-          select: { status: true },
-        },
-      },
-    });
 
     let totalAttendanceRecords = 0;
     let presentAttendanceRecords = 0;
@@ -1261,22 +1327,6 @@ export class ReportsService {
       : 0;
 
     // Shortfall students in department (<75% attendance)
-    const deptStudents = await this.prisma.student.findMany({
-      where: {
-        isActive: true,
-        ...(targetDeptId ? { departmentId: targetDeptId } : {}),
-      },
-      select: {
-        id: true,
-        attendanceRecords: {
-          where: {
-            attendanceSession: { status: 'SUBMITTED' },
-          },
-          select: { status: true },
-        },
-      },
-    });
-
     let shortfallCount = 0;
     for (const st of deptStudents) {
       const total = st.attendanceRecords.length;
@@ -1287,35 +1337,7 @@ export class ReportsService {
       }
     }
 
-    // Pending administrative requests
-    const pendingRequestsCount = await this.prisma.request.count({
-      where: { status: 'PENDING' },
-    });
-
     // Recent 5 attendance sessions
-    const recentSessions = await this.prisma.attendanceSession.findMany({
-      where: sessionScope,
-      include: {
-        takenBy: true,
-        schedule: {
-          include: {
-            template: {
-              include: {
-                subject: true,
-                section: true,
-              },
-            },
-          },
-        },
-        activity: true,
-        records: {
-          select: { status: true },
-        },
-      },
-      orderBy: { attendanceDate: 'desc' },
-      take: 5,
-    });
-
     const formattedRecent = recentSessions.map(s => {
       const total = s.records.length;
       const present = s.records.filter(r => r.status === 'PRESENT' || r.status === 'LATE' || r.status === 'EXCUSED').length;
@@ -1333,16 +1355,6 @@ export class ReportsService {
     });
 
     // Attendance Trend (group submitted records by date)
-    const trendSessions = await this.prisma.attendanceSession.findMany({
-      where: sessionScope,
-      select: {
-        attendanceDate: true,
-        records: { select: { status: true } },
-      },
-      orderBy: { attendanceDate: 'asc' },
-      take: 20,
-    });
-
     const dateMap = new Map<string, { date: string; present: number; absent: number; total: number; rate: number }>();
     for (const s of trendSessions) {
       const dStr = s.attendanceDate ? s.attendanceDate.toISOString().split('T')[0] : '';
@@ -1428,19 +1440,67 @@ export class ReportsService {
       ? availableSections.find(s => s.id === sectionIdQuery)
       : availableSections[0]) || availableSections[0];
 
-    // 3. Students in target section
-    const sectionStudents = await this.prisma.student.findMany({
-      where: { sectionId: targetSection.id, isActive: true },
-      include: {
-        attendanceRecords: {
-          where: { attendanceSession: { status: 'SUBMITTED' } },
-          select: { status: true },
-        },
-      },
-      orderBy: { rollNumber: 'asc' },
-    });
+    // Today's Schedules for section
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
 
-    // 4. Calculate Shortfall Students
+    // Parallelize section students, initial schedules, and recent sessions
+    const [sectionStudents, initialSchedules, recentSessions] = await Promise.all([
+      // 3. Students in target section
+      this.prisma.student.findMany({
+        where: { sectionId: targetSection.id, isActive: true },
+        include: {
+          attendanceRecords: {
+            where: { attendanceSession: { status: 'SUBMITTED' } },
+            select: { status: true },
+          },
+        },
+        orderBy: { rollNumber: 'asc' },
+      }),
+      // 4. Schedules for section
+      this.prisma.schedule.findMany({
+        where: {
+          template: { sectionId: targetSection.id },
+          lectureDate: { gte: todayStart, lt: todayEnd },
+        },
+        include: {
+          template: {
+            include: {
+              subject: true,
+              faculty: true,
+              room: true,
+            },
+          },
+        },
+        orderBy: { template: { startTime: 'asc' } },
+      }),
+      // 5. Recent submitted sessions for section
+      this.prisma.attendanceSession.findMany({
+        where: {
+          schedule: { template: { sectionId: targetSection.id } },
+          status: 'SUBMITTED',
+        },
+        include: {
+          takenBy: true,
+          schedule: {
+            include: {
+              template: {
+                include: { subject: true },
+              },
+            },
+          },
+          records: {
+            select: { status: true },
+          },
+        },
+        orderBy: { attendanceDate: 'desc' },
+        take: 5,
+      }),
+    ]);
+
+    // Calculate Shortfall Students
     const shortfallStudents: Array<{
       id: string;
       name: string;
@@ -1480,28 +1540,7 @@ export class ReportsService {
       ? Math.round((presentSectionRecords / totalSectionRecords) * 1000) / 10
       : 0;
 
-    // 5. Today's Schedules for section
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
-
-    let schedules = await this.prisma.schedule.findMany({
-      where: {
-        template: { sectionId: targetSection.id },
-        lectureDate: { gte: todayStart, lt: todayEnd },
-      },
-      include: {
-        template: {
-          include: {
-            subject: true,
-            faculty: true,
-            room: true,
-          },
-        },
-      },
-      orderBy: { template: { startTime: 'asc' } },
-    });
+    let schedules = initialSchedules;
 
     if (schedules.length === 0) {
       // Check UTC boundary
@@ -1564,27 +1603,7 @@ export class ReportsService {
       };
     });
 
-    // 6. Recent submitted sessions for section
-    const recentSessions = await this.prisma.attendanceSession.findMany({
-      where: {
-        schedule: { template: { sectionId: targetSection.id } },
-        status: 'SUBMITTED',
-      },
-      include: {
-        takenBy: true,
-        schedule: {
-          include: {
-            template: {
-              include: { subject: true },
-            },
-          },
-        },
-        records: true,
-      },
-      orderBy: { attendanceDate: 'desc' },
-      take: 6,
-    });
-
+    // 6. Format recent submitted sessions for section
     const formattedSessions = recentSessions.map(s => {
       const total = s.records.length;
       const present = s.records.filter(r => r.status === 'PRESENT' || r.status === 'LATE' || r.status === 'EXCUSED').length;
@@ -1625,6 +1644,540 @@ export class ReportsService {
         todaySchedules: formattedSchedules,
         recentSessions: formattedSessions,
       },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ── Faculty-Scoped Reports & Analytics ────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async resolveFaculty(userId: string) {
+    let faculty = await this.prisma.faculty.findUnique({
+      where: { userId },
+      include: { department: true },
+    });
+    if (!faculty) {
+      faculty = await this.prisma.faculty.findFirst({
+        where: { id: userId },
+        include: { department: true },
+      });
+    }
+    if (!faculty) {
+      faculty = await this.prisma.faculty.findFirst({
+        include: { department: true },
+      });
+    }
+    return faculty;
+  }
+
+  async getFacultyContext(userId: string): Promise<ApiResponse<any>> {
+    const faculty = await this.resolveFaculty(userId);
+    if (!faculty) {
+      throw new NotFoundException('Faculty profile not found.');
+    }
+
+    const templates = await this.prisma.scheduleTemplate.findMany({
+      where: { facultyId: faculty.id },
+      include: { subject: true, section: { include: { semester: true } } },
+    });
+
+    const slots = await this.prisma.timetableSlot.findMany({
+      where: { facultyId: faculty.id },
+      include: {
+        subject: true,
+        version: { include: { section: true } },
+      },
+    });
+
+    const sessions = await this.prisma.attendanceSession.findMany({
+      where: { takenById: faculty.id, status: 'SUBMITTED' },
+      include: {
+        schedule: {
+          include: {
+            template: {
+              include: { subject: true, section: { include: { semester: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    const subjectMap = new Map<string, {
+      id: string;
+      code: string;
+      name: string;
+      sections: string[];
+      totalSessionsCount: number;
+    }>();
+
+    for (const t of templates) {
+      if (t.subject) {
+        if (!subjectMap.has(t.subject.id)) {
+          subjectMap.set(t.subject.id, {
+            id: t.subject.id,
+            code: t.subject.code,
+            name: t.subject.name,
+            sections: [],
+            totalSessionsCount: 0,
+          });
+        }
+        if (t.section?.name && !subjectMap.get(t.subject.id)!.sections.includes(t.section.name)) {
+          subjectMap.get(t.subject.id)!.sections.push(t.section.name);
+        }
+      }
+    }
+
+    for (const s of slots) {
+      if (s.subject) {
+        if (!subjectMap.has(s.subject.id)) {
+          subjectMap.set(s.subject.id, {
+            id: s.subject.id,
+            code: s.subject.code,
+            name: s.subject.name,
+            sections: [],
+            totalSessionsCount: 0,
+          });
+        }
+        const secName = s.batchSection || s.version?.section?.name;
+        if (secName && !subjectMap.get(s.subject.id)!.sections.includes(secName)) {
+          subjectMap.get(s.subject.id)!.sections.push(secName);
+        }
+      }
+    }
+
+    for (const sess of sessions) {
+      const sub = sess.schedule?.template?.subject;
+      const sec = sess.schedule?.template?.section;
+      if (sub) {
+        if (!subjectMap.has(sub.id)) {
+          subjectMap.set(sub.id, {
+            id: sub.id,
+            code: sub.code,
+            name: sub.name,
+            sections: [],
+            totalSessionsCount: 0,
+          });
+        }
+        const item = subjectMap.get(sub.id)!;
+        item.totalSessionsCount += 1;
+        if (sec?.name && !item.sections.includes(sec.name)) {
+          item.sections.push(sec.name);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Faculty report context loaded successfully.',
+      data: {
+        faculty: {
+          id: faculty.id,
+          name: `${faculty.firstName} ${faculty.lastName || ''}`.trim(),
+          employeeCode: faculty.employeeCode,
+          designation: faculty.designation,
+          departmentName: faculty.department?.name || faculty.department?.shortName || 'General',
+        },
+        subjects: Array.from(subjectMap.values()),
+      },
+    };
+  }
+
+  async getFacultyStudentAttendance(
+    userId: string,
+    rollNumber: string,
+    subjectId?: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<ApiResponse<any>> {
+    if (!rollNumber || !rollNumber.trim()) {
+      throw new NotFoundException('Please enter a student roll number to view attendance.');
+    }
+
+    const faculty = await this.resolveFaculty(userId);
+    if (!faculty) {
+      throw new NotFoundException('Faculty profile not found.');
+    }
+
+    const trimmedRoll = rollNumber.trim();
+    const student = await this.prisma.student.findFirst({
+      where: {
+        rollNumber: { equals: trimmedRoll, mode: 'insensitive' },
+      },
+      include: {
+        user: true,
+        section: {
+          include: {
+            semester: {
+              include: {
+                program: { include: { department: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`No student found with Roll Number "${trimmedRoll}". Please verify and try again.`);
+    }
+
+    const { start, end } = this.parseDates(startDate, endDate);
+
+    const records = await this.prisma.attendanceRecord.findMany({
+      where: {
+        studentId: student.id,
+        attendanceSession: {
+          status: 'SUBMITTED',
+          takenById: faculty.id,
+          ...(subjectId && subjectId !== 'ALL'
+            ? {
+                schedule: {
+                  template: { subjectId },
+                },
+              }
+            : {}),
+          ...(start || end
+            ? {
+                attendanceDate: {
+                  ...(start ? { gte: start } : {}),
+                  ...(end ? { lte: end } : {}),
+                },
+              }
+            : {}),
+        },
+      },
+      include: {
+        attendanceSession: {
+          include: {
+            takenBy: true,
+            schedule: {
+              include: {
+                template: {
+                  include: { subject: true, section: true, room: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        attendanceSession: { attendanceDate: 'desc' },
+      },
+    });
+
+    const subjectStatsMap: Record<string, {
+      subjectId: string;
+      subjectCode: string;
+      subjectName: string;
+      total: number;
+      attended: number;
+      missed: number;
+      percentage: number;
+    }> = {};
+
+    const datewiseHistory = records.map((r) => {
+      const sess = r.attendanceSession;
+      const tmpl = sess.schedule?.template;
+      const sub = tmpl?.subject;
+      const subId = sub?.id || 'unknown';
+      const subCode = sub?.code || 'SUB';
+      const subName = sub?.name || 'Class Session';
+      const isPresent = PRESENT_STATUSES.includes(r.status);
+
+      if (!subjectStatsMap[subId]) {
+        subjectStatsMap[subId] = {
+          subjectId: subId,
+          subjectCode: subCode,
+          subjectName: subName,
+          total: 0,
+          attended: 0,
+          missed: 0,
+          percentage: 0,
+        };
+      }
+      subjectStatsMap[subId].total += 1;
+      if (isPresent) {
+        subjectStatsMap[subId].attended += 1;
+      } else {
+        subjectStatsMap[subId].missed += 1;
+      }
+
+      return {
+        id: r.id,
+        date: sess.attendanceDate ? sess.attendanceDate.toISOString().split('T')[0] : '—',
+        timeSlot: tmpl ? `${tmpl.startTime} - ${tmpl.endTime}` : 'Regular Slot',
+        room: tmpl?.room?.code || tmpl?.room?.name || 'Classroom',
+        subjectId: subId,
+        subjectCode: subCode,
+        subjectName: subName,
+        sectionName: tmpl?.section?.name || student.section?.name || 'A',
+        status: r.status,
+        remarks: r.remarks || '',
+      };
+    });
+
+    Object.values(subjectStatsMap).forEach((st) => {
+      st.percentage = calcPercentage(st.attended, st.total);
+    });
+
+    const totalClasses = records.length;
+    const totalAttended = records.filter((r) => PRESENT_STATUSES.includes(r.status)).length;
+    const totalMissed = totalClasses - totalAttended;
+    const overallPct = calcPercentage(totalAttended, totalClasses);
+
+    const program = student.section?.semester?.program;
+    const department = program?.department;
+
+    return {
+      success: true,
+      message: `Found ${records.length} datewise attendance records for ${student.firstName}.`,
+      data: {
+        student: {
+          id: student.id,
+          name: `${student.firstName} ${student.lastName ?? ''}`.trim(),
+          collegeId: student.collegeId,
+          rollNumber: student.rollNumber,
+          email: student.user?.email,
+          sectionName: student.section?.name || 'Unassigned',
+          semesterNumber: student.section?.semester?.number,
+          programName: program?.name || program?.shortName,
+          departmentName: department?.name || department?.shortName,
+        },
+        overall: {
+          totalClasses,
+          attended: totalAttended,
+          missed: totalMissed,
+          percentage: overallPct,
+          isShortfall: overallPct < 75,
+          eligibilityStatus: overallPct >= 75 ? 'ELIGIBLE' : 'SHORTFALL',
+        },
+        bySubject: Object.values(subjectStatsMap),
+        datewiseHistory,
+        dateRange: { startDate: start ?? null, endDate: end ?? null },
+      },
+    };
+  }
+
+  async getFacultySubjectRoster(
+    userId: string,
+    subjectId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<ApiResponse<any>> {
+    const faculty = await this.resolveFaculty(userId);
+    if (!faculty) {
+      throw new NotFoundException('Faculty profile not found.');
+    }
+
+    const subject = await this.prisma.subject.findUnique({
+      where: { id: subjectId },
+    });
+    if (!subject) {
+      throw new NotFoundException(`Subject not found.`);
+    }
+
+    const { start, end } = this.parseDates(startDate, endDate);
+
+    const sessions = await this.prisma.attendanceSession.findMany({
+      where: {
+        status: 'SUBMITTED',
+        takenById: faculty.id,
+        schedule: {
+          template: { subjectId },
+        },
+        ...(start || end
+          ? {
+              attendanceDate: {
+                ...(start ? { gte: start } : {}),
+                ...(end ? { lte: end } : {}),
+              },
+            }
+          : {}),
+      },
+      include: {
+        schedule: {
+          include: {
+            template: { include: { subject: true, section: true } },
+          },
+        },
+        records: {
+          include: {
+            student: {
+              include: { section: true },
+            },
+          },
+        },
+      },
+      orderBy: { attendanceDate: 'desc' },
+    });
+
+    const studentAggMap = new Map<string, {
+      student: {
+        id: string;
+        name: string;
+        rollNumber: string;
+        sectionName: string;
+      };
+      attended: number;
+      totalClasses: number;
+      missed: number;
+      percentage: number;
+      isShortfall: boolean;
+    }>();
+
+    for (const sess of sessions) {
+      for (const rec of sess.records) {
+        const st = rec.student;
+        if (!studentAggMap.has(st.id)) {
+          studentAggMap.set(st.id, {
+            student: {
+              id: st.id,
+              name: `${st.firstName} ${st.lastName ?? ''}`.trim(),
+              rollNumber: st.rollNumber,
+              sectionName: st.section?.name || 'General',
+            },
+            attended: 0,
+            totalClasses: 0,
+            missed: 0,
+            percentage: 0,
+            isShortfall: false,
+          });
+        }
+        const item = studentAggMap.get(st.id)!;
+        item.totalClasses += 1;
+        if (PRESENT_STATUSES.includes(rec.status)) {
+          item.attended += 1;
+        } else {
+          item.missed += 1;
+        }
+      }
+    }
+
+    const roster = Array.from(studentAggMap.values()).map((st) => {
+      const pct = calcPercentage(st.attended, st.totalClasses);
+      return {
+        ...st,
+        percentage: pct,
+        isShortfall: pct < 75,
+      };
+    });
+
+    roster.sort((a, b) => a.student.rollNumber.localeCompare(b.student.rollNumber));
+
+    const totalStudents = roster.length;
+    const shortfallCount = roster.filter((r) => r.isShortfall).length;
+    const avgPercentage =
+      totalStudents > 0
+        ? parseFloat((roster.reduce((sum, r) => sum + r.percentage, 0) / totalStudents).toFixed(2))
+        : 0;
+
+    return {
+      success: true,
+      message: 'Subject roster loaded successfully.',
+      data: {
+        subject: {
+          id: subject.id,
+          code: subject.code,
+          name: subject.name,
+        },
+        totalSessions: sessions.length,
+        totalStudents,
+        shortfallCount,
+        averageAttendancePct: avgPercentage,
+        students: roster,
+      },
+    };
+  }
+
+  async exportFacultyStudentCsv(
+    userId: string,
+    rollNumber: string,
+    subjectId?: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<{ filename: string; csv: string }> {
+    const res = await this.getFacultyStudentAttendance(userId, rollNumber, subjectId, startDate, endDate);
+    const faculty = await this.resolveFaculty(userId);
+    const st = res.data.student;
+    const ov = res.data.overall;
+    const history = res.data.datewiseHistory;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    const lines: string[] = [
+      `"INCA FACULTY ATTENDANCE REPORT"`,
+      `"Faculty","Prof. ${faculty?.firstName || ''} ${faculty?.lastName || ''} (${faculty?.employeeCode || 'FAC'})"`,
+      `"Student Name",${this.sanitizeCsv(st.name)}`,
+      `"Roll Number",${this.sanitizeCsv(st.rollNumber)}`,
+      `"College ID",${this.sanitizeCsv(st.collegeId)}`,
+      `"Section",${this.sanitizeCsv(st.sectionName)}`,
+      `"Program / Dept",${this.sanitizeCsv(`${st.programName || ''} - ${st.departmentName || ''}`)}`,
+      `"Total Classes Conducted",${this.sanitizeCsv(ov.totalClasses)}`,
+      `"Classes Attended",${this.sanitizeCsv(ov.attended)}`,
+      `"Classes Missed",${this.sanitizeCsv(ov.missed)}`,
+      `"Attendance Rate (%)",${this.sanitizeCsv(ov.percentage)}`,
+      `"Eligibility Status",${this.sanitizeCsv(ov.eligibilityStatus)}`,
+      '',
+      `"--- DATEWISE CLASSROOM ATTENDANCE RECORDS ---"`,
+      `"Date","Time Slot","Subject Code","Subject Name","Room","Status","Remarks"`,
+      ...history.map((h: any) =>
+        [
+          this.sanitizeCsv(h.date),
+          this.sanitizeCsv(h.timeSlot),
+          this.sanitizeCsv(h.subjectCode),
+          this.sanitizeCsv(h.subjectName),
+          this.sanitizeCsv(h.room),
+          this.sanitizeCsv(h.status),
+          this.sanitizeCsv(h.remarks),
+        ].join(','),
+      ),
+    ];
+
+    return {
+      filename: `student-attendance-${st.rollNumber}-${timestamp}.csv`,
+      csv: lines.join('\r\n'),
+    };
+  }
+
+  async exportFacultySubjectCsv(
+    userId: string,
+    subjectId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<{ filename: string; csv: string }> {
+    const res = await this.getFacultySubjectRoster(userId, subjectId, startDate, endDate);
+    const faculty = await this.resolveFaculty(userId);
+    const sub = res.data.subject;
+    const roster = res.data.students;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    const lines: string[] = [
+      `"INCA FACULTY OVERALL SUBJECT ATTENDANCE ROSTER"`,
+      `"Faculty","Prof. ${faculty?.firstName || ''} ${faculty?.lastName || ''} (${faculty?.employeeCode || 'FAC'})"`,
+      `"Subject Code",${this.sanitizeCsv(sub.code)}`,
+      `"Subject Name",${this.sanitizeCsv(sub.name)}`,
+      `"Total Sessions Conducted",${this.sanitizeCsv(res.data.totalSessions)}`,
+      `"Total Students Evaluated",${this.sanitizeCsv(res.data.totalStudents)}`,
+      `"Average Attendance Rate (%)",${this.sanitizeCsv(res.data.averageAttendancePct)}`,
+      `"Students in Shortfall (<75%)",${this.sanitizeCsv(res.data.shortfallCount)}`,
+      '',
+      `"--- ENROLLED STUDENTS ATTENDANCE SUMMARY ---"`,
+      `"Roll Number","Student Name","Section","Classes Attended","Total Classes","Attendance (%)","Shortfall Status"`,
+      ...roster.map((r: any) =>
+        [
+          this.sanitizeCsv(r.student.rollNumber),
+          this.sanitizeCsv(r.student.name),
+          this.sanitizeCsv(r.student.sectionName),
+          this.sanitizeCsv(r.attended),
+          this.sanitizeCsv(r.totalClasses),
+          this.sanitizeCsv(r.percentage),
+          this.sanitizeCsv(r.isShortfall ? 'SHORTFALL (<75%)' : 'ELIGIBLE'),
+        ].join(','),
+      ),
+    ];
+
+    return {
+      filename: `subject-roster-${sub.code || subjectId}-${timestamp}.csv`,
+      csv: lines.join('\r\n'),
     };
   }
 }

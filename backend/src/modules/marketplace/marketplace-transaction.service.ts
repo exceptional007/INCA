@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { InitiateTransactionDto } from './dto/initiate-transaction.dto';
 import { VerifyHandoverDto } from './dto/verify-handover.dto';
+import { ConfirmScheduleDto } from './dto/confirm-schedule.dto';
 import {
   TransactionStatus,
   ListingStatus,
@@ -24,7 +25,7 @@ export class MarketplaceTransactionService {
   }
 
   private generate6DigitOtp(): string {
-    return crypto.randomInt(100000, 1000000).toString();
+    return crypto.randomInt(0, 1000000).toString().padStart(6, '0');
   }
 
   async initiateTransaction(buyerId: string, userRole: string, dto: InitiateTransactionDto) {
@@ -44,7 +45,11 @@ export class MarketplaceTransactionService {
       throw new ForbiddenException('This listing is restricted to faculty members only');
     }
 
-    if (listing.status === ListingStatus.SOLD || listing.status === ListingStatus.REMOVED || listing.status === ListingStatus.ARCHIVED) {
+    if (
+      listing.status === ListingStatus.SOLD ||
+      listing.status === ListingStatus.REMOVED ||
+      listing.status === ListingStatus.ARCHIVED
+    ) {
       throw new BadRequestException(`Listing is ${listing.status.toLowerCase()} and cannot be purchased`);
     }
 
@@ -53,7 +58,13 @@ export class MarketplaceTransactionService {
       where: {
         listingId: dto.listingId,
         buyerId,
-        status: { in: [TransactionStatus.INITIATED, TransactionStatus.PRICE_AGREED, TransactionStatus.HANDOVER_PENDING] },
+        status: {
+          in: [
+            TransactionStatus.INITIATED,
+            TransactionStatus.PRICE_AGREED,
+            TransactionStatus.HANDOVER_PENDING,
+          ],
+        },
       },
     });
 
@@ -70,10 +81,27 @@ export class MarketplaceTransactionService {
       if (offer && offer.buyerId === buyerId && offer.status === 'ACCEPTED') {
         agreedPrice = offer.counterAmount || offer.amount;
       }
+    } else {
+      // Check if an accepted offer exists for this buyer and listing
+      const acceptedOffer = await this.prisma.marketplaceOffer.findFirst({
+        where: {
+          listingId: dto.listingId,
+          buyerId,
+          status: 'ACCEPTED',
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (acceptedOffer) {
+        agreedPrice = acceptedOffer.counterAmount || acceptedOffer.amount;
+      }
     }
 
-    const otp = this.generate6DigitOtp();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const hasSchedule = Boolean(dto.location && dto.date && dto.time);
+    const initialStatus = hasSchedule
+      ? TransactionStatus.HANDOVER_PENDING
+      : TransactionStatus.PRICE_AGREED;
+    const otp = hasSchedule ? this.generate6DigitOtp() : null;
+    const expiresAt = hasSchedule ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
       const created = await tx.marketplaceTransaction.create({
@@ -82,10 +110,16 @@ export class MarketplaceTransactionService {
           buyerId,
           sellerId: listing.sellerId,
           agreedPrice,
-          status: TransactionStatus.HANDOVER_PENDING,
+          offerId: dto.offerId || null,
+          status: initialStatus,
+          handoverLocation: dto.location || listing.preferredLocation || 'Campus Center',
+          handoverDate: dto.date || null,
+          handoverTime: dto.time || null,
           handoverOtp: otp,
           handoverOtpExpiresAt: expiresAt,
           handoverOtpAttempts: 0,
+          buyerConfirmed: hasSchedule,
+          sellerConfirmed: false,
         },
         include: {
           listing: {
@@ -103,6 +137,7 @@ export class MarketplaceTransactionService {
               email: true,
               student: { select: { firstName: true, lastName: true, phone: true } },
               faculty: { select: { firstName: true, lastName: true, phone: true } },
+              adminProfile: { select: { name: true } },
             },
           },
           buyer: {
@@ -111,6 +146,7 @@ export class MarketplaceTransactionService {
               email: true,
               student: { select: { firstName: true, lastName: true, phone: true } },
               faculty: { select: { firstName: true, lastName: true, phone: true } },
+              adminProfile: { select: { name: true } },
             },
           },
         },
@@ -122,19 +158,154 @@ export class MarketplaceTransactionService {
       });
 
       return created;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     // Notify conversation
     this.addConversationSystemMessage(
       listing.id,
       buyerId,
       buyerId,
-      `Handover initiated. Agreed price: ₹${agreedPrice.toLocaleString('en-IN')}. Verify in-person with OTP on delivery.`,
+      hasSchedule
+        ? `Handover initiated. Agreed price: ₹${agreedPrice.toLocaleString('en-IN')}. Verify in-person with OTP on delivery.`
+        : `Deal created at agreed price: ₹${agreedPrice.toLocaleString('en-IN')}. Please confirm the handover date, time, and campus meeting location.`,
       'TRANSACTION_INITIATED',
       { transactionId: transaction.id, agreedPrice },
     );
 
-    return transaction;
+    return {
+      ...transaction,
+      handoverOtp: transaction.buyerId === buyerId ? transaction.handoverOtp : undefined,
+    };
+  }
+
+  async confirmSchedule(userId: string, transactionId: string, dto: ConfirmScheduleDto) {
+    const tx = await this.prisma.marketplaceTransaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        listing: true,
+      },
+    });
+
+    if (!tx) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    if (tx.buyerId !== userId && tx.sellerId !== userId) {
+      throw new ForbiddenException('Not authorized to schedule this transaction');
+    }
+
+    if (tx.status === TransactionStatus.COMPLETED || tx.status === TransactionStatus.CANCELLED) {
+      throw new BadRequestException(`Cannot schedule a ${tx.status.toLowerCase()} transaction`);
+    }
+
+    const isBuyer = tx.buyerId === userId;
+    const isSeller = tx.sellerId === userId;
+
+    const location = dto.location.trim();
+    const date = dto.date.trim();
+    const time = dto.time.trim();
+
+    // Check if the proposed meeting details are the same or changed
+    const detailsChanged =
+      tx.handoverLocation !== location ||
+      tx.handoverDate !== date ||
+      tx.handoverTime !== time;
+
+    const buyerConfirmed = isBuyer ? true : (detailsChanged ? false : tx.buyerConfirmed);
+    const sellerConfirmed = isSeller ? true : (detailsChanged ? false : tx.sellerConfirmed);
+
+    // If both confirmed or either party confirms the proposed arrangement
+    const bothConfirmed = buyerConfirmed && sellerConfirmed;
+    const newStatus = bothConfirmed ? TransactionStatus.HANDOVER_PENDING : TransactionStatus.PRICE_AGREED;
+
+    let otp = tx.handoverOtp;
+    let expiresAt = tx.handoverOtpExpiresAt;
+    let attempts = tx.handoverOtpAttempts;
+
+    if (bothConfirmed) {
+      if (!otp || detailsChanged) {
+        otp = this.generate6DigitOtp();
+        expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        attempts = 0;
+      }
+    } else if (detailsChanged) {
+      // Invalidate existing OTP if meeting details changed until re-confirmed
+      otp = null;
+      expiresAt = null;
+      attempts = 0;
+    }
+
+    const updated = await this.prisma.marketplaceTransaction.update({
+      where: { id: transactionId },
+      data: {
+        handoverLocation: location,
+        handoverDate: date,
+        handoverTime: time,
+        buyerConfirmed,
+        sellerConfirmed,
+        buyerConfirmedAt: isBuyer ? new Date() : tx.buyerConfirmedAt,
+        sellerConfirmedAt: isSeller ? new Date() : tx.sellerConfirmedAt,
+        status: newStatus,
+        handoverOtp: otp,
+        handoverOtpExpiresAt: expiresAt,
+        handoverOtpAttempts: attempts,
+      },
+      include: {
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            preferredLocation: true,
+            images: { take: 1, orderBy: { sortOrder: 'asc' } },
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            email: true,
+            student: { select: { firstName: true, lastName: true } },
+            faculty: { select: { firstName: true, lastName: true } },
+            adminProfile: { select: { name: true } },
+          },
+        },
+        buyer: {
+          select: {
+            id: true,
+            email: true,
+            student: { select: { firstName: true, lastName: true } },
+            faculty: { select: { firstName: true, lastName: true } },
+            adminProfile: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const userLabel = isSeller ? 'Seller' : 'Buyer';
+    if (bothConfirmed) {
+      this.addConversationSystemMessage(
+        tx.listingId,
+        tx.buyerId,
+        userId,
+        `Deal finalized! Meeting confirmed at ${location} on ${date} at ${time}. In-person verification OTP has been generated for the buyer.`,
+        'HANDOVER_SCHEDULED',
+        { transactionId, location, date, time },
+      );
+    } else {
+      this.addConversationSystemMessage(
+        tx.listingId,
+        tx.buyerId,
+        userId,
+        `${userLabel} proposed handover arrangement at ${location} on ${date} at ${time}. Awaiting confirmation from the other party.`,
+        'SCHEDULE_PROPOSED',
+        { transactionId, location, date, time },
+      );
+    }
+
+    return {
+      ...updated,
+      handoverOtp: tx.buyerId === userId ? updated.handoverOtp : undefined,
+    };
   }
 
   async getTransactionById(userId: string, transactionId: string) {
@@ -197,11 +368,8 @@ export class MarketplaceTransactionService {
       throw new NotFoundException('Transaction not found');
     }
 
-    const isSeller = tx.sellerId === userId;
-    const isBuyer = tx.buyerId === userId;
-
-    if (!isSeller && !isBuyer) {
-      throw new ForbiddenException('Not authorized to verify this transaction');
+    if (tx.sellerId !== userId) {
+      throw new ForbiddenException('Only the seller can verify the handover OTP');
     }
 
     if (tx.status === TransactionStatus.COMPLETED) {
@@ -212,21 +380,25 @@ export class MarketplaceTransactionService {
       throw new BadRequestException(`Cannot verify transaction in ${tx.status} status`);
     }
 
+    if (tx.listing.status === ListingStatus.SOLD) {
+      throw new BadRequestException('This product has already been sold');
+    }
+
     if (tx.handoverOtpAttempts >= 5) {
-      throw new BadRequestException('Too many failed OTP attempts. Please generate a new OTP.');
+      throw new BadRequestException('Too many failed OTP attempts (5/5). Please ask the buyer to regenerate a new OTP.');
     }
 
     if (!tx.handoverOtpExpiresAt || new Date() > tx.handoverOtpExpiresAt) {
-      throw new BadRequestException('Handover OTP has expired. Please request a new OTP.');
+      throw new BadRequestException('Handover OTP has expired. Please ask the buyer to request a new OTP.');
     }
 
     // Validate OTP match
-    if (tx.handoverOtp !== dto.otp.trim()) {
+    if (!tx.handoverOtp || tx.handoverOtp !== dto.otp.trim()) {
       await this.prisma.marketplaceTransaction.update({
         where: { id: transactionId },
         data: { handoverOtpAttempts: { increment: 1 } },
       });
-      throw new BadRequestException('Invalid OTP. Please check the code provided by the buyer.');
+      throw new BadRequestException('Invalid OTP. Please check the 6-digit code provided by the buyer.');
     }
 
     // OTP Verified! Dual confirmation and completion
@@ -238,10 +410,11 @@ export class MarketplaceTransactionService {
           status: TransactionStatus.COMPLETED,
           buyerConfirmed: true,
           sellerConfirmed: true,
-          buyerConfirmedAt: now,
+          buyerConfirmedAt: tx.buyerConfirmedAt || now,
           sellerConfirmedAt: now,
           completedAt: now,
           handoverOtp: null,
+          handoverOtpAttempts: 0,
         },
         include: {
           listing: true,
@@ -251,6 +424,7 @@ export class MarketplaceTransactionService {
               email: true,
               student: { select: { firstName: true, lastName: true } },
               faculty: { select: { firstName: true, lastName: true } },
+              adminProfile: { select: { name: true } },
             },
           },
           seller: {
@@ -259,6 +433,7 @@ export class MarketplaceTransactionService {
               email: true,
               student: { select: { firstName: true, lastName: true } },
               faculty: { select: { firstName: true, lastName: true } },
+              adminProfile: { select: { name: true } },
             },
           },
         },
@@ -273,15 +448,26 @@ export class MarketplaceTransactionService {
         },
       });
 
+      // Cancel any remaining pending offers for this listing
+      await prismaTx.marketplaceOffer.updateMany({
+        where: {
+          listingId: tx.listingId,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'CANCELLED',
+        },
+      });
+
       return updated;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     // Notify conversation
     this.addConversationSystemMessage(
       tx.listingId,
       tx.buyerId,
       userId,
-      `Handover verified successfully! Transaction is marked COMPLETED. Buyer can now leave a rating & review.`,
+      `Handover verified successfully! Order Received. ${tx.listing.title} is marked as SOLD.`,
       'TRANSACTION_COMPLETED',
       { transactionId: completedTx.id },
     );
@@ -302,8 +488,8 @@ export class MarketplaceTransactionService {
       throw new NotFoundException('Transaction not found');
     }
 
-    if (tx.buyerId !== userId && tx.sellerId !== userId) {
-      throw new ForbiddenException('Not authorized to regenerate OTP');
+    if (tx.buyerId !== userId) {
+      throw new ForbiddenException('Only the buyer can regenerate the handover OTP');
     }
 
     if (tx.status === TransactionStatus.COMPLETED || tx.status === TransactionStatus.CANCELLED) {
@@ -324,7 +510,7 @@ export class MarketplaceTransactionService {
 
     return {
       success: true,
-      handoverOtp: tx.buyerId === userId ? newOtp : undefined,
+      handoverOtp: newOtp,
       handoverOtpExpiresAt: expiresAt,
     };
   }
@@ -365,7 +551,7 @@ export class MarketplaceTransactionService {
       }
 
       return updated;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     this.addConversationSystemMessage(
       tx.listingId,
@@ -400,6 +586,7 @@ export class MarketplaceTransactionService {
               email: true,
               student: { select: { firstName: true, lastName: true } },
               faculty: { select: { firstName: true, lastName: true } },
+              adminProfile: { select: { name: true } },
             },
           },
           review: true,
@@ -424,6 +611,7 @@ export class MarketplaceTransactionService {
               email: true,
               student: { select: { firstName: true, lastName: true } },
               faculty: { select: { firstName: true, lastName: true } },
+              adminProfile: { select: { name: true } },
             },
           },
           review: true,
@@ -431,10 +619,43 @@ export class MarketplaceTransactionService {
       }),
     ]);
 
+    // Mask handoverOtp for sales to prevent seller from seeing buyer's code beforehand
+    const safeSales = sales.map((s) => ({
+      ...s,
+      handoverOtp: undefined,
+    }));
+
     return {
       purchases,
-      sales,
+      sales: safeSales,
     };
+  }
+
+  async findActiveTransaction(listingId: string, buyerId: string) {
+    return this.prisma.marketplaceTransaction.findFirst({
+      where: {
+        listingId,
+        buyerId,
+        status: {
+          in: [
+            TransactionStatus.INITIATED,
+            TransactionStatus.PRICE_AGREED,
+            TransactionStatus.HANDOVER_PENDING,
+          ],
+        },
+      },
+      include: {
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            preferredLocation: true,
+            images: { take: 1, orderBy: { sortOrder: 'asc' } },
+          },
+        },
+      },
+    });
   }
 
   private async addConversationSystemMessage(

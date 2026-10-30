@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import type { MarketplaceListing } from '@/types/marketplace';
-import { getMarketplaceImageUrl } from '@/services/marketplace';
+import { getMarketplaceImageUrl, marketplaceApi } from '@/services/marketplace';
 import {
   MapPin,
   Star,
@@ -17,6 +17,7 @@ import {
   ShoppingBag,
   Trash2,
   Check,
+  UserCheck,
 } from 'lucide-react';
 
 interface ListingDetailModalProps {
@@ -55,24 +56,61 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   onDeleteListing,
 }) => {
   const [selectedImgIndex, setSelectedImgIndex] = useState(0);
+  const [fullListing, setFullListing] = useState<MarketplaceListing | null>(listing);
+
+  useEffect(() => {
+    setFullListing(listing);
+    setSelectedImgIndex(0);
+    if (listing?.id && isOpen) {
+      marketplaceApi
+        .getListingById(listing.id)
+        .then((fresh) => {
+          if (fresh) setFullListing(fresh);
+        })
+        .catch(() => {});
+    }
+  }, [listing?.id, isOpen]);
 
   if (!listing) return null;
 
-  const isSeller = listing.sellerId === currentUserId;
-  const seller = listing.seller;
+  const current = fullListing || listing;
+  const isSeller = current.sellerId === currentUserId;
+
+  const seller = current.seller;
   const sellerName =
     seller?.student
       ? `${seller.student.firstName} ${seller.student.lastName || ''}`.trim()
       : seller?.faculty
       ? `${seller.faculty.firstName} ${seller.faculty.lastName || ''}`.trim()
-      : seller?.email || 'Campus Member';
+      : seller?.adminProfile?.name
+      ? seller.adminProfile.name
+      : seller?.email
+      ? seller.email.split('@')[0]
+      : (isSeller ? 'You (Seller)' : 'Campus Seller');
 
-  const sellerRoleBadge = seller?.student ? 'Student' : seller?.faculty ? 'Faculty' : 'Member';
+  const sellerRoleBadge = seller?.student ? 'Student' : seller?.faculty ? 'Faculty' : seller?.adminProfile ? 'Admin' : 'Seller';
   const departmentName =
     seller?.student?.department?.name || seller?.faculty?.department?.name || null;
 
-  const reputation = listing.sellerReputation;
-  const images = listing.images || [];
+  const activeTx = current.activeTransaction || current.transactions?.[0];
+  const buyer = current.buyer || activeTx?.buyer;
+  const buyerName =
+    buyer?.student
+      ? `${buyer.student.firstName} ${buyer.student.lastName || ''}`.trim()
+      : buyer?.faculty
+      ? `${buyer.faculty.firstName} ${buyer.faculty.lastName || ''}`.trim()
+      : buyer?.adminProfile?.name
+      ? buyer.adminProfile.name
+      : buyer?.email
+      ? buyer.email.split('@')[0]
+      : 'Campus Buyer';
+
+  const buyerRoleBadge = buyer?.student ? 'Student' : buyer?.faculty ? 'Faculty' : buyer?.adminProfile ? 'Admin' : 'Buyer';
+  const buyerDepartmentName =
+    buyer?.student?.department?.name || buyer?.faculty?.department?.name || null;
+
+  const reputation = current.sellerReputation;
+  const images = current.images || [];
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -86,7 +124,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                   src={getMarketplaceImageUrl(
                     images[selectedImgIndex].url || images[selectedImgIndex].storageKey,
                   )}
-                  alt={listing.title}
+                  alt={current.title}
                   onError={(e) => {
                     (e.currentTarget as HTMLElement).style.display = 'none';
                     const fallback = e.currentTarget.parentElement?.querySelector('.detail-img-fallback');
@@ -105,7 +143,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                 <span className="text-xs mt-2">No photo available</span>
               </div>
 
-              {listing.status === 'SOLD' && (
+              {current.status === 'SOLD' && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                   <Badge variant="destructive" className="text-base px-4 py-1 font-bold">
                     SOLD
@@ -155,9 +193,9 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <Badge variant="secondary" className="font-semibold text-xs">
-                  {CATEGORY_NAMES[listing.category] || listing.category}
+                  {CATEGORY_NAMES[current.category] || current.category}
                 </Badge>
-                {listing.visibility === 'FACULTY_ONLY' && (
+                {current.visibility === 'FACULTY_ONLY' && (
                   <Badge className="bg-amber-100 text-amber-800 border-amber-300">
                     Faculty & Staff Only
                   </Badge>
@@ -166,14 +204,14 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
 
               <div>
                 <h2 className="text-xl font-bold tracking-tight text-foreground leading-snug">
-                  {listing.title}
+                  {current.title}
                 </h2>
                 <div className="mt-2 flex items-baseline gap-2">
                   <span className="text-3xl font-extrabold text-foreground">
-                    ₹{listing.price.toLocaleString('en-IN')}
+                    ₹{current.price.toLocaleString('en-IN')}
                   </span>
                   <Badge variant="outline" className="text-xs uppercase font-medium">
-                    {listing.condition.replace('_', ' ')}
+                    {current.condition.replace('_', ' ')}
                   </Badge>
                 </div>
               </div>
@@ -184,51 +222,93 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                 <span>
                   Campus Handover:{' '}
                   <strong className="text-foreground">
-                    {listing.preferredLocation || 'Campus Center'}
+                    {current.preferredLocation || 'Campus Center'}
                   </strong>
                 </span>
               </div>
 
-              {/* Seller Profile Card */}
-              <div className="p-3.5 bg-card border rounded-xl shadow-xs">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  Seller Information
-                </div>
-                <div className="flex items-center justify-between">
+              {/* Profile Card: Buyer info if sold & viewed by seller, otherwise Seller info */}
+              {isSeller && current.status === 'SOLD' ? (
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl shadow-xs">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <UserCheck className="size-3.5 text-emerald-600" />
+                      Buyer Information (Sold To)
+                    </span>
+                    <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] font-semibold">
+                      Verified Buyer
+                    </Badge>
+                  </div>
                   <div className="flex items-center gap-3">
-                    <Avatar className="size-10 border">
-                      <AvatarFallback className="font-bold bg-primary/10 text-primary">
-                        {sellerName.substring(0, 2).toUpperCase()}
+                    <Avatar className="size-10 border border-emerald-300">
+                      <AvatarFallback className="font-bold bg-emerald-100 text-emerald-800">
+                        {buyerName.substring(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <div className="font-semibold text-sm flex items-center gap-1.5">
-                        {sellerName}
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {sellerRoleBadge}
+                      <div className="font-semibold text-sm flex items-center gap-1.5 text-foreground">
+                        {buyerName}
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-400 text-emerald-800 font-semibold">
+                          {buyerRoleBadge}
                         </Badge>
                       </div>
-                      {departmentName && (
-                        <div className="text-xs text-muted-foreground">{departmentName}</div>
+                      {buyerDepartmentName && (
+                        <div className="text-xs text-muted-foreground">{buyerDepartmentName}</div>
+                      )}
+                      {current.soldAt && (
+                        <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                          Sold on {new Date(current.soldAt).toLocaleDateString()}
+                        </div>
                       )}
                     </div>
                   </div>
-
-                  {reputation && (
-                    <div className="text-right">
-                      <div className="flex items-center justify-end gap-1 text-sm font-bold text-amber-600">
-                        <Star className="size-4 fill-amber-500 text-amber-500" />
-                        <span>
-                          {reputation.totalReviews > 0 ? reputation.averageRating : 'New'}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {reputation.completedSales} sales
+                </div>
+              ) : (
+                <div className="p-3.5 bg-card border rounded-xl shadow-xs">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between">
+                    <span>{isSeller ? 'Your Listing Information' : 'Seller Information'}</span>
+                    {current.status === 'SOLD' && (
+                      <Badge variant="outline" className="text-[10px] border-emerald-500 text-emerald-700">
+                        Sold
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="size-10 border">
+                        <AvatarFallback className="font-bold bg-primary/10 text-primary">
+                          {sellerName.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-semibold text-sm flex items-center gap-1.5">
+                          {sellerName}
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            {sellerRoleBadge}
+                          </Badge>
+                        </div>
+                        {departmentName && (
+                          <div className="text-xs text-muted-foreground">{departmentName}</div>
+                        )}
                       </div>
                     </div>
-                  )}
+
+                    {!isSeller && reputation && (
+                      <div className="text-right">
+                        <div className="flex items-center justify-end gap-1 text-sm font-bold text-amber-600">
+                          <Star className="size-4 fill-amber-500 text-amber-500" />
+                          <span>
+                            {reputation.totalReviews > 0 ? reputation.averageRating : 'New'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {reputation.completedSales} sales
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Description */}
               <div>
@@ -236,7 +316,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                   Description
                 </div>
                 <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                  {listing.description || 'No additional details provided.'}
+                  {current.description || 'No additional details provided.'}
                 </p>
               </div>
             </div>
@@ -245,9 +325,9 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             <div className="pt-6 border-t mt-6 space-y-2">
               {isSeller ? (
                 <div className="space-y-2">
-                  {listing.status !== 'SOLD' && onMarkSold && (
+                  {current.status !== 'SOLD' && onMarkSold && (
                     <Button
-                      onClick={() => onMarkSold(listing.id)}
+                      onClick={() => onMarkSold(current.id)}
                       className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                       <Check className="size-4" />
@@ -257,7 +337,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                   {onDeleteListing && (
                     <Button
                       variant="outline"
-                      onClick={() => onDeleteListing(listing.id)}
+                      onClick={() => onDeleteListing(current.id)}
                       className="w-full gap-2 text-destructive hover:bg-destructive/10"
                     >
                       <Trash2 className="size-4" />
@@ -267,22 +347,22 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {listing.status === 'ACTIVE' || listing.status === 'RESERVED' ? (
+                  {current.status === 'ACTIVE' || current.status === 'RESERVED' ? (
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         variant="outline"
-                        onClick={() => onOpenChat(listing)}
+                        onClick={() => onOpenChat(current)}
                         className="gap-2 font-semibold"
                       >
                         <MessageSquare className="size-4 text-primary" />
                         Chat & Negotiate
                       </Button>
                       <Button
-                        onClick={() => onInitiateBuy(listing)}
+                        onClick={() => onInitiateBuy(current)}
                         className="gap-2 font-semibold shadow-xs"
                       >
                         <ShoppingBag className="size-4" />
-                        Buy for ₹{listing.price.toLocaleString('en-IN')}
+                        Buy for ₹{current.price.toLocaleString('en-IN')}
                       </Button>
                     </div>
                   ) : (
@@ -293,7 +373,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
 
                   <div className="flex justify-end pt-1">
                     <button
-                      onClick={() => onReport(listing)}
+                      onClick={() => onReport(current)}
                       className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition"
                     >
                       <ShieldAlert className="size-3.5" />

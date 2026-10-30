@@ -341,7 +341,7 @@ describe('NotesService & AI Tutor Integration', () => {
       expect(result.totalQuestions).toBe(5);
       expect(result.score).toBe(80);
       expect(result.passed).toBe(true);
-      expect(result.review.find((r: any) => r.id === 'q4').isCorrect).toBe(false);
+      expect(result.review.find((r: any) => r.id === 'q4')?.isCorrect).toBe(false);
     });
   });
 });

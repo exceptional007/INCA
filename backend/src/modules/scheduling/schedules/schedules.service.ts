@@ -66,8 +66,13 @@ export class SchedulesService {
     };
   }
 
-  async getTodaySchedules(userId?: string, userRole?: string, queryFacultyId?: string): Promise<ApiResponse<any>> {
-    const today = new Date();
+  async getTodaySchedules(
+    userId?: string,
+    userRole?: string,
+    queryFacultyId?: string,
+    dateQuery?: string,
+  ): Promise<ApiResponse<any>> {
+    const today = dateQuery ? new Date(dateQuery) : new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -106,15 +111,15 @@ export class SchedulesService {
       schedules = await this.scheduleRepository.findByDateRange(utcToday, utcTomorrow, facultyId, sectionIds);
     }
 
-    // If still empty (e.g. weekend, holiday or no schedule on exact today), fall back to active schedules for this section/faculty
-    if (schedules.length === 0) {
+    // Only fallback to first 10 for students or if no specific date was queried and user is not faculty
+    if (schedules.length === 0 && !dateQuery && userRole !== 'FACULTY') {
       const allSchedules = await this.scheduleRepository.findAll(facultyId, sectionIds);
       schedules = allSchedules.slice(0, 10);
     }
 
     return {
       success: true,
-      message: 'Today\'s schedules retrieved successfully.',
+      message: 'Schedules retrieved successfully.',
       data: schedules,
     };
   }

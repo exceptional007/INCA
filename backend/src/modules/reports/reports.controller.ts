@@ -69,7 +69,7 @@ export class ReportsController {
   }
 
   @Get('export/csv')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'COORDINATOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'COORDINATOR', 'FACULTY')
   @ApiOperation({
     summary:
       'Export institutional analytics, student, subject, section, or faculty reports as CSV with formula-injection protection',
@@ -205,6 +205,122 @@ export class ReportsController {
     @Query('endDate') endDate?: string,
   ) {
     return this.reportsService.getFacultyReport(facultyId, startDate, endDate);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ── Faculty-Scoped Reports Endpoints ──────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  @Get('faculty-portal/context')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY')
+  @ApiOperation({
+    summary: 'Get assigned subjects and basic faculty metadata for the logged-in faculty',
+  })
+  getFacultyContext(@Req() req: any) {
+    return this.reportsService.getFacultyContext(req.user?.id);
+  }
+
+  @Get('faculty-portal/student-attendance')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY')
+  @ApiOperation({
+    summary: 'Search datewise attendance records of a student for the logged-in faculty',
+  })
+  @ApiQuery({ name: 'rollNumber', required: true })
+  @ApiQuery({ name: 'subjectId', required: false })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  getFacultyStudentAttendance(
+    @Req() req: any,
+    @Query('rollNumber') rollNumber: string,
+    @Query('subjectId') subjectId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getFacultyStudentAttendance(
+      req.user?.id,
+      rollNumber,
+      subjectId,
+      startDate,
+      endDate,
+    );
+  }
+
+  @Get('faculty-portal/subject-roster/:subjectId')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY')
+  @ApiOperation({
+    summary: 'Get overall attendance roster for all students in a subject taught by the logged-in faculty',
+  })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  getFacultySubjectRoster(
+    @Req() req: any,
+    @Param('subjectId') subjectId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getFacultySubjectRoster(
+      req.user?.id,
+      subjectId,
+      startDate,
+      endDate,
+    );
+  }
+
+  @Get('faculty-portal/export-student-csv')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY')
+  @ApiOperation({
+    summary: 'Export datewise attendance CSV for a student taught by the logged-in faculty',
+  })
+  @ApiQuery({ name: 'rollNumber', required: true })
+  @ApiQuery({ name: 'subjectId', required: false })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async exportFacultyStudentCsv(
+    @Req() req: any,
+    @Res() res: Response,
+    @Query('rollNumber') rollNumber: string,
+    @Query('subjectId') subjectId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const { filename, csv } = await this.reportsService.exportFacultyStudentCsv(
+      req.user?.id,
+      rollNumber,
+      subjectId,
+      startDate,
+      endDate,
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.status(200).send(csv);
+  }
+
+  @Get('faculty-portal/export-subject-csv')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'FACULTY')
+  @ApiOperation({
+    summary: 'Export overall subject roster CSV for a subject taught by the logged-in faculty',
+  })
+  @ApiQuery({ name: 'subjectId', required: true })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async exportFacultySubjectCsv(
+    @Req() req: any,
+    @Res() res: Response,
+    @Query('subjectId') subjectId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const { filename, csv } = await this.reportsService.exportFacultySubjectCsv(
+      req.user?.id,
+      subjectId,
+      startDate,
+      endDate,
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.status(200).send(csv);
   }
 }
 

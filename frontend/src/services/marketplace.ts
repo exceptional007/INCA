@@ -117,8 +117,11 @@ export const marketplaceApi = {
   uploadListingImages: async (listingId: string, files: File[]) => {
     const formData = new FormData();
     files.forEach((file) => formData.append('images', file));
-    // Let browser and Axios set Content-Type with the multipart boundary automatically
-    const res = await api.post(`/marketplace/listings/${listingId}/images`, formData);
+    const res = await api.post(`/marketplace/listings/${listingId}/images`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return res.data;
   },
 
@@ -178,7 +181,7 @@ export const marketplaceApi = {
   sendMessage: async (conversationId: string, content: string, messageType = 'TEXT', metadata?: any) => {
     const res = await api.post<MarketplaceMessage>(
       `/marketplace/conversations/${conversationId}/messages`,
-      { content, messageType, metadata },
+      { conversationId, content, messageType, metadata },
     );
     return res.data;
   },
@@ -212,11 +215,27 @@ export const marketplaceApi = {
   },
 
   // TRANSACTIONS & OTP
-  initiateTransaction: async (listingId: string, offerId?: string) => {
+  initiateTransaction: async (
+    listingId: string,
+    offerId?: string,
+    schedule?: { location?: string; date?: string; time?: string },
+  ) => {
     const res = await api.post<MarketplaceTransaction>('/marketplace/transactions', {
       listingId,
       offerId,
+      ...schedule,
     });
+    return res.data;
+  },
+
+  confirmSchedule: async (
+    transactionId: string,
+    data: { location: string; date: string; time: string },
+  ) => {
+    const res = await api.post<MarketplaceTransaction>(
+      `/marketplace/transactions/${transactionId}/schedule`,
+      data,
+    );
     return res.data;
   },
 

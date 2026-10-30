@@ -7,6 +7,7 @@ import { MatchingService } from './matching.service';
 import { ConflictService, ConflictDetail } from './conflict.service';
 import { CreateDraftSlotDto } from './dto/create-draft-slot.dto';
 import { UpdateDraftSlotDto } from './dto/update-draft-slot.dto';
+import { ensureCanvasPolyfills } from '../../../common/utils/canvas-polyfill';
 
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -58,6 +59,7 @@ export class TimetableImportService {
    */
   private async extractPageTexts(pdfBuffer: Buffer): Promise<string[]> {
     try {
+      ensureCanvasPolyfills();
       const pdfjsPath = require('path').join(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.mjs');
       const pdfjsWorkerPath = require('path').join(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs');
       
@@ -147,8 +149,19 @@ export class TimetableImportService {
     });
 
     // 5. Kick off extraction & matching asynchronously
-    this.runExtractionPipeline(batch.id, fileBuffer, fullRawText, pageTexts).catch((err) => {
+    this.runExtractionPipeline(batch.id, fileBuffer, fullRawText, pageTexts).catch(async (err) => {
       this.logger.error(`Background processing failed for batch ${batch.id}`, err);
+      try {
+        await this.prisma.timetableImportBatch.update({
+          where: { id: batch.id },
+          data: {
+            status: 'EXTRACTION_FAILED',
+            notes: `Pipeline failure: ${err.message || 'Unknown processing error'}`,
+          },
+        });
+      } catch (dbErr) {
+        this.logger.error(`Failed to update batch status to EXTRACTION_FAILED`, dbErr);
+      }
     });
 
     return {
@@ -234,6 +247,7 @@ export class TimetableImportService {
     this.logger.log('Rendering PDF pages to PNG...');
     let pngPages: any[] = [];
     try {
+      ensureCanvasPolyfills();
       const { pdfToPng } = await import('pdf-to-png-converter');
       pngPages = await pdfToPng(pdfBuffer, { viewportScale: 2.0 });
     } catch (err) {
@@ -866,6 +880,37 @@ export class TimetableImportService {
           const roomCache = new Map<string, string>();
           const sectionMap = new Map<string, any>(); // sectionId -> section entity with semester
           const sectionCodeMap = new Map<string, any>(); // cacheKey -> section entity with semester
+          const slotUpdatePromises: Promise<any>[] = [];
+
+          // Pre-populate section caches using a single bulk query to minimize transaction round-trips
+          const candidateSectionIds = Array.from(
+            new Set(slots.map((s) => s.matchedSectionId).filter((id): id is string => !!id)),
+          );
+          const candidateSectionCodes = Array.from(
+            new Set(slots.flatMap((s) => s.sectionCodes || []).map((c) => c.trim().toUpperCase())),
+          );
+
+          if (candidateSectionIds.length > 0 || candidateSectionCodes.length > 0) {
+            try {
+              const preloadedSections = await tx.section.findMany({
+                where: {
+                  OR: [
+                    ...(candidateSectionIds.length > 0 ? [{ id: { in: candidateSectionIds } }] : []),
+                    ...(candidateSectionCodes.length > 0 ? [{ name: { in: candidateSectionCodes } }] : []),
+                  ],
+                },
+                include: { semester: true },
+              });
+              for (const sec of preloadedSections) {
+                sectionMap.set(sec.id, sec);
+                const cKey = programId ? `${programId}:${sec.name.toUpperCase()}` : sec.name.toUpperCase();
+                sectionCodeMap.set(cKey, sec);
+                sectionCodeMap.set(sec.name.toUpperCase(), sec);
+              }
+            } catch {
+              // Non-blocking fallback to individual lookups
+            }
+          }
 
           for (const slot of slots) {
             // 1. Resolve Section
@@ -922,7 +967,7 @@ export class TimetableImportService {
 
                 sectionId = dbSec.id;
                 sectionCodeMap.set(cacheKey, dbSec);
-                sectionMap.set(sectionId, dbSec);
+                sectionMap.set(dbSec.id, dbSec);
               }
             }
 
@@ -985,7 +1030,7 @@ export class TimetableImportService {
                 }
 
                 subjectId = dbSub.id;
-                subjectCache.set(subClean, subjectId);
+                subjectCache.set(subClean, dbSub.id);
               }
             }
 
@@ -1020,7 +1065,7 @@ export class TimetableImportService {
                 }
 
                 facultyId = dbFac.id;
-                facultyCache.set(facClean, facultyId);
+                facultyCache.set(facClean, dbFac.id);
               }
             }
 
@@ -1069,7 +1114,7 @@ export class TimetableImportService {
                 }
 
                 roomId = dbRoom.id;
-                roomCache.set(roomCode, roomId);
+                roomCache.set(roomCode, dbRoom.id);
               }
             }
 
@@ -1086,16 +1131,23 @@ export class TimetableImportService {
 
             // Persist resolved IDs back into the draft record
             if (slot.id) {
-              await tx.timetableSlotDraft.update({
-                where: { id: slot.id },
-                data: {
-                  matchedSectionId: sectionId,
-                  matchedSubjectId: subjectId,
-                  matchedFacultyId: facultyId,
-                  matchedRoomId: roomId,
-                },
-              });
+              slotUpdatePromises.push(
+                tx.timetableSlotDraft.update({
+                  where: { id: slot.id },
+                  data: {
+                    matchedSectionId: sectionId,
+                    matchedSubjectId: subjectId,
+                    matchedFacultyId: facultyId,
+                    matchedRoomId: roomId,
+                  },
+                }),
+              );
             }
+          }
+
+          // Await any pending draft slot updates in parallel
+          if (slotUpdatePromises.length > 0) {
+            await Promise.all(slotUpdatePromises);
           }
 
           // Deactivate prior active versions for all superseded sections in targetSectionIds
@@ -1681,7 +1733,7 @@ export class TimetableImportService {
       session = await this.prisma.attendanceSession.create({
         data: {
           scheduleId: targetSchedule.id,
-          takenById: targetFacultyId,
+          takenById: targetFacultyId || '',
           attendanceDate: today,
           status: 'OPEN',
         },

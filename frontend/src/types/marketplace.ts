@@ -58,6 +58,9 @@ export interface SellerProfile {
     photoKey?: string | null;
     department?: { name: string; code: string } | null;
   } | null;
+  adminProfile?: {
+    name: string;
+  } | null;
 }
 
 export interface SellerReputation {
@@ -78,6 +81,7 @@ export interface MarketplaceListing {
   preferredLocation: string | null;
   sellerId: string;
   seller?: SellerProfile;
+  buyer?: SellerProfile | null;
   sellerReputation?: SellerReputation;
   images: MarketplaceImage[];
   createdAt: string;
@@ -85,6 +89,7 @@ export interface MarketplaceListing {
   soldAt?: string | null;
   sellerOffers?: MarketplaceOffer[] | null;
   activeTransaction?: MarketplaceTransaction | null;
+  transactions?: MarketplaceTransaction[];
   _count?: {
     offers: number;
     conversations: number;
@@ -103,8 +108,10 @@ export interface MarketplaceMessage {
   createdAt: string;
   sender?: {
     id: string;
-    student?: { firstName: string; lastName: string | null } | null;
-    faculty?: { firstName: string; lastName: string | null } | null;
+    email?: string;
+    student?: { firstName: string; lastName: string | null; photoKey?: string | null } | null;
+    faculty?: { firstName: string; lastName: string | null; photoKey?: string | null } | null;
+    adminProfile?: { name: string } | null;
   };
 }
 
@@ -121,6 +128,7 @@ export interface MarketplaceConversation {
     price: number;
     status: ListingStatus;
     preferredLocation?: string | null;
+    sellerId?: string;
     images: MarketplaceImage[];
   };
   buyer?: SellerProfile;
@@ -155,12 +163,18 @@ export interface MarketplaceTransaction {
   buyerId: string;
   sellerId: string;
   agreedPrice: number;
+  offerId?: string | null;
+  handoverLocation?: string | null;
+  handoverDate?: string | null;
+  handoverTime?: string | null;
   status: TransactionStatus;
   handoverOtp?: string | null;
   handoverOtpExpiresAt?: string | null;
   handoverOtpAttempts?: number;
   buyerConfirmed: boolean;
   sellerConfirmed: boolean;
+  buyerConfirmedAt?: string | null;
+  sellerConfirmedAt?: string | null;
   completedAt?: string | null;
   createdAt: string;
   listing?: MarketplaceListing;

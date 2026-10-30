@@ -24,7 +24,6 @@ import {
   LogOut,
   ShieldCheck,
   User as UserIcon,
-  Upload,
   LayoutGrid,
   Store,
   SearchCheck,
@@ -64,7 +63,7 @@ export function AppSidebar() {
       title: "Core Portal",
       items: [
         {
-          title: "Dashboard",
+          title: "ASSAM Dashboard",
           url: "/dashboard",
           icon: LayoutDashboard,
         },
@@ -109,12 +108,6 @@ export function AppSidebar() {
           url: "/academic",
           icon: Building2,
           roles: ["SUPER_ADMIN", "ADMIN", "HOD"],
-        },
-        {
-          title: "Timetable PDF Import",
-          url: "/academic/timetable-imports",
-          icon: Upload,
-          roles: ["ADMIN", "HOD"],
         },
       ],
     },
@@ -177,9 +170,6 @@ export function AppSidebar() {
             <div className="flex flex-col leading-none min-w-0">
               <span className="font-bold text-foreground text-sm tracking-tight flex items-center gap-1.5">
                 INCA
-                <span className="text-[10px] font-semibold text-primary px-1.5 py-0.5 rounded-full bg-primary/10">
-                  ASSAM
-                </span>
               </span>
               <span className="text-[10px] text-muted-foreground font-medium truncate mt-0.5">
                 Campus Automation

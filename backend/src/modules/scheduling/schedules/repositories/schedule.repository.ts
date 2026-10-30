@@ -81,7 +81,15 @@ export class ScheduleRepository {
       include: {
         template: {
           include: {
-            section: true,
+            section: {
+              include: {
+                semester: {
+                  include: {
+                    program: true,
+                  },
+                },
+              },
+            },
             subject: true,
             faculty: {
               include: {
@@ -105,7 +113,15 @@ export class ScheduleRepository {
       include: {
         template: {
           include: {
-            section: true,
+            section: {
+              include: {
+                semester: {
+                  include: {
+                    program: true,
+                  },
+                },
+              },
+            },
             subject: true,
             faculty: {
               include: {
@@ -141,7 +157,15 @@ export class ScheduleRepository {
       include: {
         template: {
           include: {
-            section: true,
+            section: {
+              include: {
+                semester: {
+                  include: {
+                    program: true,
+                  },
+                },
+              },
+            },
             subject: true,
             faculty: {
               include: {

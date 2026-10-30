@@ -1,6 +1,7 @@
 import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { PrismaModule } from './prisma/prisma.module';
+import { CacheModule } from './common/cache/cache.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AcademicModule } from './modules/academic/academic.module';
 import { StudentModule } from "./modules/student/student.module";
@@ -27,6 +28,7 @@ import { RequestLoggingMiddleware } from './common/middleware/request-logging.mi
       envFilePath: '.env',
     }),
     PrismaModule,
+    CacheModule,
     HealthModule,
     StorageModule,
     AuthModule,

@@ -17,6 +17,7 @@ import { useAuth } from '@/context/AuthContext';
 export const TimetableViewer: React.FC = () => {
   const { user } = useAuth();
   const isSuperAdmin = user?.role?.code === 'SUPER_ADMIN';
+  const canManageTimetable = ['SUPER_ADMIN', 'ADMIN', 'HOD'].includes(user?.role?.code || '');
 
   const [selectedSectionId, setSelectedSectionId] = useState<string>('');
   const [sectionDetails, setSectionDetails] = useState<any | null>(null);
@@ -176,7 +177,7 @@ export const TimetableViewer: React.FC = () => {
               </p>
             </div>
 
-            {!isSuperAdmin && (
+            {canManageTimetable && !isSuperAdmin && (
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <Button size="sm" onClick={() => setIsUploadOpen(true)} className="bg-primary text-primary-foreground">
                   <Upload className="w-4 h-4 mr-2" />
@@ -202,7 +203,7 @@ export const TimetableViewer: React.FC = () => {
               {activeDay} Sessions ({activeLectures.length})
             </span>
 
-            {!isSuperAdmin && (
+            {canManageTimetable && !isSuperAdmin && (
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"

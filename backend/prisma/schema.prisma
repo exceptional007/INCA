@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum Gender {
@@ -79,9 +80,6 @@ model User {
   createdPolls                        Poll[]                    @relation("PollCreator")
   pollParticipations                  PollParticipation[]       @relation("UserPollParticipations")
   pollAnswers                         PollAnswer[]              @relation("UserPollAnswers")
-  createdPolls           Poll[]                  @relation("PollCreator")
-  pollParticipations     PollParticipation[]     @relation("UserPollParticipations")
-  pollAnswers            PollAnswer[]            @relation("UserPollAnswers")
 
   @@index([roleId])
   @@index([isActive])
@@ -537,6 +535,8 @@ model AttendanceSession {
   @@index([activityId])
   @@index([takenById])
   @@index([attendanceDate])
+  @@index([status])
+  @@index([status, attendanceDate])
   @@map("attendance_sessions")
 }
 
@@ -1073,6 +1073,10 @@ model MarketplaceTransaction {
   seller               User               @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)
   agreedPrice          Float
   status               TransactionStatus  @default(INITIATED)
+  offerId              String?
+  handoverLocation     String?
+  handoverDate         String?
+  handoverTime         String?
   handoverOtp          String?
   handoverOtpExpiresAt DateTime?
   handoverOtpAttempts  Int                @default(0)

@@ -4,8 +4,10 @@ import {
   ForbiddenException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MemoryCacheService } from '../../common/cache/memory-cache.service';
 import { CreatePollDto } from './dto/create-poll.dto';
 import { SubmitVoteDto } from './dto/submit-vote.dto';
 import { QueryPollsDto, PollTabFilter } from './dto/query-polls.dto';
@@ -17,7 +19,10 @@ export const RETENTION_DAYS = 15;
 export class PollsService {
   private readonly logger = new Logger(PollsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cache?: MemoryCacheService,
+  ) {}
 
   private isAdmin(userRole: string): boolean {
     const role = (userRole || '').toUpperCase();
@@ -576,15 +581,17 @@ export class PollsService {
       data: answerRecords,
     });
 
-    // 3. Increment voteCount on options
-    for (const optId of submittedOptionIds) {
-      await this.prisma.pollOption.update({
-        where: { id: optId },
-        data: {
-          voteCount: { increment: 1 },
-        },
-      });
-    }
+    // 3. Increment voteCount on options concurrently
+    await Promise.all(
+      submittedOptionIds.map((optId) =>
+        this.prisma.pollOption.update({
+          where: { id: optId },
+          data: {
+            voteCount: { increment: 1 },
+          },
+        }),
+      ),
+    );
 
     this.logger.log(
       `User ${userId} voted in poll ${pollId} (Anonymous: ${poll.isAnonymous})`,
@@ -777,20 +784,26 @@ export class PollsService {
    * Get academic targeting scopes (departments, programs, semesters)
    */
   async getAcademicScopes() {
-    const departments = await this.prisma.department.findMany({
-      select: { id: true, name: true, code: true },
-      orderBy: { name: 'asc' },
-    });
+    const key = 'polls:academic-scopes';
+    const loader = async () => {
+      const [departments, programs] = await Promise.all([
+        this.prisma.department.findMany({
+          select: { id: true, name: true, code: true },
+          orderBy: { name: 'asc' },
+        }),
+        this.prisma.program.findMany({
+          select: { id: true, name: true, code: true, departmentId: true },
+          orderBy: { name: 'asc' },
+        }),
+      ]);
 
-    const programs = await this.prisma.program.findMany({
-      select: { id: true, name: true, code: true, departmentId: true },
-      orderBy: { name: 'asc' },
-    });
-
-    return {
-      departments,
-      programs,
-      semesters: [1, 2, 3, 4, 5, 6, 7, 8],
+      return {
+        departments,
+        programs,
+        semesters: [1, 2, 3, 4, 5, 6, 7, 8],
+      };
     };
+
+    return this.cache ? this.cache.getOrSet(key, 600, loader) : loader();
   }
 }

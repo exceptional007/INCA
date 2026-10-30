@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { RespondOfferDto, OfferAction } from './dto/respond-offer.dto';
-import { OfferStatus, ListingStatus, ListingVisibility } from '@prisma/client';
+import { OfferStatus, ListingStatus, ListingVisibility, TransactionStatus } from '@prisma/client';
 
 @Injectable()
 export class MarketplaceNegotiationService {
@@ -143,6 +143,14 @@ export class MarketplaceNegotiationService {
           throw new ForbiddenException('Only the seller can accept the buyer offer');
         }
 
+        if (
+          offer.listing.status === ListingStatus.SOLD ||
+          offer.listing.status === ListingStatus.ARCHIVED ||
+          offer.listing.status === ListingStatus.REMOVED
+        ) {
+          throw new BadRequestException('This listing is no longer available');
+        }
+
         const agreedPrice = offer.counterAmount && isBuyer ? offer.counterAmount : offer.amount;
 
         updatedOffer = await this.prisma.$transaction(async (tx) => {
@@ -157,15 +165,61 @@ export class MarketplaceNegotiationService {
             data: { status: ListingStatus.RESERVED },
           });
 
+          // Check if active transaction exists for (listingId, buyerId)
+          const existingTx = await tx.marketplaceTransaction.findFirst({
+            where: {
+              listingId: offer.listingId,
+              buyerId: offer.buyerId,
+              status: {
+                in: [
+                  TransactionStatus.INITIATED,
+                  TransactionStatus.PRICE_AGREED,
+                  TransactionStatus.HANDOVER_PENDING,
+                ],
+              },
+            },
+          });
+
+          if (existingTx) {
+            await tx.marketplaceTransaction.update({
+              where: { id: existingTx.id },
+              data: {
+                agreedPrice,
+                offerId: offer.id,
+                status: TransactionStatus.PRICE_AGREED,
+                buyerConfirmed: false,
+                sellerConfirmed: false,
+                handoverOtp: null,
+                handoverOtpAttempts: 0,
+              },
+            });
+          } else {
+            await tx.marketplaceTransaction.create({
+              data: {
+                listingId: offer.listingId,
+                buyerId: offer.buyerId,
+                sellerId: offer.sellerId,
+                agreedPrice,
+                offerId: offer.id,
+                status: TransactionStatus.PRICE_AGREED,
+                handoverLocation: offer.listing.preferredLocation || 'Campus Center',
+                buyerConfirmed: false,
+                sellerConfirmed: false,
+                handoverOtp: null,
+                handoverOtpAttempts: 0,
+              },
+            });
+          }
+
           return acc;
-        });
+        }, { maxWait: 15000, timeout: 30000 });
 
         // Add automated system message
         this.addConversationSystemMessage(
           offer.listingId,
           offer.buyerId,
           userId,
-          `Offer accepted at ₹${agreedPrice.toLocaleString('en-IN')}`,
+          `Offer accepted at ₹${agreedPrice.toLocaleString('en-IN')}. Please confirm the handover date, time, and campus meeting place to generate the handover OTP.`,
           'OFFER_ACCEPTED',
           { offerId: offer.id, agreedPrice },
         );

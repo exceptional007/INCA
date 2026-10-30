@@ -38,7 +38,7 @@ export function AppLayout() {
   const getBreadcrumbs = (): BreadcrumbEntry[] => {
     const path = location.pathname
     if (path === "/dashboard") {
-      return [{ label: "Dashboard", isCurrent: true }]
+      return [{ label: "ASSAM Dashboard", isCurrent: true }]
     }
     if (path === "/schedules") {
       return [{ label: "Timetables & Schedules", isCurrent: true }]

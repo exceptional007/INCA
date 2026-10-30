@@ -13,7 +13,6 @@ const SchedulingPage = lazy(() => import('./pages/scheduling/SchedulingPage').th
 const ActivitiesPage = lazy(() => import('./pages/activities/ActivitiesPage').then((m) => ({ default: m.ActivitiesPage })));
 const MarkAttendancePage = lazy(() => import('./pages/attendance/MarkAttendancePage').then((m) => ({ default: m.MarkAttendancePage })));
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
-const TimetableImportPage = lazy(() => import('./pages/academic/import/TimetableImportPage').then((m) => ({ default: m.TimetableImportPage })));
 const NotesPage = lazy(() => import('./pages/notes/NotesPage').then((m) => ({ default: m.NotesPage })));
 const MarketplacePage = lazy(() => import('./pages/marketplace/MarketplacePage').then((m) => ({ default: m.MarketplacePage })));
 const LostFoundPage = lazy(() => import('./pages/lost-found/LostFoundPage').then((m) => ({ default: m.LostFoundPage })));
@@ -82,14 +81,11 @@ export const App: React.FC = () => {
                     <Route path="/academic" element={<AcademicPage />} />
                   </Route>
 
-                  {/* Timetable PDF Import - ADMIN and HOD only (SUPER_ADMIN blocked) */}
+                  {/* Timetable PDF Import redirect to Timetables & Schedules */}
                   <Route
-                    element={
-                      <ProtectedRoute allowedRoles={['ADMIN', 'HOD']} />
-                    }
-                  >
-                    <Route path="/academic/timetable-imports" element={<TimetableImportPage />} />
-                  </Route>
+                    path="/academic/timetable-imports"
+                    element={<Navigate to="/schedules?tab=import" replace />}
+                  />
                 </Route>
               </Route>
 
