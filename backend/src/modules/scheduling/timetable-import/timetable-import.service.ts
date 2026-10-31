@@ -1159,11 +1159,24 @@ export class TimetableImportService {
             data: { isActive: false },
           });
 
-          // Commit as new versions for each section
+          // Commit as new versions for each section (sorted so primary cohort with most slots comes first)
           const uniqueSectionIds = Array.from(new Set(slots.map((s) => s.matchedSectionId).filter((s): s is string => !!s)));
+          uniqueSectionIds.sort((a, b) => {
+            const countA = slots.filter((s) => s.matchedSectionId === a).length;
+            const countB = slots.filter((s) => s.matchedSectionId === b).length;
+            return countB - countA;
+          });
+
           const createdVersions: any[] = [];
 
           for (const secId of uniqueSectionIds) {
+            const sectionSlots = slots.filter((s) => s.matchedSectionId === secId);
+            for (const s of sectionSlots) {
+              if (!s.matchedSubjectId || !s.matchedFacultyId || !s.matchedRoomId) {
+                throw new BadRequestException('All slot drafts must have resolved Subject, Faculty, and Room before approval.');
+              }
+            }
+
             const version = await tx.timetableVersion.create({
               data: {
                 sectionId: secId,
@@ -1171,14 +1184,10 @@ export class TimetableImportService {
                 importBatchId: id,
                 effectiveFrom: new Date(),
               },
+              include: {
+                section: true,
+              },
             });
-
-            const sectionSlots = slots.filter((s) => s.matchedSectionId === secId);
-            for (const s of sectionSlots) {
-              if (!s.matchedSubjectId || !s.matchedFacultyId || !s.matchedRoomId) {
-                throw new BadRequestException('All slot drafts must have resolved Subject, Faculty, and Room before approval.');
-              }
-            }
 
             // Bulk create all slots in a single fast query
             await tx.timetableSlot.createMany({
@@ -1197,7 +1206,10 @@ export class TimetableImportService {
               })),
             });
 
-            createdVersions.push(version);
+            createdVersions.push({
+              ...version,
+              slotCount: sectionSlots.length,
+            });
           }
 
           // Synchronize committed slots into ScheduleTemplate and generate daily schedules INSIDE THE ATOMIC TRANSACTION
@@ -1217,9 +1229,13 @@ export class TimetableImportService {
         },
       );
 
+      const primaryVersion = result?.[0];
       return {
         success: true,
         message: 'Timetable batch successfully approved and committed.',
+        primarySectionId: primaryVersion?.sectionId,
+        primarySectionName: primaryVersion?.section?.name,
+        totalSlots: result?.reduce((acc: number, v: any) => acc + (v.slotCount || 0), 0) || slots.length,
         versions: result,
       };
     } catch (txErr) {
@@ -1404,7 +1420,7 @@ export class TimetableImportService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return versions.map((v) => ({
+    const mapped = versions.map((v) => ({
       versionId: v.id,
       sectionId: v.sectionId,
       sectionName: v.section?.name,
@@ -1419,6 +1435,10 @@ export class TimetableImportService {
       departmentName: v.section?.semester?.program?.department?.name,
       effectiveFrom: v.effectiveFrom,
     }));
+
+    // Primary sort: highest slot count first (master cohort timetable before small sub-batch lab groups)
+    mapped.sort((a, b) => b.slotCount - a.slotCount);
+    return mapped;
   }
 
   async syncTimetableToSchedules(
