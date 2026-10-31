@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,6 +27,9 @@ export const AcademicConfigSelector: React.FC<AcademicConfigSelectorProps> = ({
   const [semesters, setSemesters] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
 
+  const [searchParams] = useSearchParams();
+  const urlSectionId = searchParams.get('sectionId');
+
   const [selectedDept, setSelectedDept] = useState<string>('');
   const [selectedProgram, setSelectedProgram] = useState<string>('');
   const [selectedSemester, setSelectedSemester] = useState<string>('');
@@ -45,14 +49,27 @@ export const AcademicConfigSelector: React.FC<AcademicConfigSelectorProps> = ({
       const configs = res.data.data || [];
       setActiveConfigs(configs);
 
-      // Automatically auto-select the first/primary active config if none is selected yet!
+      // Auto-select either the section specified in URL query param, or the primary active config (highest slot count)
       if (configs.length > 0 && !selectedSection) {
-        handleQuickSelect(configs[0]);
+        const targetCfg = urlSectionId
+          ? configs.find((c: any) => c.sectionId === urlSectionId) || configs[0]
+          : configs[0];
+        handleQuickSelect(targetCfg);
       }
     } catch (err) {
       console.error('Error fetching active timetable configs:', err);
     }
   };
+
+  // Re-sync if URL sectionId changes
+  useEffect(() => {
+    if (urlSectionId && activeConfigs.length > 0) {
+      const match = activeConfigs.find((c: any) => c.sectionId === urlSectionId);
+      if (match && match.sectionId !== selectedSection) {
+        handleQuickSelect(match);
+      }
+    }
+  }, [urlSectionId, activeConfigs]);
 
   const handleQuickSelect = async (cfg: any) => {
     if (!cfg) return;

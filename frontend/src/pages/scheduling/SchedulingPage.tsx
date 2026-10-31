@@ -32,8 +32,11 @@ export const SchedulingPage: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
 
-  const [startDate, setStartDate] = useState('2026-08-21');
-  const [endDate, setEndDate] = useState('2026-08-27');
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const monthLaterIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const [startDate, setStartDate] = useState(todayIso);
+  const [endDate, setEndDate] = useState(monthLaterIso);
   const [msg, setMsg] = useState<string | null>(null);
 
   // Demo Attendance Modal states

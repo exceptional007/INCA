@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,7 @@ import {
   Loader2,
   Cpu,
   FileText,
+  Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -45,6 +48,8 @@ export interface TimetableImportPageProps {
 }
 
 export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedded = false }) => {
+  const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [view, setView] = useState<'list' | 'upload' | 'review' | 'history'>('list');
   const [batches, setBatches] = useState<any[]>([]);
@@ -52,6 +57,10 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
   const [programs, setPrograms] = useState<any[]>([]);
   const [selectedProgramId, setSelectedProgramId] = useState<string>('');
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [successModalData, setSuccessModalData] = useState<any | null>(null);
+  const [approveError, setApproveError] = useState<string | null>(null);
+  const [discardBatchId, setDiscardBatchId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
   // Selection / Review Batch state
@@ -279,17 +288,20 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
 
   const handleApproveBatch = async () => {
     if (!selectedBatchId) return;
+    setApproveError(null);
     setIsApproveModalOpen(true);
   };
 
   const handleConfirmApprove = async () => {
     if (!selectedBatchId) return;
     if (!selectedProgramId) {
-      alert('Please select an academic program to link this timetable to.');
+      setApproveError('Please select an academic program to link this timetable to.');
+      toast.error('Please select an academic program to link this timetable to.');
       return;
     }
     setIsCommitLoading(true);
     setConflicts([]);
+    setApproveError(null);
     try {
       const res = await api.post(`/admin/timetable-imports/${selectedBatchId}/approve`, {
         programId: selectedProgramId,
@@ -299,9 +311,8 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
         setIsApproveModalOpen(false);
         const conflictCount = res.data.conflicts?.length || 0;
         const sampleDetails = res.data.conflicts?.slice(0, 3).map((c: any) => `• ${c.message}`).join('\n') || '';
-        alert(`Cannot approve timetable: ${res.data.message || 'Scheduling conflicts detected.'}\n\n${sampleDetails}${conflictCount > 3 ? `\n...and ${conflictCount - 3} more conflict(s).` : ''}\n\nPlease review and resolve conflicting slots on the review page.`);
+        toast.error(`Cannot approve timetable (${conflictCount} conflict(s)): ${sampleDetails}`);
       } else {
-        alert('Timetable batch successfully approved, linked to program, and scheduled!');
         setIsApproveModalOpen(false);
         // Authoritatively update selectedBatch status so review page reflects committed state
         setSelectedBatch((prev: any) => prev ? { ...prev, status: 'COMMITTED', committedAt: new Date().toISOString() } : null);
@@ -310,27 +321,46 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
         queryClient.invalidateQueries({ queryKey: ['reports'] });
         queryClient.invalidateQueries({ queryKey: ['attendance'] });
         queryClient.invalidateQueries({ queryKey: ['academic'] });
-        setView('list');
+
+        const primarySecId = res.data.primarySectionId || selectedBatch?.slots?.[0]?.matchedSectionId;
+        const primarySecName = res.data.primarySectionName || selectedBatch?.slots?.[0]?.matchedSection?.name || selectedBatch?.slots?.[0]?.sectionCodes?.[0] || 'C';
+        const selectedProg = programs.find((p) => p.id === selectedProgramId);
+
+        setSuccessModalData({
+          batchId: selectedBatchId,
+          primarySectionId: primarySecId,
+          primarySectionName: primarySecName,
+          totalSlots: res.data.totalSlots || selectedBatch?.slots?.length || 0,
+          programName: selectedProg ? `[${selectedProg.code}] ${selectedProg.name}` : 'Academic Program',
+        });
+        setIsSuccessModalOpen(true);
         await fetchBatches();
       }
     } catch (err: any) {
       console.error('Approval failed:', err);
-      alert(`Approval failed: ${err.response?.data?.message || err.message || 'Error occurred.'}`);
+      const errMsg = err.response?.data?.message || err.message || 'Error occurred during approval.';
+      setApproveError(errMsg);
+      toast.error(`Approval failed: ${errMsg}`);
     } finally {
       setIsCommitLoading(false);
     }
   };
 
   const handleDiscardBatch = async (batchId: string) => {
-    if (!window.confirm('Are you sure you want to discard this batch? All parsed drafts will be deleted.')) {
-      return;
-    }
+    setDiscardBatchId(batchId);
+  };
+
+  const handleConfirmDiscard = async () => {
+    if (!discardBatchId) return;
     try {
-      await api.post(`/admin/timetable-imports/${batchId}/discard`);
+      await api.post(`/admin/timetable-imports/${discardBatchId}/discard`);
+      setDiscardBatchId(null);
+      toast.success('Batch successfully discarded.');
       setView('list');
       fetchBatches();
     } catch (err) {
       console.error('Failed to discard batch', err);
+      toast.error('Failed to discard batch.');
     }
   };
 
@@ -692,6 +722,14 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Inline Error Banner */}
+            {approveError && (
+              <div className="flex items-start gap-2 bg-destructive/10 text-destructive border border-destructive/20 p-2.5 rounded-lg text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{approveError}</span>
+              </div>
+            )}
+
             {/* Program Selection Dropdown */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
@@ -788,6 +826,103 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
               className="bg-emerald-600 hover:bg-emerald-500 text-white"
             >
               {isCommitLoading ? 'Committing Schedule...' : 'Confirm & Schedule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Commitment Success Modal replacing native browser alert */}
+      <Dialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
+        <DialogContent className="sm:max-w-[460px]">
+          <div className="flex flex-col items-center text-center p-2">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-3 ring-8 ring-emerald-500/5">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <DialogTitle className="text-lg font-bold text-foreground">
+              Timetable Successfully Approved & Scheduled!
+            </DialogTitle>
+
+            <DialogDescription className="text-xs text-muted-foreground mt-1.5 max-w-sm">
+              The timetable has been verified and registered as the active semester version. Daily classroom lecture sessions have been generated automatically.
+            </DialogDescription>
+
+            {successModalData && (
+              <div className="w-full bg-secondary/40 rounded-xl p-3.5 border border-border mt-4 text-left space-y-2 text-xs">
+                <div className="flex justify-between items-center py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Academic Program:</span>
+                  <span className="font-semibold text-foreground text-right">{successModalData.programName}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Master Section:</span>
+                  <span className="font-bold text-primary font-mono">Section {successModalData.primarySectionName}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Total Slots Scheduled:</span>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 font-mono text-[11px] border-emerald-500/30">
+                    {successModalData.totalSlots} Lecture Slots
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-muted-foreground">Daily Session Sync:</span>
+                  <span className="text-emerald-600 font-medium flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" /> Synchronized Active
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2.5 w-full mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 text-xs"
+                onClick={() => {
+                  setIsSuccessModalOpen(false);
+                  setView('list');
+                }}
+              >
+                Close & View Imports
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                onClick={() => {
+                  setIsSuccessModalOpen(false);
+                  const targetSecId = successModalData?.primarySectionId;
+                  if (embedded) {
+                    setSearchParams(targetSecId ? { tab: 'schedules', sectionId: targetSecId } : {});
+                  } else {
+                    navigate(`/schedules${targetSecId ? `?sectionId=${targetSecId}` : ''}`);
+                  }
+                }}
+              >
+                <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                View Timetable in Schedules
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard Confirmation Dialog replacing native confirm */}
+      <Dialog open={!!discardBatchId} onOpenChange={(open) => !open && setDiscardBatchId(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-destructive">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              Discard Timetable Batch?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              Are you sure you want to discard this batch? All parsed drafts and slot records will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-3">
+            <Button variant="outline" size="sm" onClick={() => setDiscardBatchId(null)}>
+              Keep Batch
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleConfirmDiscard}>
+              Discard Permanently
             </Button>
           </DialogFooter>
         </DialogContent>
