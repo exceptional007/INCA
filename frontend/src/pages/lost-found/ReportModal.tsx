@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import React, { useState, useRef, useEffect } from 'react';
 import type { LostFoundCategory, LostFoundType, LostFoundReport } from '@/types/lost-found';
 import { lostFoundApi } from '@/services/lost-found';
 import {
@@ -68,6 +69,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    if (isOpen) setType(defaultType);
+  }, [isOpen, defaultType]);
+  useEffect(() => {
+    const urls = isOpen ? selectedFiles.map(file => URL.createObjectURL(file)) : [];
+    setPreviews(urls);
+    return () => urls.forEach(url => URL.revokeObjectURL(url));
+  }, [selectedFiles, isOpen]);
+
   if (!isOpen) return null;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,17 +85,12 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     const files = Array.from(e.target.files);
     const combined = [...selectedFiles, ...files].slice(0, 5); // max 5
     setSelectedFiles(combined);
-
-    // generate preview URLs
-    const newPreviews = combined.map((file) => URL.createObjectURL(file));
-    setPreviews(newPreviews);
+    e.target.value = '';
   };
 
   const removeFile = (index: number) => {
     const updatedFiles = selectedFiles.filter((_, i) => i !== index);
-    const updatedPreviews = previews.filter((_, i) => i !== index);
     setSelectedFiles(updatedFiles);
-    setPreviews(updatedPreviews);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,8 +144,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-      <div role="dialog" aria-modal="true" aria-label="Report" data-mobile-modal="true" className="bg-white rounded-2xl max-w-2xl w-full border border-border shadow-xl my-8 overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 bg-white rounded-2xl max-w-2xl w-full border border-border shadow-xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
+        <DialogTitle className="sr-only">Report</DialogTitle>
         {/* Header */}
         <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
@@ -365,13 +371,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             />
 
             {previews.length > 0 && (
-              <div className="grid grid-cols-5 gap-2 mb-3">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
                 {previews.map((preview, i) => (
                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
-                    <img src={preview} alt="upload preview" className="w-full h-full object-cover" />
+                    <img src={preview} alt={`Selected photo ${i + 1}`} className="w-full h-full object-cover" />
                     <button
                       type="button"
                       onClick={() => removeFile(i)}
+                      aria-label={`Remove photo ${i + 1}`}
                       className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white p-1 rounded-full opacity-90 transition-opacity"
                     >
                       <X className="w-3 h-3" />
@@ -442,8 +449,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

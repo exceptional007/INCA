@@ -1039,6 +1039,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
           className="p-3 border-t bg-background flex items-center gap-2 shrink-0"
         >
           <Input
+            aria-label="Marketplace message"
             placeholder={
               !effectiveConvId
                 ? "Initializing conversation..."
@@ -1052,6 +1053,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
           <Button
             type="submit"
             size="icon"
+            aria-label="Send marketplace message"
             disabled={
               sendingMsg || !inputMessage.trim() || !effectiveConvId || loading
             }

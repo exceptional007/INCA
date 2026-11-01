@@ -65,6 +65,7 @@ export const MarkAttendancePage: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
   const [editStatus, setEditStatus] = useState<'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'>('PRESENT');
   const [editReason, setEditReason] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTodaySchedules();
@@ -142,10 +143,12 @@ export const MarkAttendancePage: React.FC = () => {
   };
 
   const setStudentStatus = (studentId: string, status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED') => {
+    if (isSubmitting || activeSession?.status === 'SUBMITTED') return;
     setAttendanceMap((prev) => ({ ...prev, [studentId]: status }));
   };
 
   const bulkMarkAll = (status: 'PRESENT' | 'ABSENT') => {
+    if (isSubmitting || activeSession?.status === 'SUBMITTED') return;
     const updated: Record<string, any> = {};
     studentList.forEach((s) => (updated[s.id] = status));
     setAttendanceMap(updated);
@@ -163,7 +166,7 @@ export const MarkAttendancePage: React.FC = () => {
       }));
 
       // 1. Submit records
-      await api.post(`/attendance/sessions/${activeSession.id}/records`, { records });
+      const saved = await api.post(`/attendance/sessions/${activeSession.id}/records`, { records });
 
       // 2. Lock session
       await api.patch(`/attendance/sessions/${activeSession.id}/submit`);
@@ -174,7 +177,7 @@ export const MarkAttendancePage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
 
       setStatusMsg('✅ Attendance submitted and locked successfully!');
-      setActiveSession((prev: any) => ({ ...prev, status: 'SUBMITTED' }));
+      setActiveSession((prev: any) => ({ ...prev, status: 'SUBMITTED', records: saved.data.data }));
     } catch (err: any) {
       setStatusMsg(err.response?.data?.message || 'Failed to submit attendance');
     } finally {
@@ -185,13 +188,18 @@ export const MarkAttendancePage: React.FC = () => {
   const handleEditSubmittedRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRecord || !user) return;
+    if (!editReason.trim()) { setEditError('Enter a reason for this correction.'); return; }
     setIsSubmitting(true);
+    setEditError(null);
 
     try {
-      await api.patch(`/attendance/records/${editingRecord.id}/edit`, {
+      const response = await api.patch(`/attendance/records/${editingRecord.id}/edit`, {
         newStatus: editStatus,
-        reason: editReason,
+        reason: editReason.trim(),
       });
+      const updated = response.data.data.record;
+      setAttendanceMap(previous => ({ ...previous, [updated.studentId]: updated.status }));
+      setActiveSession((previous: any) => ({ ...previous, records: previous.records.map((record: any) => record.id === updated.id ? updated : record) }));
 
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
@@ -199,7 +207,7 @@ export const MarkAttendancePage: React.FC = () => {
       setStatusMsg(`✅ Record updated to ${editStatus} with audit entry!`);
       setAuditModalOpen(false);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Edit window expired or unauthorized.');
+      setEditError(err.response?.data?.message || 'Edit window expired or unauthorized.');
     } finally {
       setIsSubmitting(false);
     }
@@ -406,7 +414,7 @@ export const MarkAttendancePage: React.FC = () => {
                         key={student.id}
                         className="p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/30 transition-colors"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-sm overflow-hidden border border-border">
                             {student.photoKey ? (
                               <img
@@ -421,7 +429,7 @@ export const MarkAttendancePage: React.FC = () => {
                               `${student.firstName[0]}${student.lastName ? student.lastName[0] : ''}`
                             )}
                           </div>
-                          <div>
+                          <div className="min-w-0 break-words">
                             <h4 className="font-semibold text-sm">
                               {student.firstName} {student.lastName || ''}
                             </h4>
@@ -433,7 +441,7 @@ export const MarkAttendancePage: React.FC = () => {
 
                         {/* Quick Status Buttons */}
                         {activeSession?.status !== 'SUBMITTED' ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => setStudentStatus(student.id, 'PRESENT')}
@@ -485,8 +493,14 @@ export const MarkAttendancePage: React.FC = () => {
                             <Button
                               size="sm"
                               variant="ghost"
+                              disabled={isSubmitting || !activeSession.records?.some((record: any) => record.studentId === student.id)}
                               onClick={() => {
-                                setEditingRecord({ id: `rec-${student.id}`, student });
+                                const record = activeSession.records?.find((record: any) => record.studentId === student.id);
+                                if (!record) return;
+                                setEditingRecord({ ...record, student });
+                                setEditStatus(record.status);
+                                setEditReason('');
+                                setEditError(null);
                                 setAuditModalOpen(true);
                               }}
                               className="h-7 px-2 text-xs"
@@ -530,6 +544,7 @@ export const MarkAttendancePage: React.FC = () => {
           </DialogHeader>
           
           <form onSubmit={handleEditSubmittedRecord} className="space-y-6 pt-2">
+            {editError && <p role="alert" className="text-sm text-destructive">{editError}</p>}
             <div className="space-y-2">
               <Label>New Status</Label>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -538,6 +553,7 @@ export const MarkAttendancePage: React.FC = () => {
                     key={st}
                     type="button"
                     onClick={() => setEditStatus(st)}
+                    aria-pressed={editStatus === st}
                     className={`py-2 text-xs font-medium rounded-md border transition-all ${
                       editStatus === st
                         ? 'bg-primary text-primary-foreground border-primary'

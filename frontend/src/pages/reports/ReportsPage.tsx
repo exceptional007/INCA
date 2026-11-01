@@ -34,6 +34,10 @@ export const ReportsPage: React.FC = () => {
     return <FacultyReportsWorkspace />;
   }
 
+  return <InstitutionalReportsWorkspace />;
+};
+
+const InstitutionalReportsWorkspace: React.FC = () => {
   const [reportType, setReportType] = useState<ReportType>('overview');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [selectedEntityId, setSelectedEntityId] = useState<string>('');

@@ -1,5 +1,5 @@
 // Loaded exclusively by mobile-preview-server.mjs, never by the production app.
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,14 +9,17 @@ import { listing, report, claim, poll, note, notice, overview, reportDetail } fr
 
 const cases = {
   'listing-detail': ['../src/pages/marketplace/ListingDetailModal.tsx', 'ListingDetailModal'],
+  'create-listing': ['../src/pages/marketplace/CreateListingModal.tsx', 'CreateListingModal'],
   'chat': ['../src/pages/marketplace/ChatDealModal.tsx', 'ChatDealModal'],
   'listing-report': ['../src/pages/marketplace/ReportModal.tsx', 'ReportModal'],
   'review': ['../src/pages/marketplace/ReviewModal.tsx', 'ReviewModal'],
   'lost-detail': ['../src/pages/lost-found/ItemDetailModal.tsx', 'ItemDetailModal'],
+  'create-report': ['../src/pages/lost-found/ReportModal.tsx', 'ReportModal'],
   'claim': ['../src/pages/lost-found/ClaimModal.tsx', 'ClaimModal'],
   'handover': ['../src/pages/lost-found/HandoverVerifyModal.tsx', 'HandoverVerifyModal'],
   'matches': ['../src/pages/lost-found/AiMatchesModal.tsx', 'AiMatchesModal'],
   'vote': ['../src/pages/polls/components/VoteModal.tsx', 'VoteModal'],
+  'create-poll': ['../src/pages/polls/components/CreatePollModal.tsx', 'CreatePollModal'],
   'results': ['../src/pages/polls/components/PollResultsModal.tsx', 'PollResultsModal'],
   'voters': ['../src/pages/polls/components/VoterReportModal.tsx', 'VoterReportModal'],
   'upload-note': ['../src/pages/notes/components/UploadNoteModal.tsx', 'UploadNoteModal'],
@@ -27,6 +30,7 @@ const cases = {
   'tutor': ['../src/pages/notes/components/AITutorModal.tsx', 'AITutorModal'],
   'quiz': ['../src/pages/notes/components/AIQuizModal.tsx', 'AIQuizModal'],
   'notice-detail': ['../src/pages/notices/NoticeDetailModal.tsx', 'NoticeDetailModal'],
+  'create-notice': ['../src/pages/notices/CreateNoticeModal.tsx', 'CreateNoticeModal'],
   'notice-analytics': ['../src/pages/notices/NoticeAnalyticsModal.tsx', 'NoticeAnalyticsModal'],
   'notice-review': ['../src/pages/notices/NoticeReviewDialog.tsx', 'NoticeReviewDialog'],
   'lecture': ['../src/components/timetable/AddEditLectureModal.tsx', 'AddEditLectureModal'],
@@ -37,6 +41,7 @@ const cases = {
   'report-subject': ['../src/pages/reports/SubjectReportView.tsx', 'SubjectReportView'],
   'report-faculty': ['../src/pages/reports/FacultyReportView.tsx', 'FacultyReportView'],
   'attendance-swipe': ['../src/components/attendance/CardSwipeAttendance.tsx', 'CardSwipeAttendance'],
+  'attendance-demo': ['../src/components/timetable/DemoAttendanceModal.tsx', 'DemoAttendanceModal'],
   'import-review': ['../src/pages/academic/import/components/TimetableReviewGrid.tsx', 'TimetableReviewGrid'],
   'import-history': ['../src/pages/academic/import/components/TimetableVersionHistory.tsx', 'TimetableVersionHistory'],
 };
@@ -50,4 +55,17 @@ const props = { isOpen: true, onClose: noop, onSuccess: noop, onCreated: noop, o
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 Object.assign(props, { data: name === 'reports-overview' ? overview : reportDetail, onBack: noop, onDrillDownSubject: noop, onDrillDownSection: noop, studentList: [{ id: 'demo-student', firstName: 'Aarav', lastName: 'Sharma', rollNumber: 'CSE-2026-001', collegeId: 'CSE-2026-001' }], attendanceMap: {}, onMarkStatus: noop, onSubmit: noop });
 Object.assign(props, { defaultDay: 'Monday', action: 'reject', onReviewed: noop, slots: [], sections: [], conflicts: [], onUpdateSlot: async () => {}, onAddSlot: async () => {}, onDeleteSlot: async () => {} });
-createRoot(document.getElementById('root')!).render(<QueryClientProvider client={client}><AuthProvider><BrowserRouter><main className="p-3 min-w-0"><Component {...props} /></main></BrowserRouter></AuthProvider></QueryClientProvider>);
+function InteractivePreview() {
+  const [open, setOpen] = useState(!new URLSearchParams(location.search).has('interactive'));
+  const [attendanceMap, setAttendanceMap] = useState({});
+  const [locked, setLocked] = useState(false);
+  const [events, setEvents] = useState<string[]>([]);
+  const students = ['Aarav Sharma', 'Diya Patel', 'Rohan Verma', 'Ananya Chandrasekhar Venkataraman'].map((fullName, i) => ({ id: `demo-student-${i + 1}`, firstName: fullName.split(' ')[0], lastName: fullName.split(' ').slice(1).join(' '), rollNumber: `CSE-2026-00${i + 1}`, collegeId: `INCA-ENGINEERING-2026-00${i + 1}` }));
+  const record = (event: string) => setEvents(previous => [...previous, event]);
+  return <main className="p-3 min-w-0">
+    {!open && <button onClick={() => setOpen(true)}>Reopen preview</button>}
+    {(open || name === 'attendance-swipe') && <Component {...props} open={open} isOpen={open} onOpenChange={setOpen} onClose={() => setOpen(false)} onSuccess={() => record('Saved')} onCreated={() => { record('Created'); setOpen(false); }} onReviewed={() => record('Reviewed')} onVoted={() => { record('Voted'); setOpen(false); }} studentList={students} attendanceMap={attendanceMap} onMarkStatus={(id: string, status: string) => { setAttendanceMap(previous => ({ ...previous, [id]: status })); record(`${id}:${status}`); }} isLocked={locked} onSubmit={() => { setLocked(true); record('Submitted'); }} />}
+    <output aria-label="Local interaction results" className="sr-only">{JSON.stringify({ attendanceMap, locked, events })}</output>
+  </main>;
+}
+createRoot(document.getElementById('root')!).render(<QueryClientProvider client={client}><AuthProvider><BrowserRouter><InteractivePreview /></BrowserRouter></AuthProvider></QueryClientProvider>);

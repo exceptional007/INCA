@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -154,8 +155,9 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div role="dialog" aria-modal="true" aria-label="Create Poll" data-mobile-modal="true" className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 max-h-[calc(100dvh-2rem)] flex flex-col">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 max-h-[calc(100dvh-2rem)] flex flex-col">
+        <DialogTitle className="sr-only">Create Poll</DialogTitle>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800 shrink-0">
           <div>
@@ -169,6 +171,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close dialog"
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <X className="h-5 w-5" />
@@ -243,11 +246,13 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
                     value={opt}
                     onChange={(e) => handleOptionChange(idx, e.target.value)}
                     placeholder={`Option ${idx + 1}`}
+                    aria-label={`Poll option ${idx + 1}`}
                     className="flex-1 rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
                   />
                   {options.length > 2 && (
                     <button
                       type="button"
+                      aria-label={`Remove option ${idx + 1}`}
                       onClick={() => handleRemoveOption(idx)}
                       className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
                     >
@@ -522,7 +527,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
             {isSubmitting ? 'Publishing...' : 'Publish Poll'}
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

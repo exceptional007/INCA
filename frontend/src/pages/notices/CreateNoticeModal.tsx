@@ -217,6 +217,20 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
       setError("Please provide announcement body text");
       return;
     }
+    const publicationTime = isScheduled && publishAtDate
+      ? new Date(`${publishAtDate}T${publishAtTime}:00`).getTime()
+      : Date.now();
+    if (!isDraft && isScheduled && (!publishAtDate || !Number.isFinite(publicationTime) || publicationTime <= Date.now())) {
+      setError("Choose a future publication date and time.");
+      return;
+    }
+    const expiryTime = hasExpiry && expiresAtDate
+      ? new Date(`${expiresAtDate}T${expiresAtTime}:00`).getTime()
+      : null;
+    if (hasExpiry && ((!isDraft && !expiresAtDate) || (expiresAtDate && (expiryTime === null || !Number.isFinite(expiryTime) || expiryTime <= publicationTime)))) {
+      setError("Choose an expiry date and time after publication.");
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -617,9 +631,10 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 </div>
 
                 {isScheduled && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     <Input
                       type="date"
+                      aria-label="Publication date"
                       value={publishAtDate}
                       onChange={(e) => setPublishAtDate(e.target.value)}
                       className="h-8 text-xs"
@@ -627,6 +642,7 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                     />
                     <Input
                       type="time"
+                      aria-label="Publication time"
                       value={publishAtTime}
                       onChange={(e) => setPublishAtTime(e.target.value)}
                       className="h-8 text-xs"
@@ -652,9 +668,10 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 </div>
 
                 {hasExpiry && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     <Input
                       type="date"
+                      aria-label="Expiry date"
                       value={expiresAtDate}
                       onChange={(e) => setExpiresAtDate(e.target.value)}
                       className="h-8 text-xs"
@@ -662,6 +679,7 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                     />
                     <Input
                       type="time"
+                      aria-label="Expiry time"
                       value={expiresAtTime}
                       onChange={(e) => setExpiresAtTime(e.target.value)}
                       className="h-8 text-xs"

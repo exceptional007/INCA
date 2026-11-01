@@ -392,7 +392,7 @@ export const FacultyNotesView: React.FC = () => {
 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="size-7">
+                              <Button variant="ghost" size="icon" className="size-7" aria-label={`Actions for ${note.title}`}>
                                 <MoreVertical className="size-3.5" />
                               </Button>
                             </DropdownMenuTrigger>

@@ -413,6 +413,7 @@ export const AIQuizModal: React.FC<AIQuizModalProps> = ({
                       key={count}
                       type="button"
                       onClick={() => setQuestionCount(count)}
+                      aria-pressed={questionCount === count}
                       className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all ${
                         questionCount === count
                           ? "bg-primary text-primary-foreground border-primary shadow-xs"
@@ -436,6 +437,7 @@ export const AIQuizModal: React.FC<AIQuizModalProps> = ({
                       key={diff}
                       type="button"
                       onClick={() => setDifficulty(diff)}
+                      aria-pressed={difficulty === diff}
                       className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all capitalize ${
                         difficulty === diff
                           ? "bg-primary text-primary-foreground border-primary shadow-xs"
@@ -457,6 +459,7 @@ export const AIQuizModal: React.FC<AIQuizModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setQuestionType("MULTIPLE_CHOICE")}
+                    aria-pressed={questionType === "MULTIPLE_CHOICE"}
                     className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all ${
                       questionType === "MULTIPLE_CHOICE"
                         ? "bg-primary text-primary-foreground border-primary shadow-xs"
@@ -468,6 +471,7 @@ export const AIQuizModal: React.FC<AIQuizModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setQuestionType("TRUE_FALSE")}
+                    aria-pressed={questionType === "TRUE_FALSE"}
                     className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all ${
                       questionType === "TRUE_FALSE"
                         ? "bg-primary text-primary-foreground border-primary shadow-xs"
@@ -558,6 +562,7 @@ export const AIQuizModal: React.FC<AIQuizModalProps> = ({
                         key={idx}
                         type="button"
                         onClick={() => handleSelectOption(currentQ.id, option)}
+                        aria-pressed={isSelected}
                         className={`w-full text-left p-3.5 rounded-xl border text-xs leading-relaxed transition-all flex items-center justify-between ${
                           isSelected
                             ? "bg-primary/10 border-primary text-primary font-semibold shadow-xs"

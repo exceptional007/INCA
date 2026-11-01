@@ -1,6 +1,7 @@
 // Local-only layout fixtures. No .env, database, mail, storage, or production API.
 import { fileURLToPath } from 'node:url';
-import { notice, listing, report, poll, note, overview } from './layout-fixtures.mjs';
+import { notice, listing, report, poll, note, overview, reportDetail } from './layout-fixtures.mjs';
+import { interactionResponse, resetInteractions } from './interaction-fixtures.mjs';
 process.env.VITE_API_URL = '/api/v1';
 process.env.VITE_AUTH_API_URL = '/api/v1';
 const { createServer } = await import('vite');
@@ -22,6 +23,7 @@ const server = await createServer({
         return;
       }
       if (url.pathname === '/__fixture') {
+        resetInteractions(url.searchParams.get('failNext') || '');
         role = roles.has(url.searchParams.get('role')) ? url.searchParams.get('role') : 'ADMIN';
         const destination = url.searchParams.get('page') || '/hub';
         res.setHeader('Content-Type', 'text/html');
@@ -35,6 +37,7 @@ const server = await createServer({
       const path = url.pathname.replace('/api/v1', '');
       if (path === '/auth/me') return send({ success: true, data: { ...user(), role } });
       if (path === '/auth/refresh') { res.statusCode = 401; return send({ message: 'Local fixture: signed out' }); }
+      if (await interactionResponse(req, res, path, send, role)) return;
       // Mutations deliberately never leave localhost or change stored data.
       if (req.method !== 'GET' && req.method !== 'HEAD') return send({ success: true, data: [] });
       if (path === '/profile') return send({ id: 'layout-demo', email: user().email, role, roleName: role, values: { firstName: 'Aarav', lastName: 'Sharma', phone: '+91 98765 43210', address: 'Campus residence, Computer Science department' }, revision: 'layout-revision', editableFields: ['firstName', 'lastName', 'phone', 'address'], department, academic: { program: 'B.Tech Computer Science and Engineering', semester: '6' }, joinedAt: '2026-01-01T00:00:00Z' });
@@ -58,6 +61,7 @@ const server = await createServer({
       if (path.startsWith('/marketplace') || path.startsWith('/lost-found') || path.startsWith('/polls')) return send([]);
       if (path === '/reports/filter-options') return send({ success: true, data: { departments: [department], students: [], faculty: [], subjects: [], sections: [] } });
       if (path.startsWith('/reports/analytics')) return send({ success: true, data: overview });
+      if (/^\/reports\/(student|subject|section|faculty)\//.test(path)) return send({ success: true, data: reportDetail });
       if (path === '/academic/departments') return send({ success: true, data: [department] });
       return send({ success: true, data: [] });
     });

@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React from 'react';
 import type { LostFoundMatch } from '@/types/lost-found';
 import { lostFoundApi } from '@/services/lost-found';
@@ -47,8 +48,9 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-      <div role="dialog" aria-modal="true" aria-label="Ai Matches" data-mobile-modal="true" className="bg-white rounded-2xl max-w-3xl w-full border border-border shadow-xl my-8 overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 bg-white rounded-2xl max-w-3xl w-full border border-border shadow-xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
+        <DialogTitle className="sr-only">Ai Matches</DialogTitle>
         {/* Header */}
         <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
@@ -246,8 +248,8 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
             })
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

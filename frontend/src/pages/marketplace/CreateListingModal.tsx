@@ -337,6 +337,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   <button
                     type="button"
                     onClick={() => removeImage(i)}
+                    aria-label={`Remove photo ${i + 1}`}
                     className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white rounded-full p-1 transition"
                   >
                     <X className="size-3" />
@@ -361,7 +362,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
           </div>
 
           <DialogFooter className="pt-3">
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">

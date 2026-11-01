@@ -180,12 +180,8 @@
   overscroll-behavior: contain;
   overflow-wrap: anywhere;
 }
-[data-mobile-modal] {
-  min-width: 0;
-  max-height: calc(100dvh - 2rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  overflow-wrap: anywhere;
+[data-has-close-button] > [data-dialog-header] {
+  padding-inline-end: max(2.75rem, env(safe-area-inset-right, 0px));
 }
 @media (min-width: 640px) {
   [data-responsive-dialog] {

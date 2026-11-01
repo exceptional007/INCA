@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React, { useState } from 'react';
 import { X, Shield, UserCheck, AlertCircle, Check } from 'lucide-react';
 import { pollsApi } from '@/services/polls';
@@ -64,8 +65,9 @@ export const VoteModal: React.FC<VoteModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div role="dialog" aria-modal="true" aria-label="Vote" data-mobile-modal="true" className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
+        <DialogTitle className="sr-only">Vote</DialogTitle>
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800">
           <div className="flex items-center gap-2">
@@ -79,6 +81,7 @@ export const VoteModal: React.FC<VoteModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close dialog"
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <X className="h-5 w-5" />
@@ -139,10 +142,13 @@ export const VoteModal: React.FC<VoteModalProps> = ({
               const isSelected = selectedOptionIds.includes(option.id);
 
               return (
-                <div
+                <button
                   key={option.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  disabled={isSubmitting}
                   onClick={() => handleSelect(option.id)}
-                  className={`group flex items-center justify-between rounded-xl border p-3.5 cursor-pointer transition-all duration-200 select-none ${
+                  className={`group flex w-full text-left items-center justify-between rounded-xl border p-3.5 cursor-pointer transition-all duration-200 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     isSelected
                       ? 'border-blue-600 bg-blue-50/60 shadow-sm dark:border-blue-500 dark:bg-blue-950/30'
                       : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60'
@@ -170,7 +176,7 @@ export const VoteModal: React.FC<VoteModalProps> = ({
                       {option.text}
                     </span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -193,8 +199,8 @@ export const VoteModal: React.FC<VoteModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

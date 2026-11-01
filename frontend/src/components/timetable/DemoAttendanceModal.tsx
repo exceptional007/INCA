@@ -249,13 +249,13 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
 
           {/* Live Attendance Stats Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-3 rounded-lg border border-border">
-            <div className="flex items-center gap-4 text-xs">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
               <div>
                 <span className="text-muted-foreground text-[11px] block">Present Rate</span>
                 <span className="text-base font-bold text-emerald-500">{presentRate}%</span>
               </div>
               <div className="h-7 w-[1px] bg-border" />
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
                   {presentCount} Present
                 </Badge>
@@ -360,7 +360,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                   return (
                     <div
                       key={student.id}
-                      className="p-3 flex items-center justify-between gap-3 hover:bg-secondary/30 transition-colors"
+                      className="p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-secondary/30 transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0 border border-primary/20">
@@ -371,7 +371,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                           <div className="font-semibold text-xs text-foreground">
                             {student.firstName} {student.lastName || ''}
                           </div>
-                          <div className="text-[10px] text-muted-foreground font-mono flex items-center gap-2">
+                          <div className="text-[10px] text-muted-foreground font-mono flex flex-wrap items-center gap-2">
                             <span>Roll: {student.rollNumber}</span>
                             <span>•</span>
                             <span>ID: {student.collegeId}</span>
@@ -385,6 +385,8 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                           type="button"
                           disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'PRESENT')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} present`}
+                          aria-pressed={status === 'PRESENT'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'PRESENT'
                               ? 'bg-emerald-500 text-white shadow-xs'
@@ -398,6 +400,8 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                           type="button"
                           disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'ABSENT')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} absent`}
+                          aria-pressed={status === 'ABSENT'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'ABSENT'
                               ? 'bg-rose-500 text-white shadow-xs'
@@ -411,6 +415,8 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                           type="button"
                           disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'LATE')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} late`}
+                          aria-pressed={status === 'LATE'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'LATE'
                               ? 'bg-amber-500 text-white shadow-xs'
@@ -424,6 +430,8 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                           type="button"
                           disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'EXCUSED')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} excused`}
+                          aria-pressed={status === 'EXCUSED'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'EXCUSED'
                               ? 'bg-blue-500 text-white shadow-xs'

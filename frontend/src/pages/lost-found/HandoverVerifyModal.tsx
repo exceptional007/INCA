@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React, { useState } from 'react';
 import type { LostFoundClaim } from '@/types/lost-found';
 import { lostFoundApi } from '@/services/lost-found';
@@ -49,8 +50,9 @@ export const HandoverVerifyModal: React.FC<HandoverVerifyModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
-      <div role="dialog" aria-modal="true" aria-label="Handover Verify" data-mobile-modal="true" className="bg-white rounded-2xl max-w-md w-full border border-border shadow-xl overflow-hidden flex flex-col">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 bg-white rounded-2xl max-w-md w-full border border-border shadow-xl overflow-hidden flex flex-col">
+        <DialogTitle className="sr-only">Handover Verify</DialogTitle>
         {/* Header */}
         <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
@@ -155,8 +157,8 @@ export const HandoverVerifyModal: React.FC<HandoverVerifyModalProps> = ({
             </form>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
