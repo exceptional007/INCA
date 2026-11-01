@@ -170,9 +170,9 @@ export class LostFoundContributionService {
         email: user?.email,
         role: user?.role?.code || 'STUDENT',
         department:
-          user?.student?.program?.code ||
+          user?.student?.section?.semester?.program?.code ||
           user?.faculty?.department?.code ||
-          user?.student?.program?.name ||
+          user?.student?.section?.semester?.program?.name ||
           'Campus Community',
         points,
         badge: badgeInfo.badge,

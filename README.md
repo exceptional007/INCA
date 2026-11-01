@@ -1,392 +1,150 @@
 # INCA — Intelligent Campus Assistant
 
-A unified campus operating platform combining AI-driven timetable scheduling, multi-role attendance tracking, and institutional analytics.
+INCA brings campus scheduling, attendance, academic records, learning resources, and community services into one role-based application. ASSAM is its academic scheduling and attendance module.
 
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript)
-![NestJS](https://img.shields.io/badge/NestJS-11.0-red?logo=nestjs)
-![React](https://img.shields.io/badge/React-19.2-61dafb?logo=react)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?logo=postgresql)
-![Prisma](https://img.shields.io/badge/Prisma-6.19-2D3748?logo=prisma)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.3-38B2AC?logo=tailwindcss)
-![Vite](https://img.shields.io/badge/Vite-8.2-646CFF?logo=vite)
+[Local demo walkthrough](docs/demo.md) · [Frontend guide](frontend/README.md) · [Backend guide](backend/README.md) · [Screenshot gallery](docs/screenshots/README.md)
 
-> 🔗 **Live App:** Landing page at https://incaweb.netlify.app/. The full app needs the backend and database, so see [Getting Started](#getting-started) to run it locally, or watch the [demo video](DEMO_VIDEO_LINK_HERE).
+[Render backend + Netlify frontend deployment](docs/deploy-render-netlify.md)
 
-> 📹 [Watch the demo video](DEMO_VIDEO_LINK_HERE)
+Account security now includes rotating refresh sessions, mandatory initial-password changes, recovery, and revocation. Every role has an approval-based [profile and security page](docs/account-profile.md), with [desktop](docs/screenshots/profile-demo.png) and [mobile](docs/screenshots/profile-mobile-demo.png) captures using synthetic data.
 
----
+## Demo availability
 
-## Overview
+The supported demonstration is the [local walkthrough](docs/demo.md). Public pages can be viewed with only the frontend running; authenticated workflows require a configured backend, PostgreSQL database, and appropriate accounts.
 
-Colleges and universities routinely rely on fragmented tools—paper registers, static PDF schedules, disconnected notice boards, and disparate messaging groups—creating administrative bottlenecks and poor visibility into student engagement. INCA (Intelligent Campus Assistant) solves this fragmentation by consolidating campus operations into a centralized, role-based platform. At its core is ASSAM (Academic Scheduling & Smart Attendance Management), an operational engine that parses complex timetable PDFs using Gemini AI, detects schedule conflicts, automates lecture-level attendance workflows, and provides real-time academic analytics for administrators, faculty, coordinators, and students.
+No published demo-video URL or verified full-application deployment is available in this repository. The previously documented [Netlify landing-page URL](https://incaweb.netlify.app/) could not be verified during this documentation update; it is not a verified full-app demo.
 
----
+## Application modules
 
-## Features
+| Module | Current implementation |
+| --- | --- |
+| Academic data | Departments, programs, semesters, sections, subjects, rooms, faculty, and student enrollment |
+| Scheduling / ASSAM | Templates, dated schedules, exceptions, PDF timetable extraction, draft review, conflict detection, and active timetable versions |
+| Attendance | Lecture and activity sessions, card/list marking, submission, corrections, and audit records |
+| Reports | Attendance summaries and filters for students, subjects, sections, and faculty |
+| Activities | Faculty-organised events and associated attendance |
+| Notes, tutor, and quizzes | PDF/DOCX or Drive-linked learning notes, document processing, student tutor conversations, quizzes, and attempt history |
+| Marketplace | Listings, images, conversations, offers, transactions, reviews, and reports; Socket.IO chat |
+| Lost & Found | Reports, images, AI-assisted matching, claims, and time-limited handover codes |
+| Notices | Audience targeting, scheduled publication, attachments, read tracking, acknowledgements, and in-app notifications |
+| Polls | Campus polls, participation, answers, and transactional vote recording |
 
-### Implemented & Verified in Code
-
-- **ASSAM Engine (Academic Scheduling & Smart Attendance Management):** Complete scheduling backbone connecting academic terms, degree programs, lecture templates, classroom allocations, and calendar schedule instances.
-- **Two-Pass AI Timetable PDF Import:** Automated extraction pipeline in `backend/src/modules/scheduling/timetable-import/` utilizing Google Gemini models (`@google/genai`). Extracts metadata headers (institute, department, semester, section, room, effective date) and full tabular grid slots (lecture slots, merged multi-period labs, subject codes, faculty codes). Also supports direct single-pass PDF parsing.
-- **Entity Matching & Conflict Detection Engine:** Heuristic matching service that cross-references extracted raw text with database entities (subjects, faculty, rooms, sections) providing confidence scores, coupled with conflict analysis that identifies classroom double-booking and instructor overlaps.
-- **Interactive Draft Review Grid:** Administrative interface to inspect extracted batches, view conflict warnings, edit cells inline, adjust slot assignments, and commit verified drafts into active timetable versions.
-- **Role-Based Portals & Dashboards:** Tailored dashboard views based on authenticated JWT roles:
-  - **Super Admin:** Institution-wide health metrics, administrative user accounts, system configuration (attendance thresholds, edit windows), and system audit logs.
-  - **Admin & HOD:** Departmental overviews, timetable import batches, faculty workload metrics, and at-risk student lists (<75% attendance).
-  - **Academic Coordinator:** Section schedule supervision, timetable reviews, and attendance verification.
-  - **Faculty:** Daily lecture schedules, one-click attendance launching, roster summaries, and pending session submissions.
-  - **Student:** Real-time attendance percentage breakdown per subject, visual progress gauges, shortage alerts, and schedule views.
-- **Flexible Attendance Marking:** Fast attendance recording supporting both a Tinder-style **Card Swipe** interface (swipe right for Present, swipe left for Absent) and a traditional **List View**, with status tracking for `PRESENT`, `ABSENT`, `LATE`, and `EXCUSED`.
-- **Attendance Audit Trail:** Tamper-evident audit logging for any post-submission attendance modifications, recording previous status, new status, modifying user ID, timestamp, and mandatory justification remarks.
-- **Academic Master Data Management:** Comprehensive administrative CRUD interfaces for managing Departments, Programs, Semesters, Sections, Subjects (with lab flags), Classrooms (with capacity and building), Faculty profiles, and Student enrollment records.
-- **Institutional Reporting & Analytics:** Dedicated reporting dashboard with multi-dimensional filtering across Student, Section, Subject, and Faculty dimensions, complete with low-attendance warnings and date range parameters.
-- **Co-Curricular Activities Module:** Scheduling and attendance logging for guest lectures, workshops, seminars, and placement drives.
-
-### Planned (Coming Soon in UI Hub)
-
-The following modules appear as preview cards on the post-login Feature Hub and are planned for future phases:
-
-- **AI Notes & Tutor:** Lecture transcript processing, automated summary generation, and interactive chat-based tutoring.
-- **Campus Marketplace:** Peer-to-peer textbook and student item exchange.
-- **Digital Notice Board:** Departmental announcements and centralized circular feeds (backend stub currently returns placeholder).
-- **Community Polls:** Institutional voting and student feedback surveys.
-- **Green Credits System:** Campus ecological tracking and student transit credits.
-- **AR Campus Navigation:** Augmented reality indoor classroom wayfinding.
-
----
+These modules have frontend routes and backend implementations; this is not a claim that every workflow is deployed or independently production-certified. Green Credits remains an inactive “Coming Soon” hub card.
 
 ## Screenshots
 
-### Landing Page
-![Landing Page Screenshot](./docs/screenshots/landing-page.png)
+Actual public-page captures from the local frontend at 1440 × 1000. No accounts, credentials, or private campus data were used. See [capture details](docs/screenshots/README.md).
 
-### Post-Login Feature Hub
-![Feature Hub Screenshot](./docs/screenshots/feature-hub.png)
+### Landing page
 
-### Role-Based Dashboard
-![Dashboard Screenshot](./docs/screenshots/dashboard.png)
+![INCA landing page](docs/screenshots/landing-page.png)
 
-### Timetable PDF Import & AI Review
-![Timetable Import Review Screenshot](./docs/screenshots/timetable-import-review.png)
+### Sign-in page
 
-### Smart Attendance Marking
-![Mark Attendance Screenshot](./docs/screenshots/mark-attendance.png)
+![INCA sign-in page with empty fields](docs/screenshots/login.png)
 
-### Master Data Management
-![Master Data Screenshot](./docs/screenshots/master-data.png)
-
-### Attendance Reports & Analytics
-![Attendance Reports Screenshot](./docs/screenshots/attendance-reports.png)
-
----
+Authenticated dashboard, timetable-review, roster, and report screenshots are not included: those require an approved demonstration dataset. No missing image files are referenced as if they existed.
 
 ## Architecture
 
-INCA uses a decoupled client-server architecture. The frontend is a React 19 single-page application communicating via REST APIs with a modular NestJS backend. Persistence is managed via Prisma ORM connected to PostgreSQL, document binaries are stored in Cloudflare R2, and timetable document understanding is executed through Google Gemini.
-
 ```mermaid
-flowchart TD
-    subgraph Client["Frontend Client (React 19 + Vite)"]
-        UI["React SPA UI / Tailwind CSS"]
-        AuthContext["Auth Context (JWT + LocalStorage)"]
-        Axios["Axios API Client (/api/v1)"]
-        UI --> AuthContext
-        UI --> Axios
-    end
-
-    subgraph Backend["Backend API (NestJS 11)"]
-        Guards["Auth & Role Guards"]
-        Router["Controllers (/api/v1)"]
-        
-        subgraph CoreModules["Application Modules"]
-            AuthMod["Auth Module"]
-            AcadMod["Academic Master Data"]
-            SchedMod["Scheduling & ASSAM"]
-            AttMod["Attendance & Audit"]
-            RepMod["Reports & Analytics"]
-            ActMod["Activities Module"]
-        end
-
-        subgraph ImportPipeline["Timetable Import Pipeline"]
-            Parser["PDF Text & Vision Extractor"]
-            MatchSvc["Entity Matching Service"]
-            ConflictSvc["Conflict Detection Service"]
-        end
-
-        Prisma["Prisma ORM Client"]
-    end
-
-    subgraph External["External Services & Storage"]
-        Postgres[(PostgreSQL Database)]
-        Gemini["Google Gemini AI API"]
-        R2["Cloudflare R2 Object Storage"]
-    end
-
-    Axios -->|"Bearer JWT + HTTP REST"| Guards
-    Guards --> Router
-    Router --> CoreModules
-    Router --> ImportPipeline
-
-    ImportPipeline -->|"Fetch / Store PDFs"| R2
-    ImportPipeline -->|"Prompt + PDF / Images"| Gemini
-    ImportPipeline -->|"Draft Slots & Entities"| Prisma
-
-    CoreModules --> Prisma
-    Prisma --> Postgres
+flowchart LR
+    Browser[React SPA] -->|REST /api/v1 + bearer JWT| API[NestJS modules]
+    Browser <-->|Socket.IO marketplace namespace| API
+    API --> Prisma[Prisma ORM]
+    Prisma --> DB[(PostgreSQL)]
+    API --> R2[Cloudflare R2 files]
+    API --> Gemini[Google Gemini services]
 ```
 
-*Architecture summary: React 19 SPA -> NestJS REST API (JWT/Role Guards) -> Prisma ORM -> PostgreSQL, backed by Cloudflare R2 for document storage and Google Gemini for AI timetable parsing.*
+The frontend handles navigation, presentation, and client state. Backend controllers, guards, and services enforce authorization and domain rules. Prisma models the relational data. Documents and images use R2; AI-assisted workflows use Gemini where configured.
 
-### Timetable Import & Verification Pipeline
+## Technology stack
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Admin as Administrator
-    participant Web as INCA Frontend
-    participant API as NestJS API
-    participant R2 as Cloudflare R2
-    participant Gemini as Google Gemini AI
-    participant DB as PostgreSQL (Prisma)
+Versions below are resolved from the committed lockfiles, not just dependency ranges.
 
-    Admin->>Web: Upload Timetable PDF
-    Web->>API: POST /api/v1/admin/timetable-imports (Multipart)
-    API->>R2: Store Raw PDF Document
-    API->>Gemini: Pass 1: Extract Document Header (Dept, Section, Term)
-    API->>Gemini: Pass 2: Extract Schedule Grid Slots
-    Gemini-->>API: Structured JSON Slots (Days, Times, Subjects, Faculty)
-    API->>DB: Match Entities (Fuzzy match Subject, Faculty, Room, Section)
-    API->>API: Run Conflict Detection (Room overlaps & Faculty clashes)
-    API->>DB: Save as TimetableSlotDraft (Batch Status: PENDING_REVIEW)
-    API-->>Web: Batch Processing Complete
-    Admin->>Web: Inspect Review Grid & Inline Edit Slots
-    Web->>API: PATCH /api/v1/admin/timetable-imports/:id/slots/:slotId
-    Admin->>Web: Approve & Commit Batch
-    Web->>API: POST /api/v1/admin/timetable-imports/:id/approve
-    API->>DB: Create TimetableVersion & Active TimetableSlots
-    API->>DB: Generate ScheduleTemplates & Calendar Schedules
-    API-->>Web: Timetable Live & Active
-```
+| Area | Technology |
+| --- | --- |
+| Frontend | React 19.2.8, Vite 8.2.2, TypeScript 6.0.3 |
+| Styling and UI | Tailwind CSS 4.3.3, Radix UI, Lucide, Framer Motion |
+| Client data and forms | TanStack Query/Table, Axios, React Hook Form, Zod, Recharts |
+| Backend | NestJS core 11.2.3, TypeScript 5.9.3, Passport/JWT, Socket.IO |
+| Persistence | PostgreSQL with Prisma client/CLI 6.19.3 |
+| Integrations | Cloudflare R2 through the AWS S3 client; Google Gemini; PDF and DOCX processing |
 
----
+Use Node.js 22.12 or newer with a version satisfying the package engines. There is no root package/workspace install: frontend and backend have separate manifests and lockfiles.
 
-## Tech Stack
-
-| Layer | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Frontend Framework** | React 19.2.8 | Single-page application rendering and user interface |
-| **Frontend Build Tool** | Vite 8.2.0 | Development server, bundling, and hot module replacement |
-| **Styling** | Tailwind CSS 4.3.3 | Utility-first responsive design and layout system |
-| **UI Components** | Radix UI Primitives | Accessible, unstyled primitives (Dialog, Dropdown, Select, Avatar, Tooltip) |
-| **Icons & Animation** | Lucide React 1.33.0 & Framer Motion 13.1.1 | Vector iconography and UI micro-interactions |
-| **Data Fetching** | TanStack React Query 5.101.4 | Server state management, query caching, and synchronization |
-| **Tables & Charts** | TanStack React Table 8.21.3 & Recharts 3.10.1 | Data tables for master data and visual analytics |
-| **Form Handling** | React Hook Form 7.85.0 & Zod 4.4.3 | Schema validation and input handling |
-| **Backend Framework** | NestJS 11.0.1 | Modular enterprise TypeScript server architecture |
-| **Language & Runtime**| Node.js / TypeScript 5.7.3 | Typed execution across backend and frontend codebases |
-| **Database & ORM** | PostgreSQL & Prisma ORM 6.19.3 | Relational schema definitions, migrations, and database client |
-| **Authentication** | Passport.js & JWT (`@nestjs/jwt`) | Role-based token authentication and route authorization |
-| **AI Document Extraction** | Google Gemini (`@google/genai` 2.20.0) | Multimodal PDF OCR and structured timetable grid extraction |
-| **Cloud Object Storage**| AWS S3 Client (`@aws-sdk/client-s3` 3.1116.0) | Cloudflare R2 integration for storing raw timetable PDFs |
-| **PDF Processing** | `pdf-parse` & `pdf-to-png-converter` | Local PDF buffer processing and fallback page rendering |
-| **API Documentation** | Swagger (`@nestjs/swagger` 11.4.6) | Interactive OpenAPI documentation endpoint (`/docs`) |
-
----
-
-## Project Structure
+## Repository layout
 
 ```text
 INCA/
-├── backend/                # NestJS 11 API server, Prisma ORM, and AI timetable import pipeline
-│   ├── prisma/             # Database schema (schema.prisma), migrations, and role seed script
-│   ├── src/                # NestJS modules (auth, academic, scheduling, attendance, reports)
-│   ├── test/               # Jest unit and end-to-end test configurations
-│   ├── package.json        # Backend package configuration and scripts
-│   └── tsconfig.json       # Backend TypeScript compiler settings
-├── frontend/               # React 19 client application built with Vite and Tailwind CSS v4
-│   ├── public/             # Static assets (favicons, manifest)
-│   ├── src/                # React pages, layout wrappers, components, hooks, and API client
-│   ├── package.json        # Frontend package configuration and scripts
-│   └── vite.config.ts      # Vite bundler plugins and path aliases
-├── docs/                   # Documentation assets and screenshots
-│   └── screenshots/        # Application interface screenshots
-├── DESIGN.md               # Visual design specifications and tokens
-├── LICENSE                 # MIT License (Akshhat Srivastava)
-└── README.md               # Main project documentation
+├── backend/
+│   ├── prisma/             # Schema, existing migrations, seed
+│   ├── src/common/         # Guards, decorators, filters, middleware, cache
+│   ├── src/modules/        # Application domains and API controllers
+│   ├── src/prisma/         # Prisma lifecycle, pooling, diagnostics
+│   └── test/               # End-to-end test configuration
+├── frontend/
+│   ├── public/             # Static assets
+│   ├── src/api/            # Axios configuration
+│   ├── src/components/     # Shared UI, layouts, protected routes
+│   ├── src/context/        # Authentication state
+│   ├── src/pages/          # Public and authenticated screens
+│   ├── src/services/       # Domain API clients / marketplace socket
+│   └── src/types/          # Client data types
+├── docs/
+│   ├── demo.md             # Local demonstration procedure
+│   └── screenshots/        # Actual captures and provenance
+├── DESIGN.md               # Design direction
+└── LICENSE
 ```
 
----
+## Getting started
 
-## Getting Started
+1. Read the [backend setup and database notes](backend/README.md#setup). Use a development database; do not point local development at production data.
+2. Configure backend environment values from `backend/.env.example`, including `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, and `FRONTEND_URL`.
+3. Start the backend from `backend/` with `npm run start:dev` after completing setup.
+4. Follow the [frontend setup](frontend/README.md#setup), then run `npm run dev` from `frontend/` in a second terminal.
+5. Open [the local frontend](http://localhost:5173/). The [API reference](http://localhost:3000/docs) and [database health check](http://localhost:3000/health) are served by the backend.
 
-### Prerequisites
+The API base is `http://localhost:3000/api/v1`. `/docs` and `/health` are not under that prefix. Change documented local ports if you override the configuration.
 
-- **Node.js:** Not specified in `package.json` engines (Node.js LTS `v20.x` or `v22.x` recommended).
-- **Package Manager:** `npm` (bundled with Node.js).
-- **Database:** PostgreSQL database instance (local or hosted like Neon / Supabase).
-- **Google Gemini API Key:** Required for timetable PDF AI parsing.
-- **Cloudflare R2 Bucket (Optional):** Required if storing uploaded PDFs in cloud storage.
+### Database and account prerequisites
 
----
+The current schema includes modules whose table-creation migrations are not all represented in the checked-in migration history. Do not assume `prisma migrate deploy` alone reproduces the full schema on an empty database. Follow the backend guide for an isolated development database or a reviewed migration baseline; do not reset an existing database.
 
-### Environment Variables
+The seed creates roles and a bootstrap SUPER_ADMIN with a fixed development credential defined in `backend/prisma/seed.ts`. It is not a production provisioning mechanism. Review it before use and replace bootstrap credentials before exposing any deployment. New account-creation workflows generate unique initial passwords where no password is supplied.
 
-#### Backend (`backend/.env`)
+### Roles and access
 
-Configure these variables in `backend/.env` (reference: `backend/.env.example`):
+Roles are `SUPER_ADMIN`, `ADMIN`, `HOD`, `FACULTY`, `COORDINATOR`, and `STUDENT`. Permissions vary by endpoint. Schedule/template/exception changes require an ADMIN with an assigned department. Faculty activity changes are limited to their own events; admins manage events within their department. Coordinator attendance oversight remains campus-wide; SUPER_ADMIN attendance access is read-only. Tutor and quiz workflows require the caller's own student profile; note creation requires their own faculty profile.
 
-| Variable | Description | Required |
-| :--- | :--- | :---: |
-| `DATABASE_URL` | PostgreSQL connection string with schema parameters | **Y** |
-| `JWT_SECRET` | Secret key used for signing access JWT tokens | **Y** |
-| `JWT_REFRESH_SECRET` | Secret key used for signing refresh JWT tokens | **Y** |
-| `FRONTEND_URL` | Allowed client origin for CORS (e.g. `http://localhost:5173`) | **Y** |
-| `PORT` | HTTP port for the NestJS server (defaults to `3000`) | N |
-| `GEMINI_API_KEY` | Google Gemini API key for timetable vision extraction | **Y** (for imports) |
-| `GEMINI_MODEL` | Gemini model name (defaults to `gemini-3.6-flash`) | N |
-| `R2_ACCOUNT_ID` | Cloudflare account identifier for R2 storage | N |
-| `R2_BUCKET_NAME` | Cloudflare R2 bucket name | N |
-| `R2_ACCESS_KEY` | Cloudflare R2 S3-compatible access key ID | N |
-| `R2_SECRET_KEY` | Cloudflare R2 S3-compatible secret access key | N |
-| `DB_MAX_RETRIES` | Connection retry count on server startup (defaults to `5`) | N |
+## Validation
 
-#### Frontend (`frontend/.env`)
+From `backend/`:
 
-Configure these variables in `frontend/.env`:
-
-| Variable | Description | Required |
-| :--- | :--- | :---: |
-| `VITE_API_URL` | Base URL for backend REST API (defaults to `http://localhost:3000/api/v1`) | N |
-
----
-
-### Installation
-
-Follow these steps to configure the backend and frontend:
-
-#### 1. Backend Setup
-
-```bash
-# Navigate to the backend directory
-cd backend
-
-# Install dependencies
-npm install
-
-# Copy environment template and fill in your DATABASE_URL and secrets
-cp .env.example .env
-
-# Generate the Prisma client
-npx prisma generate
-
-# Run database migrations
-npx prisma migrate dev
-
-# Seed database with initial roles and the default Super Admin user
-npx prisma db seed
+```sh
+npm test -- --runInBand
+node node_modules/typescript/bin/tsc -p tsconfig.build.json --noEmit --incremental false --declaration false
 ```
 
-#### 2. Frontend Setup
+From `frontend/`:
 
-```bash
-# Navigate to the frontend directory
-cd ../frontend
-
-# Install dependencies
-npm install
-
-# Create environment configuration (optional if using default port 3000)
-# echo VITE_API_URL=http://localhost:3000/api/v1 > .env
+```sh
+npm run build
+npm run lint
 ```
 
----
+The frontend has no configured automated-test command. Backend e2e tests have a separate script and may need an isolated database. Passing unit/regression tests does not replace testing real storage, AI credentials, or a deployment.
 
-### Running Locally
+## Deployment notes
 
-Run both servers concurrently in separate terminal windows:
+Host `frontend/dist/` with SPA fallback to `index.html` for client routes. Set `VITE_API_URL` before building. Deploy the NestJS server separately with PostgreSQL access, HTTPS, the correct `FRONTEND_URL`, and private environment secrets. Marketplace chat also needs Socket.IO transport support. Storage operations require R2 credentials; AI-dependent behavior requires a usable Gemini configuration.
 
-#### Start Backend
+Backend startup connects to the database. The notices module checks for due scheduled publications at startup and every 30 seconds. Development startup can also seed example requests when the request table is empty. Use an isolated database for demos and screenshots; see the backend guide before running a server against shared data.
 
-```bash
-cd backend
-npm run start:dev
-```
-- Server starts at: `http://localhost:3000`
-- Swagger API Documentation: `http://localhost:3000/docs`
-- Health check endpoint: `http://localhost:3000/health`
+## Project information
 
-#### Start Frontend
-
-```bash
-cd frontend
-npm run dev
-```
-- Web application starts at: `http://localhost:5173`
-
----
-
-## Usage
-
-### Default Credentials (from Seed)
-
-The seed script (`backend/prisma/seed.ts`) populates initial roles (`SUPER_ADMIN`, `ADMIN`, `HOD`, `FACULTY`, `COORDINATOR`, `STUDENT`) and creates a default administrator:
-
-- **Email:** `admin@bit.ac.in`
-- **Password:** `Admin@123`
-- **Assigned Role:** `SUPER_ADMIN`
-
-*(Note: Additional role profiles can be created directly from the Master Data / Super Admin panels.)*
-
----
-
-### Key Workflows by Role
-
-#### 1. Timetable PDF Import (Admin / HOD)
-1. Log in with an `ADMIN` or `HOD` account and navigate to **Academic -> Timetable Imports** (`/academic/timetable-imports`).
-2. Upload a university timetable PDF document.
-3. The system dispatches the file to Gemini AI, executing header extraction and grid parsing.
-4. Open the **Review Grid** to inspect extracted lecture slots, review confidence scores, and resolve any highlighted room or instructor conflicts.
-5. Make inline edits to any subject, faculty, or room mappings if necessary.
-6. Click **Approve & Commit** to publish the active `TimetableVersion` and generate corresponding `ScheduleTemplate` records.
-
-#### 2. Taking Attendance (Faculty / Coordinator)
-1. Log in with a `FACULTY`, `HOD`, or `COORDINATOR` account.
-2. The Faculty Dashboard presents the list of lectures scheduled for today.
-3. Click **Mark Attendance** (`/attendance/mark?scheduleId=...`) for the current lecture.
-4. Choose between:
-   - **Card Swipe Mode:** Rapidly review student profile cards (Swipe right for Present, swipe left for Absent).
-   - **List Mode:** View the full alphabetical student roster with toggles for Present, Absent, Late, or Excused.
-5. Click **Submit Attendance Session** to finalize records.
-6. If an adjustment is needed later, open the **Audit Modal**, select the student record, enter the revised status along with a mandatory audit reason, and submit.
-
-#### 3. Monitoring Academic Engagement (Student)
-1. Log in with a `STUDENT` account.
-2. The Student Dashboard displays:
-   - Total attended lectures vs. total delivered sessions.
-   - Aggregate attendance percentage with color-coded threshold alerts (warning if below the mandatory 75% requirement).
-   - Subject-by-subject attendance progress bars.
-   - Upcoming lecture timetable for the day.
-
-#### 4. Managing Campus Master Data (Super Admin / Admin)
-1. Navigate to **Academic Management** (`/academic`).
-2. Manage institutional hierarchies: Departments, Degree Programs, Semesters, and Sections.
-3. Maintain classroom lists with capacities and building numbers.
-4. Manage Faculty designations and assign students to specific sections.
-
----
-
-## Known Limitations
-
-- **Public Deployment Status:** The live URL (`https://incaweb.netlify.app/`) hosts the frontend landing page. The full application requires a running NestJS backend and PostgreSQL database; it must be run locally or deployed to a server environment.
-- **Secondary Hub Features:** Features in the Feature Hub other than ASSAM (such as AI Notes & Tutor, Campus Marketplace, Digital Notice Board, Community Polls, and Green Credits) are UI placeholders labeled "Coming Soon" and are not yet connected to backend services.
-- **Timetable Layout Variance:** While the Gemini vision extraction pipeline handles complex multi-section grids, non-standard or heavily distorted timetable PDFs may require manual adjustments in the interactive review grid before publishing.
-- **Cloud Storage Configuration:** PDF file persistence requires valid Cloudflare R2 / S3 credentials; if unset, PDF upload relies on local processing buffers.
-
----
-
-## Footer
-
-- **License:** [MIT License](LICENSE) © 2026 Akshhat Srivastava
-- **Author:** Akshhat Srivastava
-- **Repository:** [https://github.com/exceptional007/INCA.git](https://github.com/exceptional007/INCA.git)
-- 🔗 **Live App:** Landing page at https://incaweb.netlify.app/. The full app needs the backend and database, so see [Getting Started](#getting-started) to run it locally, or watch the [demo video](DEMO_VIDEO_LINK_HERE).
+- Repository: [exceptional007/INCA](https://github.com/exceptional007/INCA)
+- Design reference: [DESIGN.md](DESIGN.md)
+- License: [MIT](LICENSE), © 2026 Akshhat Srivastava. The backend package manifest separately declares `UNLICENSED`; reconcile that metadata before distribution.

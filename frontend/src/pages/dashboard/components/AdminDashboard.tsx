@@ -1,3 +1,4 @@
+import { generateInitialPassword, useInitialCredentials } from '@/components/useInitialCredentials';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -94,6 +95,7 @@ interface CourseRule {
 }
 
 export const AdminDashboard: React.FC = () => {
+  const { showCredentials, credentialsDialog } = useInitialCredentials();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'faculty' | 'students' | 'coordinators' | 'policies'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -452,12 +454,13 @@ export const AdminDashboard: React.FC = () => {
     }
 
     try {
+      const initialPassword = generateInitialPassword();
       if (activeTab === 'faculty') {
         const employeeCode = 'FAC-' + Date.now().toString().slice(-6);
 
         await api.post('/faculty/accounts', {
           email: fieldB,
-          password: 'Temp@12345',
+          password: initialPassword,
           employeeCode,
           firstName: facFirstName,
           lastName: facLastName,
@@ -466,6 +469,7 @@ export const AdminDashboard: React.FC = () => {
           phone: formattedPhone,
           designation: fieldD || 'Lecturer',
         });
+        showCredentials(fieldB, initialPassword);
         toast.success('Faculty member account created successfully.');
       } else if (activeTab === 'students') {
         const nameParts = fieldA.trim().split(' ');
@@ -476,7 +480,7 @@ export const AdminDashboard: React.FC = () => {
 
         await api.post('/students/accounts', {
           email: fieldC,
-          password: 'Temp@12345',
+          password: initialPassword,
           collegeId,
           rollNumber: fieldB,
           enrollmentNumber,
@@ -484,12 +488,14 @@ export const AdminDashboard: React.FC = () => {
           lastName,
           gender: 'MALE',
         });
+        showCredentials(fieldC, initialPassword);
         toast.success('Student account registered successfully.');
       } else if (activeTab === 'coordinators') {
         await api.post('/auth/coordinators', {
           email: fieldB,
-          password: 'Temp@12345',
+          password: initialPassword,
         });
+        showCredentials(fieldB, initialPassword);
         toast.success('Coordinator registered.');
       } else if (activeTab === 'policies') {
         if (!defaultSemesterId) {
@@ -655,6 +661,7 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans select-none">
+      {credentialsDialog}
 
       {/* Brand Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

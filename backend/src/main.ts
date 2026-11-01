@@ -25,6 +25,9 @@ async function bootstrap() {
 
   // Enable graceful shutdown hooks so Prisma.$disconnect and cleanup hooks run on SIGINT/SIGTERM
   app.enableShutdownHooks();
+  // Render terminates HTTPS at its reverse proxy. Keep local development untrusted.
+  if (process.env.TRUST_PROXY_HOPS === '1')
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   // Phase 2: Configuration & Global Middleware
   const tConfigStart = performance.now();
@@ -79,7 +82,7 @@ async function bootstrap() {
   // Phase 4: HTTP server startup
   const tListenStart = performance.now();
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(Number(port), '0.0.0.0');
   const tListenDuration = performance.now() - tListenStart;
 
   const totalProcessBootstrapMs = performance.now() - processEntryTime;

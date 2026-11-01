@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type {
   MarketplaceListing,
   MarketplaceConversation,
@@ -16,8 +16,8 @@ import type {
   MarketplaceOffer,
   MarketplaceTransaction,
   SellerProfile,
-} from '@/types/marketplace';
-import { marketplaceApi, getMarketplaceSocket } from '@/services/marketplace';
+} from "@/types/marketplace";
+import { marketplaceApi, getMarketplaceSocket } from "@/services/marketplace";
 import {
   Send,
   Loader2,
@@ -32,7 +32,7 @@ import {
   Clock,
   Check,
   PackageCheck,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface ChatDealModalProps {
   conversationId: string | null;
@@ -53,21 +53,25 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
   onOpenReviewModal,
   onDealCompleted,
 }) => {
-  const [internalConvId, setInternalConvId] = useState<string | null>(conversationId);
+  const [internalConvId, setInternalConvId] = useState<string | null>(
+    conversationId,
+  );
   const [messages, setMessages] = useState<MarketplaceMessage[]>([]);
-  const [conversation, setConversation] = useState<MarketplaceConversation | null>(null);
+  const [conversation, setConversation] =
+    useState<MarketplaceConversation | null>(null);
   const [activeOffer, setActiveOffer] = useState<MarketplaceOffer | null>(null);
-  const [activeTransaction, setActiveTransaction] = useState<MarketplaceTransaction | null>(null);
+  const [activeTransaction, setActiveTransaction] =
+    useState<MarketplaceTransaction | null>(null);
 
-  const [inputMessage, setInputMessage] = useState('');
-  const [offerInput, setOfferInput] = useState('');
+  const [inputMessage, setInputMessage] = useState("");
+  const [offerInput, setOfferInput] = useState("");
   const [showOfferForm, setShowOfferForm] = useState(false);
-  const [counterInput, setCounterInput] = useState('');
+  const [counterInput, setCounterInput] = useState("");
   const [showCounterForm, setShowCounterForm] = useState(false);
-  const [otpInput, setOtpInput] = useState('');
-  const [scheduleLocation, setScheduleLocation] = useState('');
-  const [scheduleDate, setScheduleDate] = useState('');
-  const [scheduleTime, setScheduleTime] = useState('');
+  const [otpInput, setOtpInput] = useState("");
+  const [scheduleLocation, setScheduleLocation] = useState("");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
   const [schedulingLoading, setSchedulingLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -83,7 +87,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
   const effectiveConvId = internalConvId || conversationId;
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const loadData = useCallback(async (convId: string) => {
@@ -118,7 +122,9 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
           return loadData(conv.id);
         })
         .catch((err: any) => {
-          setActionError(err?.response?.data?.message || 'Failed to initialize conversation');
+          setActionError(
+            err?.response?.data?.message || "Failed to initialize conversation",
+          );
           setLoading(false);
         })
         .finally(() => {
@@ -153,7 +159,11 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     if (!isOpen || !effectiveConvId) return;
 
     const socket = getMarketplaceSocket();
-    socket.emit('joinConversation', { conversationId: effectiveConvId });
+    const join = () =>
+      socket.emit("joinConversation", { conversationId: effectiveConvId });
+    const reconnect=()=>{join();void loadData(effectiveConvId);};
+    socket.on("connect", reconnect);
+    if (socket.connected) join();
 
     const handleNewMessage = (msg: MarketplaceMessage) => {
       if (msg.conversationId === effectiveConvId) {
@@ -174,31 +184,35 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     const handleTransactionUpdate = (data: any) => {
       if (data.tx) {
         setActiveTransaction(data.tx);
-        if (data.type === 'TX_COMPLETED') {
+        if (data.type === "TX_COMPLETED") {
           onDealCompleted?.();
         }
       }
     };
 
-    const handleTyping = (data: { conversationId: string; isTyping: boolean }) => {
+    const handleTyping = (data: {
+      conversationId: string;
+      isTyping: boolean;
+    }) => {
       if (data.conversationId === effectiveConvId) {
         setPartnerTyping(data.isTyping);
       }
     };
 
-    socket.on('newMessage', handleNewMessage);
-    socket.on('offerUpdate', handleOfferUpdate);
-    socket.on('transactionUpdate', handleTransactionUpdate);
-    socket.on('userTyping', handleTyping);
+    socket.on("newMessage", handleNewMessage);
+    socket.on("offerUpdate", handleOfferUpdate);
+    socket.on("transactionUpdate", handleTransactionUpdate);
+    socket.on("userTyping", handleTyping);
 
     return () => {
-      socket.emit('leaveConversation', { conversationId: effectiveConvId });
-      socket.off('newMessage', handleNewMessage);
-      socket.off('offerUpdate', handleOfferUpdate);
-      socket.off('transactionUpdate', handleTransactionUpdate);
-      socket.off('userTyping', handleTyping);
+      socket.off("connect", reconnect);
+      socket.emit("leaveConversation", { conversationId: effectiveConvId });
+      socket.off("newMessage", handleNewMessage);
+      socket.off("offerUpdate", handleOfferUpdate);
+      socket.off("transactionUpdate", handleTransactionUpdate);
+      socket.off("userTyping", handleTyping);
     };
-  }, [isOpen, effectiveConvId]);
+  }, [isOpen, effectiveConvId,loadData]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,10 +221,13 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     const text = inputMessage.trim();
     try {
       setSendingMsg(true);
-      setInputMessage('');
+      setInputMessage("");
 
       const socket = getMarketplaceSocket();
-      socket.emit('typingIndicator', { conversationId: effectiveConvId, isTyping: false });
+      socket.emit("typingIndicator", {
+        conversationId: effectiveConvId,
+        isTyping: false,
+      });
 
       const sentMsg = await marketplaceApi.sendMessage(effectiveConvId, text);
       if (sentMsg) {
@@ -222,7 +239,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
       }
     } catch (err: any) {
       setInputMessage(text);
-      setActionError(err?.response?.data?.message || 'Failed to send message');
+      setActionError(err?.response?.data?.message || "Failed to send message");
     } finally {
       setSendingMsg(false);
     }
@@ -233,11 +250,17 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     if (!effectiveConvId) return;
 
     const socket = getMarketplaceSocket();
-    socket.emit('typingIndicator', { conversationId: effectiveConvId, isTyping: true });
+    socket.emit("typingIndicator", {
+      conversationId: effectiveConvId,
+      isTyping: true,
+    });
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typingIndicator', { conversationId: effectiveConvId, isTyping: false });
+      socket.emit("typingIndicator", {
+        conversationId: effectiveConvId,
+        isTyping: false,
+      });
     }, 1500);
   };
 
@@ -251,32 +274,38 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
       const offer = await marketplaceApi.createOffer(listingId, amount);
       setActiveOffer(offer);
       setShowOfferForm(false);
-      setOfferInput('');
+      setOfferInput("");
       if (effectiveConvId) {
         loadData(effectiveConvId);
       }
     } catch (err: any) {
-      setActionError(err?.response?.data?.message || 'Failed to submit offer');
+      setActionError(err?.response?.data?.message || "Failed to submit offer");
     }
   };
 
   const handleRespondOffer = async (
-    action: 'ACCEPT' | 'REJECT' | 'COUNTER' | 'CANCEL',
+    action: "ACCEPT" | "REJECT" | "COUNTER" | "CANCEL",
     counterAmount?: number,
   ) => {
     if (!activeOffer) return;
     try {
       setActionError(null);
-      const updated = await marketplaceApi.respondOffer(activeOffer.id, action, counterAmount);
+      const updated = await marketplaceApi.respondOffer(
+        activeOffer.id,
+        action,
+        counterAmount,
+      );
       setActiveOffer(updated);
       setShowCounterForm(false);
-      setCounterInput('');
+      setCounterInput("");
 
       if (effectiveConvId) {
         await loadData(effectiveConvId);
       }
     } catch (err: any) {
-      setActionError(err?.response?.data?.message || 'Failed to respond to offer');
+      setActionError(
+        err?.response?.data?.message || "Failed to respond to offer",
+      );
     }
   };
 
@@ -285,12 +314,15 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     try {
       setOtpLoading(true);
       setActionError(null);
-      const res = await marketplaceApi.verifyHandover(activeTransaction.id, otpInput.trim());
+      const res = await marketplaceApi.verifyHandover(
+        activeTransaction.id,
+        otpInput.trim(),
+      );
       setActiveTransaction(res.transaction);
-      setOtpInput('');
+      setOtpInput("");
       onDealCompleted?.();
     } catch (err: any) {
-      setActionError(err?.response?.data?.message || 'Invalid OTP code');
+      setActionError(err?.response?.data?.message || "Invalid OTP code");
     } finally {
       setOtpLoading(false);
     }
@@ -301,9 +333,13 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
     try {
       setActionError(null);
       const res = await marketplaceApi.regenerateOtp(activeTransaction.id);
-      setActiveTransaction((prev) => (prev ? { ...prev, handoverOtp: res.handoverOtp } : null));
+      setActiveTransaction((prev) =>
+        prev ? { ...prev, handoverOtp: res.handoverOtp } : null,
+      );
     } catch (err: any) {
-      setActionError(err?.response?.data?.message || 'Failed to regenerate OTP');
+      setActionError(
+        err?.response?.data?.message || "Failed to regenerate OTP",
+      );
     }
   };
 
@@ -313,43 +349,58 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
         activeTransaction.handoverLocation ||
           conversation?.listing?.preferredLocation ||
           listing?.preferredLocation ||
-          'Campus Center',
+          "Campus Center",
       );
       if (activeTransaction.handoverDate) {
         setScheduleDate(activeTransaction.handoverDate);
       } else {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        setScheduleDate(tomorrow.toISOString().split('T')[0]);
+        setScheduleDate(tomorrow.toISOString().split("T")[0]);
       }
       if (activeTransaction.handoverTime) {
         setScheduleTime(activeTransaction.handoverTime);
       } else {
-        setScheduleTime('14:00');
+        setScheduleTime("14:00");
       }
     }
-  }, [activeTransaction, conversation?.listing?.preferredLocation, listing?.preferredLocation]);
+  }, [
+    activeTransaction,
+    conversation?.listing?.preferredLocation,
+    listing?.preferredLocation,
+  ]);
 
   const handleConfirmSchedule = async () => {
     if (!activeTransaction) return;
-    if (!scheduleLocation.trim() || !scheduleDate.trim() || !scheduleTime.trim()) {
-      setActionError('Please enter a location, date, and time for the handover');
+    if (
+      !scheduleLocation.trim() ||
+      !scheduleDate.trim() ||
+      !scheduleTime.trim()
+    ) {
+      setActionError(
+        "Please enter a location, date, and time for the handover",
+      );
       return;
     }
     try {
       setSchedulingLoading(true);
       setActionError(null);
-      const updated = await marketplaceApi.confirmSchedule(activeTransaction.id, {
-        location: scheduleLocation.trim(),
-        date: scheduleDate.trim(),
-        time: scheduleTime.trim(),
-      });
+      const updated = await marketplaceApi.confirmSchedule(
+        activeTransaction.id,
+        {
+          location: scheduleLocation.trim(),
+          date: scheduleDate.trim(),
+          time: scheduleTime.trim(),
+        },
+      );
       setActiveTransaction(updated);
       if (effectiveConvId) {
         loadData(effectiveConvId);
       }
     } catch (err: any) {
-      setActionError(err?.response?.data?.message || 'Failed to confirm schedule');
+      setActionError(
+        err?.response?.data?.message || "Failed to confirm schedule",
+      );
     } finally {
       setSchedulingLoading(false);
     }
@@ -360,23 +411,34 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
   const currentListing = conversation?.listing || listing;
   const isSeller = conversation
     ? conversation.sellerId === currentUserId
-    : (listing ? listing.sellerId === currentUserId : false);
+    : listing
+      ? listing.sellerId === currentUserId
+      : false;
   const isBuyer = !isSeller;
 
   const otherParty: SellerProfile | null | undefined =
     conversation?.otherParty ||
     (conversation
-      ? (isSeller ? conversation.buyer : (conversation.seller || listing?.seller))
-      : (isSeller ? null : listing?.seller));
+      ? isSeller
+        ? conversation.buyer
+        : conversation.seller || listing?.seller
+      : isSeller
+        ? null
+        : listing?.seller);
 
-  const getParticipantName = (party: SellerProfile | null | undefined, fallback: string) => {
+  const getParticipantName = (
+    party: SellerProfile | null | undefined,
+    fallback: string,
+  ) => {
     if (!party) return fallback;
     if (party.student) {
-      const name = `${party.student.firstName} ${party.student.lastName || ''}`.trim();
+      const name =
+        `${party.student.firstName} ${party.student.lastName || ""}`.trim();
       if (name) return name;
     }
     if (party.faculty) {
-      const name = `${party.faculty.firstName} ${party.faculty.lastName || ''}`.trim();
+      const name =
+        `${party.faculty.firstName} ${party.faculty.lastName || ""}`.trim();
       if (name) return name;
     }
     if (party.adminProfile?.name) {
@@ -384,23 +446,25 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
       if (name) return name;
     }
     if (party.email) {
-      return party.email.split('@')[0];
+      return party.email.split("@")[0];
     }
     return fallback;
   };
 
   const otherPartyName = getParticipantName(
     otherParty,
-    isSeller ? 'Prospective Buyer' : 'Seller'
+    isSeller ? "Prospective Buyer" : "Seller",
   );
 
   const otherPartyBadge = otherParty?.student
-    ? 'Student'
+    ? "Student"
     : otherParty?.faculty
-    ? 'Faculty'
-    : otherParty?.adminProfile
-    ? 'Admin'
-    : (isSeller ? 'Buyer' : 'Seller');
+      ? "Faculty"
+      : otherParty?.adminProfile
+        ? "Admin"
+        : isSeller
+          ? "Buyer"
+          : "Seller";
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -421,10 +485,12 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                   </Badge>
                 </DialogTitle>
                 <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                  <span className="font-medium text-foreground">{currentListing?.title}</span>
+                  <span className="font-medium text-foreground">
+                    {currentListing?.title}
+                  </span>
                   <span>•</span>
                   <span className="font-bold text-foreground">
-                    ₹{currentListing?.price.toLocaleString('en-IN')}
+                    ₹{currentListing?.price.toLocaleString("en-IN")}
                   </span>
                 </div>
               </div>
@@ -464,18 +530,20 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="flex items-center gap-1.5 text-primary">
                   <ShieldCheck className="size-4" />
-                  Status:{' '}
+                  Status:{" "}
                   <Badge variant="outline" className="font-bold">
                     {activeTransaction.status}
                   </Badge>
                 </span>
                 <span className="font-bold text-sm">
-                  Agreed Price: ₹{activeTransaction.agreedPrice.toLocaleString('en-IN')}
+                  Agreed Price: ₹
+                  {activeTransaction.agreedPrice.toLocaleString("en-IN")}
                 </span>
               </div>
 
               {/* STEP 2: DEAL FINALIZATION & SCHEDULING (PRICE_AGREED / INITIATED) */}
-              {(activeTransaction.status === 'PRICE_AGREED' || activeTransaction.status === 'INITIATED') && (
+              {(activeTransaction.status === "PRICE_AGREED" ||
+                activeTransaction.status === "INITIATED") && (
                 <div className="pt-2 border-t border-primary/10 space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between text-xs gap-1.5">
                     <span className="font-semibold text-foreground flex items-center gap-1.5">
@@ -484,22 +552,36 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                     </span>
                     <div className="flex items-center gap-1.5 text-[11px]">
                       <Badge
-                        variant={activeTransaction.buyerConfirmed ? 'default' : 'secondary'}
-                        className={`text-[10px] ${activeTransaction.buyerConfirmed ? 'bg-emerald-600 hover:bg-emerald-600' : ''}`}
+                        variant={
+                          activeTransaction.buyerConfirmed
+                            ? "default"
+                            : "secondary"
+                        }
+                        className={`text-[10px] ${activeTransaction.buyerConfirmed ? "bg-emerald-600 hover:bg-emerald-600" : ""}`}
                       >
-                        {activeTransaction.buyerConfirmed ? '✓ Buyer Confirmed' : 'Buyer Pending'}
+                        {activeTransaction.buyerConfirmed
+                          ? "✓ Buyer Confirmed"
+                          : "Buyer Pending"}
                       </Badge>
                       <Badge
-                        variant={activeTransaction.sellerConfirmed ? 'default' : 'secondary'}
-                        className={`text-[10px] ${activeTransaction.sellerConfirmed ? 'bg-emerald-600 hover:bg-emerald-600' : ''}`}
+                        variant={
+                          activeTransaction.sellerConfirmed
+                            ? "default"
+                            : "secondary"
+                        }
+                        className={`text-[10px] ${activeTransaction.sellerConfirmed ? "bg-emerald-600 hover:bg-emerald-600" : ""}`}
                       >
-                        {activeTransaction.sellerConfirmed ? '✓ Seller Confirmed' : 'Seller Pending'}
+                        {activeTransaction.sellerConfirmed
+                          ? "✓ Seller Confirmed"
+                          : "Seller Pending"}
                       </Badge>
                     </div>
                   </div>
 
                   <p className="text-[11px] text-muted-foreground">
-                    Confirm a safe campus meeting spot and time. Once both parties confirm, the buyer's 6-digit verification OTP will be unlocked.
+                    Confirm a safe campus meeting spot and time. Once both
+                    parties confirm, the buyer's 6-digit verification OTP will
+                    be unlocked.
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -542,7 +624,12 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                     <Button
                       size="sm"
                       onClick={handleConfirmSchedule}
-                      disabled={schedulingLoading || !scheduleLocation.trim() || !scheduleDate.trim() || !scheduleTime.trim()}
+                      disabled={
+                        schedulingLoading ||
+                        !scheduleLocation.trim() ||
+                        !scheduleDate.trim() ||
+                        !scheduleTime.trim()
+                      }
                       className="h-7 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                     >
                       {schedulingLoading ? (
@@ -550,22 +637,24 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                       ) : (
                         <Check className="size-3.5" />
                       )}
-                      {(isBuyer && activeTransaction.buyerConfirmed) || (isSeller && activeTransaction.sellerConfirmed)
-                        ? 'Update Meeting Details'
-                        : 'Confirm Handover Arrangement'}
+                      {(isBuyer && activeTransaction.buyerConfirmed) ||
+                      (isSeller && activeTransaction.sellerConfirmed)
+                        ? "Update Meeting Details"
+                        : "Confirm Handover Arrangement"}
                     </Button>
                   </div>
                 </div>
               )}
 
               {/* STEP 3: PHYSICAL HANDOVER & OTP VERIFICATION */}
-              {activeTransaction.status === 'HANDOVER_PENDING' && (
+              {activeTransaction.status === "HANDOVER_PENDING" && (
                 <div className="pt-2 border-t border-primary/10 space-y-2">
                   <div className="flex flex-wrap items-center justify-between text-xs bg-background/80 p-2 rounded-lg border gap-2">
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <MapPin className="size-3.5 text-primary shrink-0" />
                       <span className="font-medium text-foreground">
-                        {activeTransaction.handoverLocation || 'Campus Meeting Point'}
+                        {activeTransaction.handoverLocation ||
+                          "Campus Meeting Point"}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-muted-foreground text-[11px]">
@@ -592,12 +681,13 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                           Your 6-Digit Handover Code
                         </div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">
-                          Inspect item physically first. Disclose code to seller only upon receiving the item.
+                          Inspect item physically first. Disclose code to seller
+                          only upon receiving the item.
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="bg-primary text-primary-foreground font-mono font-bold text-xl px-4 py-1.5 rounded-lg tracking-widest shadow-sm select-all">
-                          {activeTransaction.handoverOtp || '••••••'}
+                          {activeTransaction.handoverOtp || "••••••"}
                         </div>
                         <Button
                           size="icon"
@@ -617,21 +707,26 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                           <PackageCheck className="size-4 text-emerald-600" />
                           Enter Buyer's 6-Digit Handover OTP:
                         </span>
-                        {typeof activeTransaction.handoverOtpAttempts === 'number' && (
+                        {typeof activeTransaction.handoverOtpAttempts ===
+                          "number" && (
                           <span className="text-[10px] text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                            {5 - activeTransaction.handoverOtpAttempts} attempts left
+                            {5 - activeTransaction.handoverOtpAttempts} attempts
+                            left
                           </span>
                         )}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Hand over the item and enter the 6-digit OTP given by the buyer to complete this sale.
+                        Hand over the item and enter the 6-digit OTP given by
+                        the buyer to complete this sale.
                       </div>
                       <div className="flex gap-2 pt-1">
                         <Input
                           placeholder="000000"
                           maxLength={6}
                           value={otpInput}
-                          onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) =>
+                            setOtpInput(e.target.value.replace(/\D/g, ""))
+                          }
                           className="font-mono tracking-widest text-center h-8 text-base font-bold bg-background"
                         />
                         <Button
@@ -640,7 +735,9 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                           disabled={otpLoading || otpInput.length !== 6}
                           className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shrink-0"
                         >
-                          {otpLoading && <Loader2 className="size-3.5 animate-spin" />}
+                          {otpLoading && (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          )}
                           Verify & Complete
                         </Button>
                       </div>
@@ -650,13 +747,15 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
               )}
 
               {/* STEP 4: DEAL COMPLETED */}
-              {activeTransaction.status === 'COMPLETED' && (
+              {activeTransaction.status === "COMPLETED" && (
                 <div className="pt-2 border-t border-emerald-200 text-emerald-950 text-xs">
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <Badge className="bg-emerald-600 text-white font-bold text-[11px] px-2.5 py-0.5">
-                          {isBuyer ? 'Order Received' : 'Sold / Handover Completed'}
+                          {isBuyer
+                            ? "Order Received"
+                            : "Sold / Handover Completed"}
                         </Badge>
                         <span className="font-semibold text-emerald-900 flex items-center gap-1">
                           <CheckCircle2 className="size-4 text-emerald-600" />
@@ -665,41 +764,46 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                       </div>
                       <p className="text-[11px] text-emerald-800">
                         {isBuyer
-                          ? 'You have verified receipt of this item on campus. The transaction is complete.'
-                          : 'OTP successfully verified. The listing is marked SOLD and automatically unlisted from the marketplace.'}
+                          ? "You have verified receipt of this item on campus. The transaction is complete."
+                          : "OTP successfully verified. The listing is marked SOLD and automatically unlisted from the marketplace."}
                       </p>
                     </div>
 
-                    {isBuyer && !activeTransaction.review && onOpenReviewModal && (
-                      <Button
-                        size="sm"
-                        onClick={() => onOpenReviewModal(activeTransaction.id)}
-                        className="gap-1.5 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold shrink-0 shadow-xs"
-                      >
-                        <Star className="size-3.5 fill-white" />
-                        Rate & Review Seller
-                      </Button>
-                    )}
+                    {isBuyer &&
+                      !activeTransaction.review &&
+                      onOpenReviewModal && (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            onOpenReviewModal(activeTransaction.id)
+                          }
+                          className="gap-1.5 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold shrink-0 shadow-xs"
+                        >
+                          <Star className="size-3.5 fill-white" />
+                          Rate & Review Seller
+                        </Button>
+                      )}
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {(!activeTransaction || activeTransaction.status !== 'COMPLETED') && (
+          {(!activeTransaction || activeTransaction.status !== "COMPLETED") && (
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              {activeOffer && activeOffer.status === 'PENDING' ? (
+              {activeOffer && activeOffer.status === "PENDING" ? (
                 <div className="flex flex-wrap items-center justify-between w-full gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                   <div className="flex items-center gap-1.5">
                     <DollarSign className="size-4 text-amber-600" />
                     <span>
-                      Active Offer:{' '}
+                      Active Offer:{" "}
                       <strong className="text-foreground">
-                        ₹{activeOffer.amount.toLocaleString('en-IN')}
+                        ₹{activeOffer.amount.toLocaleString("en-IN")}
                       </strong>
                       {activeOffer.counterAmount && (
                         <span className="text-amber-700 ml-1">
-                          (Counter: ₹{activeOffer.counterAmount.toLocaleString('en-IN')})
+                          (Counter: ₹
+                          {activeOffer.counterAmount.toLocaleString("en-IN")})
                         </span>
                       )}
                     </span>
@@ -711,7 +815,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => handleRespondOffer('ACCEPT')}
+                          onClick={() => handleRespondOffer("ACCEPT")}
                           className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
                         >
                           Accept
@@ -727,7 +831,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleRespondOffer('REJECT')}
+                          onClick={() => handleRespondOffer("REJECT")}
                           className="h-7 text-xs text-destructive hover:bg-destructive/10"
                         >
                           Decline
@@ -739,7 +843,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                       <>
                         <Button
                           size="sm"
-                          onClick={() => handleRespondOffer('ACCEPT')}
+                          onClick={() => handleRespondOffer("ACCEPT")}
                           className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
                         >
                           Accept Counter
@@ -747,7 +851,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleRespondOffer('REJECT')}
+                          onClick={() => handleRespondOffer("REJECT")}
                           className="h-7 text-xs text-destructive"
                         >
                           Decline
@@ -759,7 +863,7 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleRespondOffer('CANCEL')}
+                        onClick={() => handleRespondOffer("CANCEL")}
                         className="h-7 text-xs text-muted-foreground hover:text-foreground"
                       >
                         Cancel Offer
@@ -801,7 +905,11 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                       className="h-7 pl-6 text-xs"
                     />
                   </div>
-                  <Button size="sm" onClick={handleMakeOffer} className="h-7 text-xs">
+                  <Button
+                    size="sm"
+                    onClick={handleMakeOffer}
+                    className="h-7 text-xs"
+                  >
                     Send Offer
                   </Button>
                   <Button
@@ -831,7 +939,9 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
                   </div>
                   <Button
                     size="sm"
-                    onClick={() => handleRespondOffer('COUNTER', parseFloat(counterInput))}
+                    onClick={() =>
+                      handleRespondOffer("COUNTER", parseFloat(counterInput))
+                    }
                     className="h-7 text-xs"
                   >
                     Send Counter
@@ -858,16 +968,18 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
           ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-6">
               <ShieldCheck className="size-10 stroke-[1.2] text-primary/60 mb-2" />
-              <p className="text-sm font-semibold text-foreground">Direct Campus Chat</p>
+              <p className="text-sm font-semibold text-foreground">
+                Direct Campus Chat
+              </p>
               <p className="text-xs max-w-sm mt-1">
-                Say hello, ask questions about the item's condition, or arrange where to meet on
-                campus for the handover.
+                Say hello, ask questions about the item's condition, or arrange
+                where to meet on campus for the handover.
               </p>
             </div>
           ) : (
             messages.map((msg) => {
               const isMine = msg.senderId === currentUserId;
-              const isSystem = msg.messageType !== 'TEXT';
+              const isSystem = msg.messageType !== "TEXT";
 
               if (isSystem) {
                 return (
@@ -882,24 +994,28 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
               return (
                 <div
                   key={msg.id}
-                  className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
+                  className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
                 >
                   <div
                     className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm shadow-2xs ${
                       isMine
-                        ? 'bg-primary text-primary-foreground rounded-br-xs'
-                        : 'bg-card text-card-foreground border rounded-bl-xs'
+                        ? "bg-primary text-primary-foreground rounded-br-xs"
+                        : "bg-card text-card-foreground border rounded-bl-xs"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    <p className="whitespace-pre-wrap leading-relaxed">
+                      {msg.content}
+                    </p>
                     <div
                       className={`text-[9px] mt-1 text-right ${
-                        isMine ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                        isMine
+                          ? "text-primary-foreground/70"
+                          : "text-muted-foreground"
                       }`}
                     >
                       {new Date(msg.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
+                        hour: "2-digit",
+                        minute: "2-digit",
                       })}
                     </div>
                   </div>
@@ -925,8 +1041,8 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
           <Input
             placeholder={
               !effectiveConvId
-                ? 'Initializing conversation...'
-                : 'Type a message or proposed meeting spot...'
+                ? "Initializing conversation..."
+                : "Type a message or proposed meeting spot..."
             }
             value={inputMessage}
             onChange={handleInputChange}
@@ -936,7 +1052,9 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
           <Button
             type="submit"
             size="icon"
-            disabled={sendingMsg || !inputMessage.trim() || !effectiveConvId || loading}
+            disabled={
+              sendingMsg || !inputMessage.trim() || !effectiveConvId || loading
+            }
             className="rounded-full shrink-0 shadow-xs"
           >
             {sendingMsg ? (

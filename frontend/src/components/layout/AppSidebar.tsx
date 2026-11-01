@@ -62,6 +62,7 @@ export function AppSidebar() {
     {
       title: "Core Portal",
       items: [
+        { title: "My Profile", url: "/profile", icon: UserIcon },
         {
           title: "ASSAM Dashboard",
           url: "/dashboard",

@@ -18,6 +18,8 @@ describe('Lost & Found Module Services', () => {
   let notificationService: LostFoundNotificationService;
 
   const mockPrisma = {
+    $transaction: jest.fn(async callback => callback(mockPrisma)),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     lostFoundReport: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -251,7 +253,7 @@ describe('Lost & Found Module Services', () => {
   });
 
   describe('LostFoundClaimService & 6-Digit OTP Handover', () => {
-    it('creates an ownership claim with a 6-digit OTP code and sets report to CLAIM_PENDING', async () => {
+    it('creates a pending claim without issuing an OTP before approval', async () => {
       mockPrisma.lostFoundReport.findUnique.mockResolvedValue({
         id: 'found-1',
         title: 'Found Keys with Red Lanyard',
@@ -271,7 +273,7 @@ describe('Lost & Found Module Services', () => {
       });
 
       expect(claim).toBeDefined();
-      expect(claim.verificationCode).toHaveLength(6);
+      expect(claim.verificationCode).toBeNull();
       expect(mockPrisma.lostFoundReport.update).toHaveBeenCalledWith({
         where: { id: 'found-1' },
         data: { status: LostFoundStatus.CLAIM_PENDING },
@@ -291,6 +293,8 @@ describe('Lost & Found Module Services', () => {
       mockPrisma.lostFoundClaim.findUnique.mockResolvedValue({
         id: 'claim-1',
         verificationCode: '654321',
+        verificationCodeExpiresAt: new Date(Date.now() + 60000),
+        verificationCodeAttempts: 0,
         status: 'APPROVED',
         report: { id: 'found-1', reporterId: 'user-finder', title: 'Found Keys' },
         claimant: { id: 'user-claimant', name: 'Claimant Sam', email: 'sam@inca.edu' },
@@ -307,6 +311,8 @@ describe('Lost & Found Module Services', () => {
       mockPrisma.lostFoundClaim.findUnique.mockResolvedValue({
         id: 'claim-1',
         verificationCode: '654321',
+        verificationCodeExpiresAt: new Date(Date.now() + 60000),
+        verificationCodeAttempts: 0,
         status: 'APPROVED',
         reportId: 'found-1',
         claimantId: 'user-claimant',

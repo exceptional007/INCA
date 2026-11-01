@@ -125,7 +125,7 @@ export const LoginPage: React.FC = () => {
       const response = await api.post('/auth/login', { email, password });
       const { accessToken, user } = response.data.data;
       login(accessToken, user);
-      navigate('/hub');
+      navigate(user.mustChangePassword ? '/change-password' : '/hub');
     } catch (err: any) {
       setError(
         err.response?.data?.message || 'Invalid institutional credentials or network error.'
@@ -291,6 +291,7 @@ export const LoginPage: React.FC = () => {
               )}
             </Button>
           </form>
+          <button type="button" onClick={() => navigate('/forgot-password')} className="mt-4 w-full text-center text-sm text-primary hover:underline">Forgot your password?</button>
 
           {/* Unified Platform Access Notice */}
           <div className="mt-6 pt-5 border-t border-border/80 text-center">

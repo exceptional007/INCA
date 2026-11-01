@@ -22,6 +22,7 @@ import { CreateDraftSlotDto } from './dto/create-draft-slot.dto';
 import { UpdateDraftSlotDto } from './dto/update-draft-slot.dto';
 import { ApproveBatchDto } from './dto/approve-batch.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import type { AttendanceActor } from '../../attendance/sessions/attendance-access.service';
 
 @Controller('admin/timetable-imports')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -187,11 +188,12 @@ export class TimetableImportController {
   }
 
   @Post('test-lecture-session')
-  @Roles('ADMIN', 'SUPER_ADMIN', 'FACULTY')
+  @Roles('ADMIN', 'FACULTY')
   async createTestLectureSession(
     @Body() body: { slotId?: string; scheduleId?: string; sectionId?: string },
+    @CurrentUser() actor: AttendanceActor,
   ) {
-    const result = await this.importService.createTestLectureSession(body);
+    const result = await this.importService.createTestLectureSession(body, actor);
     return result;
   }
 

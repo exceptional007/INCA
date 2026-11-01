@@ -148,6 +148,7 @@ export class StudentController {
     @Res() res: any,
   ) {
     const { stream, contentType } = await this.studentService.getPhotoStream(key);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     stream.pipe(res);
@@ -282,11 +283,10 @@ export class StudentController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
-    summary: 'Get academic notices',
+    summary: 'Get the first 10 active notice-board announcements for the current account',
   })
   async getAcademicNotices(@Req() req: any) {
-    const userRole = req.user?.role?.code || req.user?.role;
-    const notices = await this.studentService.getAcademicNotices(req.user?.id, userRole);
+    const notices = await this.studentService.getAcademicNotices(req.user?.id);
     return {
       success: true,
       message: 'Academic notices retrieved successfully.',

@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import type { Notice } from '@/types/notice';
-import { noticeApi } from '@/services/notice';
+import { NoticeEnrichment } from "./NoticeEnrichment";
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import type { Notice } from "@/types/notice";
+import { noticeApi } from "@/services/notice";
+import api from "@/api/axios";
 import {
   FileText,
   Download,
@@ -21,7 +19,7 @@ import {
   User,
   Check,
   Loader2,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface NoticeDetailModalProps {
   notice: Notice | null;
@@ -38,9 +36,52 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
 }) => {
   const [acknowledging, setAcknowledging] = useState(false);
   const [isAcked, setIsAcked] = useState(notice?.isAcknowledged || false);
-  const [ackedAt, setAckedAt] = useState<string | null>(notice?.acknowledgedAt || null);
+  const [ackedAt, setAckedAt] = useState<string | null>(
+    notice?.acknowledgedAt || null,
+  );
+  const [attachmentBusy, setAttachmentBusy] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   if (!notice) return null;
+
+  const openAttachment = async (
+    id: string,
+    fileName: string,
+    preview: boolean,
+  ) => {
+    const tab = preview ? window.open("about:blank", "_blank") : null;
+    if (preview && !tab) {
+      setAttachmentError(
+        "Allow pop-ups to preview this document, or use Download.",
+      );
+      return;
+    }
+    if (tab) tab.opener = null;
+    setAttachmentBusy(id);
+    setAttachmentError(null);
+    try {
+      const response = await api.get(
+        `/notices/${encodeURIComponent(notice.id)}/attachments/${encodeURIComponent(id)}/stream`,
+        { responseType: "blob" },
+      );
+      const url = URL.createObjectURL(response.data);
+      if (tab) tab.location.replace(url);
+      else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      tab?.close();
+      setAttachmentError("Could not load this document. Please retry.");
+    } finally {
+      setAttachmentBusy(null);
+    }
+  };
 
   const handleAcknowledge = async () => {
     try {
@@ -50,7 +91,7 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
       setAckedAt(res.acknowledgedAt);
       onNoticeUpdated?.();
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to acknowledge notice');
+      alert(err?.response?.data?.message || "Failed to acknowledge notice");
     } finally {
       setAcknowledging(false);
     }
@@ -58,15 +99,18 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
 
   const getPriorityBadge = (priority: string) => {
     const p = priority.toUpperCase();
-    if (p === 'CRITICAL' || p === 'URGENT') {
+    if (p === "CRITICAL" || p === "URGENT") {
       return (
-        <Badge variant="destructive" className="gap-1 font-bold text-xs uppercase shadow-xs">
+        <Badge
+          variant="destructive"
+          className="gap-1 font-bold text-xs uppercase shadow-xs"
+        >
           <ShieldAlert className="size-3.5" />
           Critical Notice
         </Badge>
       );
     }
-    if (p === 'HIGH') {
+    if (p === "HIGH") {
       return (
         <Badge className="bg-amber-500 hover:bg-amber-600 text-white gap-1 font-semibold text-xs shadow-2xs">
           <AlertTriangle className="size-3.5" />
@@ -74,7 +118,7 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
         </Badge>
       );
     }
-    if (p === 'LOW') {
+    if (p === "LOW") {
       return (
         <Badge variant="secondary" className="text-xs text-muted-foreground">
           Routine
@@ -89,7 +133,7 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
   };
 
   const formatFileSize = (bytes: number) => {
-    if (!bytes) return '0 KB';
+    if (!bytes) return "0 KB";
     if (bytes >= 1024 * 1024) {
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
@@ -104,7 +148,10 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {getPriorityBadge(notice.priority)}
-              <Badge variant="outline" className="font-semibold text-xs uppercase tracking-wide">
+              <Badge
+                variant="outline"
+                className="font-semibold text-xs uppercase tracking-wide"
+              >
                 {notice.category}
               </Badge>
               {notice.isPinned && (
@@ -118,9 +165,9 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
               <span className="flex items-center gap-1">
                 <Calendar className="size-3.5" />
                 {new Date(notice.publishAt).toLocaleDateString(undefined, {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
                 })}
               </span>
               {notice.expiresAt && (
@@ -158,9 +205,11 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
               </div>
             )}
 
-            {notice.targetScope !== 'ALL' && (
+            {notice.targetScope !== "ALL" && (
               <div className="flex items-center gap-1.5 text-primary/80">
-                <span>Audience: <strong>{notice.targetScope}</strong></span>
+                <span>
+                  Audience: <strong>{notice.targetScope}</strong>
+                </span>
               </div>
             )}
           </div>
@@ -168,17 +217,19 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
 
         {/* Content Body */}
         <div className="p-6 space-y-6">
-          {/* AI Summary Highlight if available */}
-          {notice.aiSummary && (
-            <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5">
-              <div className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-                <span>Summary Highlights</span>
-              </div>
-              <p className="text-sm text-foreground/90 leading-relaxed">
-                {notice.aiSummary}
+          {["PENDING_REVIEW", "REJECTED", "DRAFT"].includes(notice.status) && (
+            <div className="p-3 border rounded-lg text-sm space-y-1">
+              <p className="font-semibold">
+                {notice.status === "PENDING_REVIEW"
+                  ? "Awaiting approval — not visible to recipients"
+                  : notice.status === "REJECTED"
+                    ? "Rejected — revise and resubmit"
+                    : "Draft — not visible to recipients"}
               </p>
+              {notice.rejectionReason && <p>{notice.rejectionReason}</p>}
             </div>
           )}
+          <NoticeEnrichment notice={notice} />
 
           {/* Main Notice Body */}
           <div className="prose prose-sm dark:prose-invert max-w-none text-foreground whitespace-pre-wrap leading-relaxed font-sans text-[14.5px]">
@@ -186,12 +237,12 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
           </div>
 
           {/* Formal Acknowledgement Banner */}
-          {notice.requiresAcknowledgement && (
+          {notice.requiresAcknowledgement && notice.status === "PUBLISHED" && (
             <div
               className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                 isAcked
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                  : 'bg-amber-50 border-amber-200 text-amber-900'
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                  : "bg-amber-50 border-amber-200 text-amber-900"
               }`}
             >
               <div className="space-y-0.5">
@@ -203,8 +254,8 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
                   )}
                   <span>
                     {isAcked
-                      ? 'Notice Formally Acknowledged'
-                      : 'Formal Recipient Acknowledgement Required'}
+                      ? "Notice Formally Acknowledged"
+                      : "Formal Recipient Acknowledgement Required"}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-normal">
@@ -212,7 +263,7 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
                     ? `You recorded your formal acknowledgement on ${new Date(
                         ackedAt || notice.acknowledgedAt || Date.now(),
                       ).toLocaleString()}.`
-                    : 'The publisher requires all intended recipients to confirm they have read and understood this official announcement.'}
+                    : "The publisher requires all intended recipients to confirm they have read and understood this official announcement."}
                 </p>
               </div>
 
@@ -235,19 +286,22 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
           )}
 
           {/* Attachments Section */}
+          {attachmentError && (
+            <p role="alert" className="text-sm text-destructive">
+              {attachmentError}
+            </p>
+          )}
           {notice.attachments && notice.attachments.length > 0 && (
             <div className="space-y-2.5 pt-2 border-t">
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <FileText className="size-3.5" />
-                <span>Supporting Official Documents ({notice.attachments.length})</span>
+                <span>
+                  Supporting Official Documents ({notice.attachments.length})
+                </span>
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {notice.attachments.map((att) => {
-                  const streamUrl =
-                    att.streamUrl ||
-                    noticeApi.getAttachmentStreamUrl(notice.id, att.id);
-
                   return (
                     <div
                       key={att.id}
@@ -258,7 +312,10 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
                           <FileText className="size-5" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold text-foreground truncate" title={att.fileName}>
+                          <p
+                            className="text-xs font-semibold text-foreground truncate"
+                            title={att.fileName}
+                          >
                             {att.fileName}
                           </p>
                           <span className="text-[11px] text-muted-foreground">
@@ -272,7 +329,10 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
                           size="sm"
                           variant="outline"
                           className="h-8 px-2 text-xs gap-1"
-                          onClick={() => window.open(streamUrl, '_blank')}
+                          onClick={() =>
+                            void openAttachment(att.id, att.fileName, true)
+                          }
+                          disabled={!!attachmentBusy}
                           title="Preview in new tab"
                         >
                           <ExternalLink className="size-3.5" />
@@ -282,12 +342,17 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
                           size="sm"
                           variant="ghost"
                           className="h-8 px-2 text-xs"
-                          asChild
+                          onClick={() =>
+                            void openAttachment(att.id, att.fileName, false)
+                          }
+                          disabled={!!attachmentBusy}
                           title="Download document"
                         >
-                          <a href={streamUrl} download={att.fileName}>
+                          {attachmentBusy === att.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
                             <Download className="size-3.5" />
-                          </a>
+                          )}
                         </Button>
                       </div>
                     </div>

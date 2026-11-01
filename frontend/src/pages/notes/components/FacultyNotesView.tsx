@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +40,11 @@ import { DeleteNoteConfirmDialog } from './DeleteNoteConfirmDialog';
 import { DocumentPreviewModal } from './DocumentPreviewModal';
 
 export const FacultyNotesView: React.FC = () => {
+  const queryClient = useQueryClient();
+  const refreshNotes = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['faculty-notes'] }),
+    queryClient.invalidateQueries({ queryKey: ['student-notes'] }),
+  ]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [page, setPage] = useState<number>(1);
@@ -52,7 +57,7 @@ export const FacultyNotesView: React.FC = () => {
   const [deleteNote, setDeleteNote] = useState<LearningNote | null>(null);
 
   // Fetch faculty notes and summary metrics
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['faculty-notes', searchTerm, statusFilter, page],
     queryFn: async () => {
       const params: any = { page, limit: 10 };
@@ -62,6 +67,8 @@ export const FacultyNotesView: React.FC = () => {
       const res = await api.get('/notes/faculty', { params });
       return res.data;
     },
+    refetchInterval: (query) => query.state.data?.metrics?.processingNotes > 0 ? 2000 : 15000,
+    refetchIntervalInBackground: false,
   });
 
   const notes: LearningNote[] = data?.items || [];
@@ -100,7 +107,7 @@ export const FacultyNotesView: React.FC = () => {
   const handleRetryProcessing = async (noteId: string) => {
     try {
       await api.post(`/notes/${noteId}/retry`);
-      refetch();
+      await refreshNotes();
     } catch (err: any) {
       console.error('Retry failed:', err);
     }
@@ -466,28 +473,33 @@ export const FacultyNotesView: React.FC = () => {
       <UploadNoteModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
-        onSuccess={() => refetch()}
+        onSuccess={() => {
+          setPage(1);
+          setSearchTerm('');
+          setStatusFilter('ALL');
+          void refreshNotes();
+        }}
       />
 
       <EditNoteModal
         note={editNote}
         isOpen={!!editNote}
         onClose={() => setEditNote(null)}
-        onSuccess={() => refetch()}
+        onSuccess={() => { void refreshNotes(); }}
       />
 
       <ReplaceDocumentModal
         note={replaceNote}
         isOpen={!!replaceNote}
         onClose={() => setReplaceNote(null)}
-        onSuccess={() => refetch()}
+        onSuccess={() => { void refreshNotes(); }}
       />
 
       <DeleteNoteConfirmDialog
         note={deleteNote}
         isOpen={!!deleteNote}
         onClose={() => setDeleteNote(null)}
-        onSuccess={() => refetch()}
+        onSuccess={() => { void refreshNotes(); }}
       />
 
       <DocumentPreviewModal

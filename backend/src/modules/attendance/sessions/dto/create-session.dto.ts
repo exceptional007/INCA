@@ -1,7 +1,6 @@
 import {
   IsUUID,
   IsOptional,
-  ValidateIf,
   IsNotEmpty,
   IsDateString,
 } from 'class-validator';
@@ -24,10 +23,10 @@ export class CreateSessionDto {
   @IsOptional()
   activityId?: string;
 
-  @ApiProperty({ description: 'UUID of the faculty taking attendance.' })
+  @ApiPropertyOptional({ description: 'Deprecated compatibility field. Recording faculty is derived from the authenticated user.' })
   @IsUUID()
-  @IsNotEmpty()
-  takenById: string;
+  @IsOptional()
+  takenById?: string;
 
   @ApiProperty({
     description: 'Date on which attendance is being taken (YYYY-MM-DD).',

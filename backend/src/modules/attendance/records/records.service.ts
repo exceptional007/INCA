@@ -7,18 +7,23 @@ import { RecordRepository } from './repositories/record.repository';
 import { SessionRepository } from '../sessions/repositories/session.repository';
 import { SubmitAttendanceDto } from './dto/submit-attendance.dto';
 import { ApiResponse } from '../../../common/interfaces/api-response.interface';
+import { AttendanceAccessService } from '../sessions/attendance-access.service';
+import type { AttendanceActor } from '../sessions/attendance-access.service';
 
 @Injectable()
 export class RecordsService {
   constructor(
     private readonly recordRepository: RecordRepository,
     private readonly sessionRepository: SessionRepository,
+    private readonly access: AttendanceAccessService,
   ) {}
 
   async submitRecords(
     sessionId: string,
     dto: SubmitAttendanceDto,
+    actor: AttendanceActor,
   ): Promise<ApiResponse<any>> {
+    await this.access.assertSessionAccess(sessionId, actor, true);
     const session = await this.sessionRepository.findById(sessionId);
     if (!session) {
       throw new NotFoundException(
@@ -29,6 +34,16 @@ export class RecordsService {
       throw new BadRequestException(
         'This attendance session is already submitted and locked. Use the edit endpoint to make changes.',
       );
+    }
+
+    const roster = await this.sessionRepository.getRoster(sessionId);
+    const eligibleIds = new Set(roster.map(student => student.id));
+    const submittedIds = dto.records.map(record => record.studentId);
+    if (new Set(submittedIds).size !== submittedIds.length) {
+      throw new BadRequestException('A student cannot appear more than once in the submission.');
+    }
+    if (submittedIds.some(id => !eligibleIds.has(id))) {
+      throw new BadRequestException('Attendance can only be recorded for active students in this session roster.');
     }
 
     const records = await this.recordRepository.bulkCreate(
@@ -43,7 +58,8 @@ export class RecordsService {
     };
   }
 
-  async getRecordsBySession(sessionId: string): Promise<ApiResponse<any>> {
+  async getRecordsBySession(sessionId: string, actor: AttendanceActor): Promise<ApiResponse<any>> {
+    await this.access.assertSessionAccess(sessionId, actor);
     const session = await this.sessionRepository.findById(sessionId);
     if (!session) {
       throw new NotFoundException(
@@ -59,11 +75,12 @@ export class RecordsService {
     };
   }
 
-  async findOneRecord(id: string): Promise<ApiResponse<any>> {
+  async findOneRecord(id: string, actor: AttendanceActor): Promise<ApiResponse<any>> {
     const record = await this.recordRepository.findById(id);
     if (!record) {
       throw new NotFoundException(`Attendance record with ID ${id} not found.`);
     }
+    await this.access.assertSessionAccess(record.attendanceSessionId, actor);
     return {
       success: true,
       message: 'Attendance record retrieved successfully.',

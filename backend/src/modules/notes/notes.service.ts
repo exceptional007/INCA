@@ -13,6 +13,20 @@ import { UpdateNoteDto } from './dto/update-note.dto';
 import { QueryNotesDto } from './dto/query-notes.dto';
 import { NoteSourceType, NoteStatus, Prisma } from '@prisma/client';
 
+// Accommodate subject codes entered with or without the usual separator.
+function subjectCodeFilters(term: string): Prisma.LearningNoteWhereInput[] {
+  const variants = new Set([term]);
+  const match = term.match(/^([a-z]+)[\s-]*(\d+)$/i);
+  if (match) {
+    variants.add(match[1] + match[2]);
+    variants.add(match[1] + ' ' + match[2]);
+    variants.add(match[1] + '-' + match[2]);
+  }
+  return [...variants].map((code) => ({
+    subject: { code: { contains: code, mode: 'insensitive' } },
+  }));
+}
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 @Injectable()
@@ -36,12 +50,6 @@ export class NotesService {
       include: { department: true },
     });
 
-    if (!faculty && isGlobalAdmin) {
-      // Find or fallback to first faculty for admin test context
-      faculty = await this.prisma.faculty.findFirst({
-        include: { department: true },
-      });
-    }
 
     if (!faculty) {
       throw new ForbiddenException('Faculty profile not found for this account.');
@@ -151,9 +159,7 @@ export class NotesService {
   ) {
     const isGlobalAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(userRole);
     let faculty = await this.prisma.faculty.findUnique({ where: { userId } });
-    if (!faculty && isGlobalAdmin) {
-      faculty = await this.prisma.faculty.findFirst();
-    }
+
 
     if (!faculty) {
       throw new ForbiddenException('Faculty profile required to upload learning notes.');
@@ -267,16 +273,14 @@ export class NotesService {
   async listFacultyNotes(userId: string, userRole: string, query: QueryNotesDto) {
     const isGlobalAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(userRole);
     let faculty = await this.prisma.faculty.findUnique({ where: { userId } });
-    if (!faculty && isGlobalAdmin) {
-      faculty = await this.prisma.faculty.findFirst();
-    }
 
-    if (!faculty) {
+
+    if (!faculty && !isGlobalAdmin) {
       throw new ForbiddenException('Faculty profile required.');
     }
 
     const where: Prisma.LearningNoteWhereInput = {
-      ...(isGlobalAdmin ? {} : { facultyId: faculty.id }),
+      ...(isGlobalAdmin ? {} : { facultyId: faculty!.id }),
     };
 
     if (query.status) {
@@ -301,6 +305,7 @@ export class NotesService {
         { title: { contains: term, mode: 'insensitive' } },
         { description: { contains: term, mode: 'insensitive' } },
         { subject: { name: { contains: term, mode: 'insensitive' } } },
+        ...subjectCodeFilters(term),
         { tags: { has: term } },
       ];
     }
@@ -324,7 +329,7 @@ export class NotesService {
       this.prisma.learningNote.count({ where }),
       this.prisma.learningNote.groupBy({
         by: ['status'],
-        where: isGlobalAdmin ? {} : { facultyId: faculty.id },
+        where: isGlobalAdmin ? {} : { facultyId: faculty!.id },
         _count: { id: true },
       }),
     ]);
@@ -631,6 +636,7 @@ export class NotesService {
         { title: { contains: term, mode: 'insensitive' } },
         { description: { contains: term, mode: 'insensitive' } },
         { subject: { name: { contains: term, mode: 'insensitive' } } },
+        ...subjectCodeFilters(term),
         { faculty: { firstName: { contains: term, mode: 'insensitive' } } },
         { faculty: { lastName: { contains: term, mode: 'insensitive' } } },
         { tags: { has: term } },

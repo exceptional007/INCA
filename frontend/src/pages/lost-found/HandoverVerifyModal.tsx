@@ -112,6 +112,7 @@ export const HandoverVerifyModal: React.FC<HandoverVerifyModalProps> = ({
                 <p className="text-[11px] leading-relaxed">
                   Ask the person receiving the item for the 6-digit OTP displayed on their screen.
                   Entering this code confirms you have handed over the item safely on campus.
+                  {' '}Codes expire after 15 minutes and lock after five failed attempts. If expired or locked, ask the claimant to generate a new code in My Items & Claims.
                 </p>
               </div>
 

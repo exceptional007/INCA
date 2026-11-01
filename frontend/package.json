@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:netlify": "npm run build && node scripts/write-netlify-redirects.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -34,8 +35,10 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.85.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.2",
     "recharts": "^3.10.1",
+    "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.4",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",

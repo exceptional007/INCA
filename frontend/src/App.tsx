@@ -19,6 +19,8 @@ const LostFoundPage = lazy(() => import('./pages/lost-found/LostFoundPage').then
 const NoticeBoardPage = lazy(() => import('./pages/notices/NoticeBoardPage').then((m) => ({ default: m.NoticeBoardPage })));
 const PollsPage = lazy(() => import('./pages/polls/PollsPage').then((m) => ({ default: m.PollsPage })));
 const FeatureHub = lazy(() => import('./pages/dashboard/FeatureHub').then((m) => ({ default: m.FeatureHub })));
+const PasswordPage = lazy(() => import('./pages/auth/PasswordPage'));
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -46,14 +48,18 @@ export const App: React.FC = () => {
               {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/forgot-password" element={<PasswordPage key="forgot" />} />
+              <Route path="/reset-password" element={<PasswordPage key="reset" />} />
 
               {/* Protected Routes */}
               <Route element={<ProtectedRoute />}>
+                <Route path="/change-password" element={<PasswordPage key="change" />} />
                 <Route path="/hub" element={<FeatureHub />} />
 
                 {/* ASSAM Module routes inside AppLayout */}
                 <Route element={<AppLayout />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/schedules" element={<SchedulingPage />} />
                   <Route path="/activities" element={<ActivitiesPage />} />
                   <Route path="/reports" element={<ReportsPage />} />

@@ -93,8 +93,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Claim Filed Successfully!</h3>
                 <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto">
-                  The finder has been notified. When meeting on campus, show them your 6-digit
-                  handover verification code below:
+                  The finder has been notified. Your handover code becomes available after the claim is approved.
                 </p>
               </div>
 
@@ -123,7 +122,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
               )}
 
               <p className="text-[11px] text-slate-400">
-                You can also access this code at any time under your "My Items & Claims" tab.
+                After approval, open "My Items & Claims" to view or regenerate your 15-minute handover code.
               </p>
 
               <div className="pt-2">

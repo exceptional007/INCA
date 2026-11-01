@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/context/AuthContext';
 
 interface AiMatchesModalProps {
   isOpen: boolean;
@@ -25,6 +26,8 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
   matches,
   onMatchUpdated,
 }) => {
+  const { user } = useAuth();
+  const isStaff = ['ADMIN', 'SUPER_ADMIN', 'FACULTY'].includes(user?.role?.code || '');
   if (!isOpen) return null;
 
   const handleReviewMatch = async (matchId: string, status: 'VERIFIED_MATCH' | 'REJECTED') => {
@@ -85,6 +88,8 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
               const isHigh = score >= 75;
               const lostImg = match.lostReport?.images?.[0]?.url || match.lostReport?.images?.[0]?.storageKey;
               const foundImg = match.foundReport?.images?.[0]?.url || match.foundReport?.images?.[0]?.storageKey;
+              const canReview = !!user?.id && (isStaff ||
+                match.lostReport?.reporterId === user.id || match.foundReport?.reporterId === user.id);
 
               return (
                 <div
@@ -214,7 +219,7 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
                   )}
 
                   {/* Match Review Actions */}
-                  {match.status === 'PENDING_REVIEW' && (
+                  {match.status === 'PENDING_REVIEW' && canReview && (
                     <div className="flex items-center justify-end gap-2 pt-1">
                       <Button
                         variant="outline"

@@ -21,16 +21,16 @@ export class SchedulesController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Create a specific schedule' })
-  create(@Body() createScheduleDto: CreateScheduleDto) {
-    return this.schedulesService.create(createScheduleDto);
+  create(@Body() createScheduleDto: CreateScheduleDto, @Req() req: any) {
+    return this.schedulesService.create(createScheduleDto, { id: req.user?.id, role: req.user?.role?.code || req.user?.role });
   }
 
   @Post('generate')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Generate semester schedules from templates' })
-  generate(@Body() generateDto: GenerateScheduleDto) {
-    return this.schedulesService.generate(generateDto);
+  generate(@Body() generateDto: GenerateScheduleDto, @Req() req: any) {
+    return this.schedulesService.generate(generateDto, { id: req.user?.id, role: req.user?.role?.code || req.user?.role });
   }
 
   @Get()
@@ -67,7 +67,10 @@ export class SchedulesController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Update a schedule' })
-  update(@Param('id') id: string, @Body() updateScheduleDto: UpdateScheduleDto) {
-    return this.schedulesService.update(id, updateScheduleDto);
+  update(@Param('id') id: string, @Body() updateScheduleDto: UpdateScheduleDto, @Req() req: any) {
+    return this.schedulesService.update(id, updateScheduleDto, {
+      id: req.user?.id,
+      role: req.user?.role?.code || req.user?.role,
+    });
   }
 }

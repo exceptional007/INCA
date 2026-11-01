@@ -14,11 +14,15 @@ import { CreateActivityTypeDto } from './dto/create-activity-type.dto';
 import { UpdateActivityTypeDto } from './dto/update-activity-type.dto';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { ActivityActor } from './activities.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Activities')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('activities')
 export class ActivitiesController {
   constructor(private readonly activitiesService: ActivitiesService) {}
@@ -26,9 +30,15 @@ export class ActivitiesController {
   // ─── Activity Types ───────────────────────────────────────────────────────
 
   @Post('types')
-  @ApiOperation({ summary: 'Create an activity type (e.g. Guest Lecture, Workshop)' })
-  createType(@Body() dto: CreateActivityTypeDto) {
-    return this.activitiesService.createActivityType(dto);
+  @ApiOperation({
+    summary: 'Create an activity type (e.g. Guest Lecture, Workshop)',
+  })
+  @Roles('ADMIN')
+  createType(
+    @Body() dto: CreateActivityTypeDto,
+    @CurrentUser() actor: ActivityActor,
+  ) {
+    return this.activitiesService.createActivityType(dto, actor);
   }
 
   @Get('types')
@@ -45,22 +55,31 @@ export class ActivitiesController {
 
   @Patch('types/:id')
   @ApiOperation({ summary: 'Update an activity type' })
-  updateType(@Param('id') id: string, @Body() dto: UpdateActivityTypeDto) {
-    return this.activitiesService.updateActivityType(id, dto);
+  @Roles('ADMIN')
+  updateType(
+    @Param('id') id: string,
+    @Body() dto: UpdateActivityTypeDto,
+    @CurrentUser() actor: ActivityActor,
+  ) {
+    return this.activitiesService.updateActivityType(id, dto, actor);
   }
 
   @Delete('types/:id')
-  @ApiOperation({ summary: 'Delete an activity type (only if no activities are linked)' })
-  removeType(@Param('id') id: string) {
-    return this.activitiesService.removeActivityType(id);
+  @ApiOperation({
+    summary: 'Delete an activity type (only if no activities are linked)',
+  })
+  @Roles('ADMIN')
+  removeType(@Param('id') id: string, @CurrentUser() actor: ActivityActor) {
+    return this.activitiesService.removeActivityType(id, actor);
   }
 
   // ─── Activities ───────────────────────────────────────────────────────────
 
   @Post()
   @ApiOperation({ summary: 'Create a new activity (event)' })
-  create(@Body() dto: CreateActivityDto) {
-    return this.activitiesService.createActivity(dto);
+  @Roles('ADMIN', 'FACULTY')
+  create(@Body() dto: CreateActivityDto, @CurrentUser() actor: ActivityActor) {
+    return this.activitiesService.createActivity(dto, actor);
   }
 
   @Get()
@@ -76,7 +95,9 @@ export class ActivitiesController {
   }
 
   @Get('faculty/:facultyId')
-  @ApiOperation({ summary: 'Get all activities organised by a specific faculty' })
+  @ApiOperation({
+    summary: 'Get all activities organised by a specific faculty',
+  })
   findByFaculty(@Param('facultyId') facultyId: string) {
     return this.activitiesService.findActivitiesByFaculty(facultyId);
   }
@@ -89,13 +110,19 @@ export class ActivitiesController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update an activity' })
-  update(@Param('id') id: string, @Body() dto: UpdateActivityDto) {
-    return this.activitiesService.updateActivity(id, dto);
+  @Roles('ADMIN', 'FACULTY')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateActivityDto,
+    @CurrentUser() actor: ActivityActor,
+  ) {
+    return this.activitiesService.updateActivity(id, dto, actor);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete an activity' })
-  remove(@Param('id') id: string) {
-    return this.activitiesService.removeActivity(id);
+  @Roles('ADMIN', 'FACULTY')
+  remove(@Param('id') id: string, @CurrentUser() actor: ActivityActor) {
+    return this.activitiesService.removeActivity(id, actor);
   }
 }

@@ -1,3 +1,4 @@
+import { generateInitialPassword, useInitialCredentials } from '@/components/useInitialCredentials';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Building2, Users, ShieldCheck, Activity, Search, Plus, Trash2, Edit3, Settings, AlertTriangle, Loader2 } from 'lucide-react';
@@ -87,6 +88,7 @@ interface SystemStats {
 }
 
 export const SuperAdminDashboard: React.FC = () => {
+  const { showCredentials, credentialsDialog } = useInitialCredentials();
   const [activeTab, setActiveTab] = useState<'overview' | 'admins' | 'settings'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -234,12 +236,15 @@ export const SuperAdminDashboard: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      const initialPassword = generateInitialPassword();
       const response = await api.post('/auth/admins', {
+        password: initialPassword,
         name: formName.trim(),
         email: formEmail.trim(),
         departmentId: formDepartmentId,
       });
       if (response.data?.success) {
+        showCredentials(formEmail.trim(), initialPassword);
         toast.success('Department Admin account created successfully.');
         setIsCreateOpen(false);
         await Promise.all([fetchAdmins(), fetchStats(), fetchLogs()]);
@@ -359,6 +364,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans">
+      {credentialsDialog}
       {/* Dashboard Section Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

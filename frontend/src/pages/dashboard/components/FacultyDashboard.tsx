@@ -68,7 +68,7 @@ export const FacultyDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'schedule' | 'logs'>('schedule');
 
-  const getTodayDateStr = () => new Date().toISOString().split('T')[0];
+  const getTodayDateStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   // Real data state
   const [sessions, setSessions] = useState<LectureSession[]>([]);
@@ -264,6 +264,16 @@ export const FacultyDashboard: React.FC = () => {
     fetchPastLogs();
     fetchApprovedRequests();
   }, [fetchTodaySchedules, fetchPastLogs, fetchApprovedRequests]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void fetchTodaySchedules(); };
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.clearInterval(timer);
+    };
+  }, [fetchTodaySchedules]);
 
   // Navigate to Mark Attendance Page for active / approved lecture
   const handleTakeAttendance = (sess: LectureSession) => {

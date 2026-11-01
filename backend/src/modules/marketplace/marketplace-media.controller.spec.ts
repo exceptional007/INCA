@@ -11,7 +11,7 @@ describe('MarketplaceMediaController', () => {
 
   beforeEach(async () => {
     mockR2Storage = {
-      getObjectStream: jest.fn().mockImplementation(async (key: string) => {
+      getPublicImageStream: jest.fn().mockImplementation(async (key: string) => {
         const stream = new Readable({
           read() {
             this.push(Buffer.from('marketplace-mock-image'));
@@ -49,14 +49,14 @@ describe('MarketplaceMediaController', () => {
       } as unknown as Response;
 
       const pipeSpy = jest.fn();
-      (mockR2Storage.getObjectStream as jest.Mock).mockResolvedValueOnce({
+      (mockR2Storage.getPublicImageStream as jest.Mock).mockResolvedValueOnce({
         stream: { pipe: pipeSpy },
         contentType: 'image/png',
       });
 
       await controller.streamImageByQuery('marketplace-images/listing-1.png', res);
 
-      expect(mockR2Storage.getObjectStream).toHaveBeenCalledWith('marketplace-images/listing-1.png');
+      expect(mockR2Storage.getPublicImageStream).toHaveBeenCalledWith('marketplace-images/listing-1.png', 'marketplace');
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png');
       expect(pipeSpy).toHaveBeenCalledWith(res);
     });
@@ -76,14 +76,14 @@ describe('MarketplaceMediaController', () => {
       } as unknown as Response;
 
       const pipeSpy = jest.fn();
-      (mockR2Storage.getObjectStream as jest.Mock).mockResolvedValueOnce({
+      (mockR2Storage.getPublicImageStream as jest.Mock).mockResolvedValueOnce({
         stream: { pipe: pipeSpy },
         contentType: 'image/jpeg',
       });
 
-      await controller.streamImageByPath('listing.jpg', res);
+      await controller.streamImageByPath('marketplace-images/listing.jpg', res);
 
-      expect(mockR2Storage.getObjectStream).toHaveBeenCalledWith('listing.jpg');
+      expect(mockR2Storage.getPublicImageStream).toHaveBeenCalledWith('marketplace-images/listing.jpg', 'marketplace');
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
       expect(pipeSpy).toHaveBeenCalledWith(res);
     });
@@ -94,15 +94,15 @@ describe('MarketplaceMediaController', () => {
       } as unknown as Response;
 
       const pipeSpy = jest.fn();
-      (mockR2Storage.getObjectStream as jest.Mock).mockResolvedValueOnce({
+      (mockR2Storage.getPublicImageStream as jest.Mock).mockResolvedValueOnce({
         stream: { pipe: pipeSpy },
         contentType: 'image/jpeg',
       });
 
       await controller.streamImageByPath(['marketplace-images', 'subfolder', 'item.jpg'], res);
 
-      expect(mockR2Storage.getObjectStream).toHaveBeenCalledWith(
-        'marketplace-images/subfolder/item.jpg',
+      expect(mockR2Storage.getPublicImageStream).toHaveBeenCalledWith(
+        'marketplace-images/subfolder/item.jpg', 'marketplace',
       );
       expect(pipeSpy).toHaveBeenCalledWith(res);
     });

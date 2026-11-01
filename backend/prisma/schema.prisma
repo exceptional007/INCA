@@ -42,6 +42,14 @@ model User {
 
   isActive           Boolean @default(true)
   mustChangePassword Boolean @default(true)
+  authVersion        Int @default(0)
+  displayName        String?
+  profilePhone       String?
+  profilePhotoKey    String?
+  authSessions       AuthSession[]
+  passwordResets     PasswordReset[]
+  profileRequests    ProfileChangeRequest[] @relation("ProfileOwner")
+  profileReviews     ProfileChangeRequest[] @relation("ProfileReviewer")
 
   lastLoginAt DateTime?
 
@@ -84,6 +92,63 @@ model User {
   @@index([roleId])
   @@index([isActive])
   @@map("users")
+}
+
+model AuthSession {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyId String
+  authVersion Int @default(0)
+  refreshHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, revokedAt])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model PasswordReset {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique
+  passwordHashAtIssue String
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_resets")
+}
+
+model AuthThrottle {
+  key String @id
+  attempts Int @default(1)
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("auth_throttles")
+}
+
+model ProfileChangeRequest {
+  id String @id @default(uuid())
+  userId String
+  user User @relation("ProfileOwner", fields: [userId], references: [id], onDelete: Cascade)
+  changes Json
+  previous Json
+  photoKey String?
+  status String @default("PENDING")
+  reason String?
+  reviewerId String?
+  reviewer User? @relation("ProfileReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([reviewerId])
+  @@map("profile_change_requests")
 }
 
 model Faculty {
@@ -1362,6 +1427,8 @@ model LostFoundClaim {
   claimDetails     String      @db.Text
   proofImageUrl    String?
   verificationCode String?
+  verificationCodeExpiresAt DateTime? @db.Timestamptz(3)
+  verificationCodeAttempts Int @default(0)
   status           ClaimStatus @default(PENDING)
   staffNote        String?     @db.Text
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,10 +35,12 @@ export const MarkAttendancePage: React.FC = () => {
   const scheduleIdParam = searchParams.get('scheduleId');
 
   const [schedules, setSchedules] = useState<any[]>([]);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [selectedSchedule, setSelectedSchedule] = useState<any | null>(null);
   const [activeSession, setActiveSession] = useState<any | null>(null);
 
   const [studentList, setStudentList] = useState<any[]>([]);
+  const sessionRequestId = useRef(0);
   const [attendanceMap, setAttendanceMap] = useState<Record<string, 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'>>({});
 
   const [isLoading, setIsLoading] = useState(false);
@@ -68,64 +70,27 @@ export const MarkAttendancePage: React.FC = () => {
     fetchTodaySchedules();
   }, []);
 
-  const loadStudents = async (): Promise<any[]> => {
-    let loaded: any[] = [];
-    try {
-      const studentsRes = await api.get('/students');
-      const allStudents = studentsRes.data?.data || studentsRes.data || [];
-      if (allStudents.length > 0) {
-        loaded = allStudents;
-      }
-    } catch (e) {
-      console.error('Failed to load students from DB:', e);
-    }
-
-    if (loaded.length === 0) {
-      loaded = [
-        { id: '643b1e4b-39c5-4b77-8c83-5db870fb9fc1', firstName: 'Akshhat', lastName: 'Srivastava', rollNumber: '2305251540007', collegeId: 'BIT-23/DS/C/08' },
-        { id: 'b7e3eac1-3fb2-4e3d-bd34-fd53dac35a2e', firstName: 'Shubham', lastName: 'Prajapati', rollNumber: '2305251540057', collegeId: 'BIT-23/DS/C/83' },
-        { id: '1a770019-494b-43df-903d-5ec52f342e88', firstName: 'Krishna', lastName: 'Chaturvedi', rollNumber: '2305251540028', collegeId: 'BIT-23/DS/C/02' },
-        { id: 'b89be4c5-0d18-4b61-9576-e310f7a03cfd', firstName: 'Mohammad', lastName: 'Fahad', rollNumber: '2405251549002', collegeId: 'BIT-24/DS/L/D/02' },
-        { id: '1faac9d9-2d99-4c18-8cc9-935edb460707', firstName: 'Sanskar', lastName: 'Gupta', rollNumber: '2305251540049', collegeId: 'BIT-23/DS/C/085' },
-      ];
-    }
-    setStudentList(loaded);
-    return loaded;
-  };
-
   const fetchTodaySchedules = async () => {
     setIsLoading(true);
     try {
-      const loadedStudents = await loadStudents();
-      let data: any[] = [];
-      try {
-        const res = await api.get('/schedules/today');
-        data = res.data.data || [];
-      } catch (err) {
-        console.error('Failed to load today schedules', err);
-      }
-
-      // If no schedules returned for exact today, fallback to recent active schedules
-      if (data.length === 0) {
-        try {
-          const allRes = await api.get('/schedules');
-          data = allRes.data.data || [];
-        } catch (err) {
-          console.error('Failed to load all schedules', err);
-        }
-      }
-
+      setScheduleError(null);
+      const response = await api.get('/schedules/today');
+      const data: any[] = response.data.data || [];
+      setSelectedSchedule(null);
       setSchedules(data);
       if (data.length > 0) {
         setSelectedSchedule(data[0]);
         if (scheduleIdParam) {
           const match = data.find((s: any) => s.id === scheduleIdParam);
           if (match) {
-            handleOpenSession(match, loadedStudents);
+            handleOpenSession(match);
           }
         }
       }
     } catch (err) {
+      setSchedules([]);
+      setSelectedSchedule(null);
+      setScheduleError('Could not load today’s classes. Please retry.');
       console.error('Failed to load today schedules', err);
     } finally {
       setIsLoading(false);
@@ -133,93 +98,46 @@ export const MarkAttendancePage: React.FC = () => {
   };
 
   // Open session & fetch students for selected schedule, opening the modal
-  const handleOpenSession = async (schedule: any, preloadedStudents?: any[]) => {
+  const handleOpenSession = async (schedule: any) => {
+    const requestId = ++sessionRequestId.current;
     setSelectedSchedule(schedule);
+    setActiveSession(null);
+    setStudentList([]);
+    setAttendanceMap({});
     setIsLoading(true);
     setStatusMsg(null);
     setSessionModalOpen(true);
-    setStatusMsg(null);
-
-    const activeStudents = preloadedStudents || (studentList.length > 0 ? studentList : await loadStudents());
-
     try {
       // 1. Create or get session
       const sessionRes = await api.post('/attendance/sessions', {
         scheduleId: schedule.id,
-        takenById: user?.faculty?.id || schedule.template?.facultyId || 'demo-faculty-id',
         attendanceDate: new Date().toISOString().split('T')[0],
       });
 
       const session = sessionRes.data.data;
+      const rosterRes = await api.get(`/attendance/sessions/${session.id}/roster`);
+      if (requestId !== sessionRequestId.current) return;
+      const activeStudents: any[] = rosterRes.data.data;
+      if (!Array.isArray(activeStudents)) throw new Error('Invalid attendance roster response.');
       setActiveSession(session);
       setStudentList(activeStudents);
 
-      // Initialize map: if session has records, restore them; otherwise all PRESENT
+      // Restore statuses only for students in the current, server-authorized roster.
       const initialMap: Record<string, any> = {};
-      if (session?.records && session.records.length > 0) {
-        session.records.forEach((r: any) => {
-          initialMap[r.studentId] = r.status;
-        });
-      }
+      const savedRecords = new Map<string, any>((session.records || []).map((record: any) => [record.studentId, record.status]));
       activeStudents.forEach((st: any) => {
-        if (!initialMap[st.id]) {
-          initialMap[st.id] = 'PRESENT';
-        }
+        initialMap[st.id] = savedRecords.get(st.id) || 'PRESENT';
       });
       setAttendanceMap(initialMap);
+      if (activeStudents.length === 0) setStatusMsg('No active students are enrolled in this lecture section.');
     } catch (err: any) {
-      if (err.response?.status === 409) {
-        // Session already exists — fetch existing session
-        fetchExistingSession(schedule.id, activeStudents);
-      } else {
-        setStatusMsg(err.response?.data?.message || 'Error initializing session');
-        // Still activate the student list so faculty can mark attendance
-        setStudentList(activeStudents);
-        const initialMap: Record<string, any> = {};
-        activeStudents.forEach((st: any) => {
-          initialMap[st.id] = 'PRESENT';
-        });
-        setAttendanceMap(initialMap);
-      }
+      if (requestId !== sessionRequestId.current) return;
+      setActiveSession(null);
+      setStudentList([]);
+      setAttendanceMap({});
+      setStatusMsg(err.response?.data?.message || 'Unable to load this session and its roster.');
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchExistingSession = async (scheduleId: string, activeStudents?: any[]) => {
-    const studentsToUse = activeStudents || studentList;
-    try {
-      const res = await api.get('/attendance/sessions');
-      const found = res.data.data?.find((s: any) => s.scheduleId === scheduleId);
-      if (found) {
-        setActiveSession(found);
-        try {
-          const recRes = await api.get(`/attendance/sessions/${found.id}/records`);
-          const records = recRes.data?.data || [];
-          const loadedMap: Record<string, any> = {};
-          if (records.length > 0) {
-            records.forEach((r: any) => {
-              loadedMap[r.studentId] = r.status;
-            });
-          }
-          studentsToUse.forEach((st: any) => {
-            if (!loadedMap[st.id]) {
-              loadedMap[st.id] = 'PRESENT';
-            }
-          });
-          setAttendanceMap(loadedMap);
-        } catch (re) {
-          console.error('Failed to fetch session records:', re);
-        }
-      } else {
-        const initialMap: Record<string, any> = {};
-        studentsToUse.forEach((st: any) => {
-          initialMap[st.id] = 'PRESENT';
-        });
-        setAttendanceMap(initialMap);
-      }
-    } catch (e) {
-      console.error(e);
+      if (requestId === sessionRequestId.current) setIsLoading(false);
     }
   };
 
@@ -234,14 +152,14 @@ export const MarkAttendancePage: React.FC = () => {
   };
 
   const handleSubmitAttendance = async () => {
-    if (!activeSession) return;
+    if (!activeSession || isLoading || isSubmitting || studentList.length === 0) return;
     setIsSubmitting(true);
     setStatusMsg(null);
 
     try {
-      const records = Object.entries(attendanceMap).map(([studentId, status]) => ({
-        studentId,
-        status,
+      const records = studentList.map(student => ({
+        studentId: student.id,
+        status: attendanceMap[student.id],
       }));
 
       // 1. Submit records
@@ -272,7 +190,6 @@ export const MarkAttendancePage: React.FC = () => {
     try {
       await api.patch(`/attendance/records/${editingRecord.id}/edit`, {
         newStatus: editStatus,
-        editedById: user.id,
         reason: editReason,
       });
 
@@ -316,32 +233,14 @@ export const MarkAttendancePage: React.FC = () => {
         </h2>
         {isLoading && !activeSession ? (
           <div className="text-sm text-muted-foreground">Loading schedules...</div>
+        ) : scheduleError ? (
+          <Card className="p-8 text-center space-y-3"><p role="alert">{scheduleError}</p><Button onClick={fetchTodaySchedules}>Retry</Button></Card>
         ) : schedules.length === 0 ? (
           <Card className="p-8 text-center bg-muted/30 border-dashed space-y-3 max-w-md mx-auto">
             <div className="text-sm text-muted-foreground font-medium">
               No classes scheduled for today.
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs font-semibold gap-1.5"
-              onClick={() => {
-                const demoSchedule = {
-                  id: 'demo-active-lecture',
-                  template: {
-                    subject: { code: 'BOE 074', name: 'Renewable Energy Resources (RER)' },
-                    startTime: '10:10 AM',
-                    endTime: '11:05 AM',
-                    section: { name: 'C' },
-                    room: { code: '101' },
-                  },
-                };
-                handleOpenSession(demoSchedule);
-              }}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
-              Launch Test Attendance Session
-            </Button>
+
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -482,7 +381,9 @@ export const MarkAttendancePage: React.FC = () => {
                 isLocked={activeSession?.status === 'SUBMITTED'}
                 onSubmit={handleSubmitAttendance}
                 isSubmitting={isSubmitting}
-                onReloadStudents={loadStudents}
+                onReloadStudents={() => {
+                  if (selectedSchedule && !isLoading) void handleOpenSession(selectedSchedule);
+                }}
               />
             ) : (
               /* Traditional Student List View */
@@ -604,7 +505,7 @@ export const MarkAttendancePage: React.FC = () => {
                     <Button
                       size="lg"
                       onClick={handleSubmitAttendance}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isLoading || !activeSession || studentList.length === 0}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                     >
                       <Send className="w-4 h-4 mr-2" />

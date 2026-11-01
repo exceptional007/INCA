@@ -1,3 +1,4 @@
+import { NoticeEnrichmentService } from './notice-enrichment.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NoticesService } from './notices.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -14,6 +15,8 @@ describe('NoticesService Unit Tests', () => {
   let service: NoticesService;
 
   const mockPrisma = {
+    $transaction: jest.fn(async (callback) => callback(mockPrisma)),
+    $queryRaw: jest.fn().mockResolvedValue([{id: 'notice'}]),
     user: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -72,6 +75,7 @@ describe('NoticesService Unit Tests', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NoticesService,
+        {provide: NoticeEnrichmentService, useValue: {enrich: jest.fn().mockResolvedValue(null)}},
         { provide: PrismaService, useValue: mockPrisma },
         { provide: StrictR2StorageService, useValue: mockR2Storage },
       ],
@@ -79,6 +83,7 @@ describe('NoticesService Unit Tests', () => {
 
     service = module.get<NoticesService>(NoticesService);
     jest.clearAllMocks();
+    mockPrisma.notices.update.mockImplementation(async ({data, where}) => ({id: where.id, updatedAt: new Date(), ...data}));
   });
 
   describe('User Roles and Publishing Authorization', () => {
@@ -279,6 +284,7 @@ describe('NoticesService Unit Tests', () => {
   });
 
   describe('PDF Attachments & Security', () => {
+    beforeEach(() => {mockPrisma.user.findUnique.mockResolvedValue({id: 'user-admin', role: {code: 'ADMIN'}, adminProfile: {departmentId: 'department'}});});
     it('should reject non-PDF attachments with BadRequestException', async () => {
       mockPrisma.notices.findUnique.mockResolvedValue({
         id: 'notice-1',
@@ -366,8 +372,11 @@ describe('NoticesService Unit Tests', () => {
   });
 
   describe('Read Tracking and Acknowledgements', () => {
+    beforeEach(() => {
+      mockPrisma.user.findUnique.mockResolvedValue({id: 'student-1', role: {code: 'STUDENT'}});
+    });
     it('should mark notice as read for authenticated user', async () => {
-      mockPrisma.notices.findUnique.mockResolvedValue({ id: 'notice-1' });
+      mockPrisma.notices.findUnique.mockResolvedValue({ id: 'notice-1', status: 'PUBLISHED', publishAt: new Date(0), targetScope: 'ALL' });
       mockPrisma.notice_reads.upsert.mockResolvedValue({
         id: 'read-1',
         noticeId: 'notice-1',
@@ -388,6 +397,7 @@ describe('NoticesService Unit Tests', () => {
       mockPrisma.notices.findUnique.mockResolvedValue({
         id: 'notice-regular',
         targetScope: 'ALL',
+        status: 'PUBLISHED', publishAt: new Date(0),
         requiresAcknowledgement: false,
       });
 
@@ -404,6 +414,7 @@ describe('NoticesService Unit Tests', () => {
       mockPrisma.notices.findUnique.mockResolvedValue({
         id: 'notice-exam',
         targetScope: 'ALL',
+        status: 'PUBLISHED', publishAt: new Date(0),
         requiresAcknowledgement: true,
       });
       mockPrisma.notice_reads.upsert.mockResolvedValue({

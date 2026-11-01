@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -132,6 +132,7 @@ export const FeatureHub: React.FC = () => {
                   <p className="text-[10px] text-ink-muted-48 mt-1.5">{user?.role?.name || user?.role?.code}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-[#f0f0f0]" />
+                <DropdownMenuItem asChild><Link to="/profile">My profile & security</Link></DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={logout} 
                   className="p-2.5 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer flex items-center gap-2 rounded-[8px]"

@@ -5,6 +5,8 @@ import { EditRecordDto } from './dto/edit-record.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import type { AttendanceActor } from '../sessions/attendance-access.service';
 
 @ApiTags('Attendance Audit')
 @ApiBearerAuth('JWT-auth')
@@ -19,8 +21,8 @@ export class AuditController {
     summary:
       'Edit a submitted attendance record (24-hour window only). Writes to audit log.',
   })
-  editRecord(@Param('id') id: string, @Body() dto: EditRecordDto) {
-    return this.auditService.editRecord(id, dto);
+  editRecord(@Param('id') id: string, @Body() dto: EditRecordDto, @CurrentUser() actor: AttendanceActor) {
+    return this.auditService.editRecord(id, dto, actor);
   }
 
   @Get('records/:id/audits')
@@ -28,14 +30,14 @@ export class AuditController {
   @ApiOperation({
     summary: 'Get full audit/change-log trail for an attendance record',
   })
-  getAudits(@Param('id') id: string) {
-    return this.auditService.getAuditsByRecord(id);
+  getAudits(@Param('id') id: string, @CurrentUser() actor: AttendanceActor) {
+    return this.auditService.getAuditsByRecord(id, actor);
   }
 
   @Get('audits')
   @Roles('SUPER_ADMIN', 'ADMIN', 'HOD', 'COORDINATOR')
   @ApiOperation({ summary: 'Get all attendance audit logs (admin use)' })
-  getAllAudits() {
-    return this.auditService.getAllAudits();
+  getAllAudits(@CurrentUser() actor: AttendanceActor) {
+    return this.auditService.getAllAudits(actor);
   }
 }

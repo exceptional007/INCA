@@ -108,6 +108,13 @@ export const lostFoundApi = {
     return res.data;
   },
 
+  regenerateHandoverCode: async (claimId: string): Promise<{
+    id: string; verificationCode: string; verificationCodeExpiresAt: string; verificationCodeAttempts: number;
+  }> => {
+    const res = await api.post(`/lost-found/claims/${claimId}/regenerate-code`);
+    return res.data;
+  },
+
   // Contributions & Leaderboard
   getMyContributionStats: async (): Promise<UserStats> => {
     const res = await api.get<UserStats>('/lost-found/contributions/my-stats');

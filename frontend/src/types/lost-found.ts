@@ -94,6 +94,8 @@ export interface LostFoundClaim {
   claimDetails: string;
   proofImageUrl: string | null;
   verificationCode?: string;
+  verificationCodeExpiresAt?: string | null;
+  verificationCodeAttempts?: number;
   status: ClaimStatus;
   staffNote: string | null;
   verifiedById: string | null;

@@ -13,6 +13,7 @@ import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 
 import { StrictR2StorageService } from '../storage/strict-r2-storage.service';
+import { NoticesService } from '../notices/notices.service';
 
 @Injectable()
 export class StudentService {
@@ -20,6 +21,7 @@ export class StudentService {
     private readonly studentRepository: StudentRepository,
     private readonly prisma: PrismaService,
     private readonly strictR2StorageService: StrictR2StorageService,
+    private readonly noticesService: NoticesService,
   ) {}
 
   async createStudentAccount(dto: CreateStudentAccountDto) {
@@ -296,7 +298,9 @@ export class StudentService {
   }
 
   async getPhotoStream(key: string) {
-    return this.strictR2StorageService.getObjectStream(key);
+    return this.strictR2StorageService.getPublicImageStream(
+      key || this.strictR2StorageService.getDefaultPlaceholderKey(), 'student',
+    );
   }
 
   async deactivateStudent(id: string) {
@@ -509,7 +513,27 @@ export class StudentService {
     };
   }
 
-  async getAcademicNotices(userId: string, userRole: string) {
-    return [];
+  async getAcademicNotices(userId: string) {
+    if (!userId) throw new ForbiddenException('An authenticated account is required.');
+    const feed = await this.noticesService.getRecipientNotices(userId, {
+      page: 1,
+      limit: 10,
+      isArchived: false,
+    });
+    // Keep the dashboard endpoint's existing shape while sharing the board's
+    // publication, targeting, ordering, and read/acknowledgement rules.
+    return feed.items.map((notice) => ({
+      id: notice.id,
+      title: notice.title,
+      body: notice.content,
+      date: notice.publishAt,
+      author: notice.author.name,
+      priority: notice.priority,
+      isPinned: notice.isPinned,
+      isRead: notice.isRead,
+      requiresAcknowledgement: notice.requiresAcknowledgement,
+      isAcknowledged: notice.isAcknowledged,
+      attachmentCount: notice.attachments.length,
+    }));
   }
 }

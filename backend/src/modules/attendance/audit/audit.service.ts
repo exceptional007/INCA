@@ -9,6 +9,8 @@ import { RecordRepository } from '../records/repositories/record.repository';
 import { SessionRepository } from '../sessions/repositories/session.repository';
 import { EditRecordDto } from './dto/edit-record.dto';
 import { ApiResponse } from '../../../common/interfaces/api-response.interface';
+import { AttendanceAccessService } from '../sessions/attendance-access.service';
+import type { AttendanceActor } from '../sessions/attendance-access.service';
 
 const EDIT_WINDOW_HOURS = 24;
 
@@ -18,11 +20,13 @@ export class AuditService {
     private readonly auditRepository: AuditRepository,
     private readonly recordRepository: RecordRepository,
     private readonly sessionRepository: SessionRepository,
+    private readonly access: AttendanceAccessService,
   ) {}
 
   async editRecord(
     recordId: string,
     dto: EditRecordDto,
+    actor: AttendanceActor,
   ): Promise<ApiResponse<any>> {
     // 1. Load the record
     const record = await this.recordRepository.findById(recordId);
@@ -31,6 +35,8 @@ export class AuditService {
         `Attendance record with ID ${recordId} not found.`,
       );
     }
+
+    await this.access.assertSessionAccess(record.attendanceSessionId, actor, true);
 
     // 2. Session must be SUBMITTED to allow edits
     const session = await this.sessionRepository.findById(
@@ -72,7 +78,7 @@ export class AuditService {
         recordId: record.id,
         oldStatus: record.status,
         newStatus: dto.newStatus,
-        editedById: dto.editedById,
+        editedById: actor.id,
         reason: dto.reason,
         remarks: dto.reason ?? record.remarks,
       });
@@ -87,7 +93,7 @@ export class AuditService {
     };
   }
 
-  async getAuditsByRecord(recordId: string): Promise<ApiResponse<any>> {
+  async getAuditsByRecord(recordId: string, actor: AttendanceActor): Promise<ApiResponse<any>> {
     const record = await this.recordRepository.findById(recordId);
     if (!record) {
       throw new NotFoundException(
@@ -95,6 +101,7 @@ export class AuditService {
       );
     }
 
+    await this.access.assertSessionAccess(record.attendanceSessionId, actor);
     const audits = await this.auditRepository.findByRecord(recordId);
     return {
       success: true,
@@ -103,8 +110,8 @@ export class AuditService {
     };
   }
 
-  async getAllAudits(): Promise<ApiResponse<any>> {
-    const audits = await this.auditRepository.findAll();
+  async getAllAudits(actor: AttendanceActor): Promise<ApiResponse<any>> {
+    const audits = await this.auditRepository.findAll(await this.access.sessionScope(actor));
     return {
       success: true,
       message: 'All attendance audits retrieved successfully.',

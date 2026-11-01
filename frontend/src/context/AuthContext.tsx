@@ -1,7 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { User } from '../types';
-import api from '../api/axios';
-
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { User } from "../types";
+import api, {
+  clearSession,
+  storeSession,
+  startSession,
+  refreshSession,
+} from "../api/axios";
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -10,58 +15,76 @@ interface AuthContextType {
   login: (token: string, user: User) => void;
   logout: () => void;
 }
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem('inca_user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('inca_token');
-  });
-
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
+function savedUser(): User | null {
+  try {
+    return JSON.parse(localStorage.getItem("inca_user") || "null");
+  } catch {
+    return null;
+  }
+}
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [user, setUser] = useState<User | null>(savedUser),
+    [token, setToken] = useState<string | null>(() =>
+      localStorage.getItem("inca_token"),
+    ),
+    [isLoading, setLoading] = useState(true);
+  const cache = useQueryClient();
   useEffect(() => {
-    const verifySession = async () => {
-      if (token) {
-        try {
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        } catch {
-          logout();
-        }
-      }
-      setIsLoading(false);
+    const sync = () => {
+      setUser(savedUser());
+      setToken(localStorage.getItem("inca_token"));
+      if (!localStorage.getItem("inca_token")) cache.clear();
     };
-
-    verifySession();
-  }, [token]);
-
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem('inca_token', newToken);
-    localStorage.setItem('inca_user', JSON.stringify(newUser));
-    api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+    window.addEventListener("inca-auth-updated", sync);
+    window.addEventListener("storage", sync);
+    let alive = true;
+    const startupToken = localStorage.getItem("inca_token");
+    (async () => {
+      try {
+        if (!localStorage.getItem("inca_token")) await refreshSession();
+        const requestToken = localStorage.getItem("inca_token");
+        const response = await api.get("/auth/me");
+        if (!alive || localStorage.getItem("inca_token") !== requestToken)
+          return;
+        const current = response.data.data;
+        const existing = savedUser();
+        storeSession(localStorage.getItem("inca_token")!, {
+          ...existing,
+          ...current,
+          role: { ...existing?.role, code: current.role },
+        });
+      } catch {
+        if (alive && localStorage.getItem("inca_token") === startupToken)
+          clearSession();
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+      window.removeEventListener("inca-auth-updated", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, [cache]);
+  const login = (t: string, u: User) => {
+    cache.clear();
+    startSession(t, u);
+    setLoading(false);
   };
-
   const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('inca_token');
-    localStorage.removeItem('inca_user');
-    delete api.defaults.headers.common['Authorization'];
+    void api.post("/auth/logout").catch(() => {});
+    clearSession();
+    cache.clear();
   };
-
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
-        isAuthenticated: !!token && !!user,
+        isAuthenticated: !!user && !!token,
         isLoading,
         login,
         logout,
@@ -71,11 +94,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
-
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const value = useContext(AuthContext);
+  if (!value) throw new Error("useAuth must be used within AuthProvider");
+  return value;
 };

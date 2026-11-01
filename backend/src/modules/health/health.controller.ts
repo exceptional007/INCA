@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Header,
   ServiceUnavailableException,
   VERSION_NEUTRAL,
 } from '@nestjs/common';
@@ -17,19 +18,20 @@ export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
   @ApiOperation({
-    summary: 'Standard health check endpoint reporting server and database status',
+    summary:
+      'Standard health check endpoint reporting server and database status',
   })
   @ApiResponse({ status: 200, description: 'Server and database are healthy' })
   @ApiResponse({ status: 503, description: 'Database is unreachable' })
   @Get()
+  @Header('Cache-Control', 'no-store')
   async check() {
     const timestamp = new Date().toISOString();
     try {
       const dbStart = performance.now();
       // Lightweight query to verify database responsiveness
       await this.prisma.$queryRaw`SELECT 1`;
-      const latencyMs =
-        Math.round((performance.now() - dbStart) * 100) / 100;
+      const latencyMs = Math.round((performance.now() - dbStart) * 100) / 100;
 
       return {
         status: 'ok',
@@ -58,9 +60,13 @@ export class HealthController {
   }
 
   @ApiOperation({
-    summary: 'Diagnostic performance and infrastructure metrics (safe, non-sensitive)',
+    summary:
+      'Diagnostic performance and infrastructure metrics (safe, non-sensitive)',
   })
-  @ApiResponse({ status: 200, description: 'Diagnostic telemetry and health state' })
+  @ApiResponse({
+    status: 200,
+    description: 'Diagnostic telemetry and health state',
+  })
   @Get('diagnostics')
   async diagnostics() {
     const timestamp = new Date().toISOString();

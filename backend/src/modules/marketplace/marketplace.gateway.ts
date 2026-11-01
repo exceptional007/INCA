@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Logger } from '@nestjs/common';
 import { MarketplaceChatService } from './marketplace-chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
+import { JwtStrategy } from '../auth/strategies/jwt.strategy';
 
 @WebSocketGateway({
   cors: {
@@ -19,7 +20,9 @@ import { SendMessageDto } from './dto/send-message.dto';
   },
   namespace: '/marketplace',
 })
-export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MarketplaceGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -28,6 +31,7 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
   constructor(
     private readonly jwtService: JwtService,
     private readonly chatService: MarketplaceChatService,
+    private readonly identity: JwtStrategy,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -39,26 +43,33 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
           : null);
 
       if (!rawToken) {
-        this.logger.warn(`Marketplace Socket connection rejected: No token provided (${client.id})`);
+        this.logger.warn(
+          `Marketplace Socket connection rejected: No token provided (${client.id})`,
+        );
         client.disconnect();
         return;
       }
 
       const payload = this.jwtService.verify(rawToken);
-      const userId = payload.sub || payload.id;
-      if (!userId) {
-        client.disconnect();
-        return;
-      }
+      const user = await this.identity.validate(
+        { originalUrl: '/api/v1/marketplace/socket' },
+        payload,
+      );
+      const userId = user.id;
 
       client.data.userId = userId;
       client.data.user = payload;
+      client.data.accessToken = rawToken;
 
       // Join individual user room for real-time notifications
       client.join(`user_${userId}`);
-      this.logger.log(`Marketplace Socket connected: User ${userId} (${client.id})`);
+      this.logger.log(
+        `Marketplace Socket connected: User ${userId} (${client.id})`,
+      );
     } catch (err: any) {
-      this.logger.warn(`Marketplace Socket authentication error: ${err.message}`);
+      this.logger.warn(
+        `Marketplace Socket authentication error: ${err.message}`,
+      );
       client.disconnect();
     }
   }
@@ -67,14 +78,61 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
     this.logger.log(`Marketplace Socket disconnected: ${client.id}`);
   }
 
+  private async authenticated(client: any): Promise<string | null> {
+    try {
+      const payload = this.jwtService.verify(client.data?.accessToken);
+      const user = await this.identity.validate(
+        { originalUrl: '/api/v1/marketplace/socket' },
+        payload,
+      );
+      if (user.id !== client.data.userId) throw new Error('Invalid identity');
+      return user.id;
+    } catch {
+      client.disconnect(true);
+      return null;
+    }
+  }
+
+  private async emitAuthorized(
+    room: string | null,
+    event: string,
+    payload: any,
+    exceptId?: string,
+  ) {
+    if (!this.server) return;
+    const sockets = await (
+      room ? this.server.in(room) : this.server
+    ).fetchSockets();
+    await Promise.all(
+      sockets.map(async (client) => {
+        if (client.id !== exceptId && (await this.authenticated(client)))
+          client.emit(event, payload);
+      }),
+    );
+  }
+
+  private deliver(
+    room: string | null,
+    event: string,
+    payload: any,
+    exceptId?: string,
+  ) {
+    void this.emitAuthorized(room, event, payload, exceptId).catch(() =>
+      this.logger.warn('Marketplace delivery failed.'),
+    );
+  }
+
   @SubscribeMessage('joinConversation')
   async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
   ) {
-    const userId = client.data?.userId;
+    const userId = await this.authenticated(client);
     if (!userId || !data?.conversationId) {
-      return { success: false, error: 'Unauthorized or missing conversation ID' };
+      return {
+        success: false,
+        error: 'Unauthorized or missing conversation ID',
+      };
     }
 
     const isMember = await this.chatService.isUserConversationParticipant(
@@ -86,21 +144,26 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
       this.logger.warn(
         `Unauthorized room join attempt: User ${userId} tried to join conv_${data.conversationId}`,
       );
-      return { success: false, error: 'You are not an authorized participant of this conversation' };
+      return {
+        success: false,
+        error: 'You are not an authorized participant of this conversation',
+      };
     }
 
     const room = `conv_${data.conversationId}`;
     client.join(room);
-    this.logger.log(`Client ${client.id} (user ${userId}) authorized and joined room ${room}`);
+    this.logger.log(
+      `Client ${client.id} (user ${userId}) authorized and joined room ${room}`,
+    );
     return { success: true, room };
   }
 
   @SubscribeMessage('leaveConversation')
-  handleLeaveConversation(
+  async handleLeaveConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
   ) {
-    if (data?.conversationId) {
+    if ((await this.authenticated(client)) && data?.conversationId) {
       const room = `conv_${data.conversationId}`;
       client.leave(room);
       return { success: true };
@@ -112,7 +175,7 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string; isTyping: boolean },
   ) {
-    const userId = client.data?.userId;
+    const userId = await this.authenticated(client);
     if (!userId || !data?.conversationId) return;
 
     const isMember = await this.chatService.isUserConversationParticipant(
@@ -121,11 +184,16 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
     );
     if (!isMember) return;
 
-    client.to(`conv_${data.conversationId}`).emit('userTyping', {
-      userId,
-      conversationId: data.conversationId,
-      isTyping: data.isTyping,
-    });
+    this.deliver(
+      `conv_${data.conversationId}`,
+      'userTyping',
+      {
+        userId,
+        conversationId: data.conversationId,
+        isTyping: data.isTyping,
+      },
+      client.id,
+    );
   }
 
   @SubscribeMessage('sendMessage')
@@ -133,21 +201,24 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
     @ConnectedSocket() client: Socket,
     @MessageBody() dto: SendMessageDto,
   ) {
-    const userId = client.data.userId;
+    const userId = await this.authenticated(client);
     if (!userId) {
       return { error: 'Unauthorized' };
     }
 
     try {
-      const { message, recipientId } = await this.chatService.saveMessage(userId, dto);
+      const { message, recipientId } = await this.chatService.saveMessage(
+        userId,
+        dto,
+      );
 
       // Broadcast to room
-      this.server.to(`conv_${dto.conversationId}`).emit('newMessage', message);
+      this.notifyConversation(message.conversationId, 'newMessage', message);
 
       // Notify recipient's user room
-      this.server.to(`user_${recipientId}`).emit('unreadNotification', {
+      this.notifyUser(recipientId, 'unreadNotification', {
         type: 'MARKETPLACE_MESSAGE',
-        conversationId: dto.conversationId,
+        conversationId: message.conversationId,
         message,
       });
 
@@ -159,21 +230,14 @@ export class MarketplaceGateway implements OnGatewayConnection, OnGatewayDisconn
 
   // Public helper to emit offer and transaction updates to relevant clients
   notifyUser(userId: string, event: string, payload: any) {
-    if (this.server) {
-      this.server.to(`user_${userId}`).emit(event, payload);
-    }
+    this.deliver(`user_${userId}`, event, payload);
   }
 
   notifyConversation(conversationId: string, event: string, payload: any) {
-    if (this.server) {
-      this.server.to(`conv_${conversationId}`).emit(event, payload);
-    }
+    this.deliver(`conv_${conversationId}`, event, payload);
   }
 
   broadcast(event: string, payload: any) {
-    if (this.server) {
-      this.server.emit(event, payload);
-    }
+    this.deliver(null, event, payload);
   }
 }
-

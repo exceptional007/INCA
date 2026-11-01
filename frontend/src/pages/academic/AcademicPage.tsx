@@ -1,3 +1,4 @@
+import { generateInitialPassword, useInitialCredentials } from '@/components/useInitialCredentials';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -193,6 +194,7 @@ const StudentAvatar: React.FC<StudentAvatarProps> = ({ photoKey, alt, className 
 // --- Page component -------------------------------------------------------
 
 export const AcademicPage: React.FC = () => {
+  const { showCredentials, credentialsDialog } = useInitialCredentials();
   const { user } = useAuth();
   const isSuperAdmin = user?.role?.code === 'SUPER_ADMIN';
   const isAdmin = user?.role?.code === 'ADMIN';
@@ -710,7 +712,7 @@ export const AcademicPage: React.FC = () => {
     try {
       const payload: any = {
         email: values.email.trim(),
-        password: values.password?.trim() || 'Password123!',
+        password: values.password?.trim() || generateInitialPassword(),
         employeeCode: values.employeeCode.trim().toUpperCase(),
         firstName: values.firstName.trim(),
         gender: values.gender || 'MALE',
@@ -726,6 +728,7 @@ export const AcademicPage: React.FC = () => {
         payload.phone = values.phone.trim();
       }
       await api.post('/faculty/accounts', payload);
+      showCredentials(payload.email, payload.password);
       toast.success('Faculty account created successfully.');
       setCreateFacultyDialogOpen(false);
       fetchData();
@@ -804,7 +807,7 @@ export const AcademicPage: React.FC = () => {
     try {
       const payload: any = {
         email: values.email.trim(),
-        password: values.password?.trim() || 'Password123!',
+        password: values.password?.trim() || generateInitialPassword(),
         rollNumber: values.rollNumber.trim().toUpperCase(),
         collegeId: values.collegeId.trim().toUpperCase(),
         enrollmentNumber: 'ENR-' + values.rollNumber.trim().toUpperCase() + '-' + Date.now().toString().slice(-4),
@@ -820,6 +823,7 @@ export const AcademicPage: React.FC = () => {
       if (values.departmentId) payload.departmentId = values.departmentId;
 
       await api.post('/students/accounts', payload);
+      showCredentials(payload.email, payload.password);
       toast.success('Student account created successfully.');
       setCreateStudentDialogOpen(false);
       fetchData();
@@ -1516,6 +1520,7 @@ export const AcademicPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {credentialsDialog}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Academic Master Data</h1>
@@ -2812,7 +2817,7 @@ export const AcademicPage: React.FC = () => {
           designation: 'Assistant Professor',
           departmentId: isAdmin ? ((user as any)?.adminProfile?.departmentId || (user as any)?.departmentId || '') : '',
           gender: 'MALE',
-          password: 'Password123!',
+          password: '',
         }}
         onSubmit={handleCreateFaculty}
         submitLabel="Create Faculty"
@@ -2951,7 +2956,7 @@ export const AcademicPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Initial Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Password123!" {...field} />
+                      <Input type="password" placeholder="Leave blank to generate a unique password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -3151,7 +3156,7 @@ export const AcademicPage: React.FC = () => {
           collegeId: '',
           departmentId: isAdmin ? ((user as any)?.adminProfile?.departmentId || (user as any)?.departmentId || '') : '',
           gender: 'MALE',
-          password: 'Password123!',
+          password: '',
         }}
         onSubmit={handleCreateStudent}
         submitLabel="Create Student"
@@ -3356,7 +3361,7 @@ export const AcademicPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Initial Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Password123!" {...field} />
+                      <Input type="password" placeholder="Leave blank to generate a unique password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -1,8 +1,8 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ClaimStatus } from '@prisma/client';
 
 export class ReviewClaimDto {
-  @IsEnum(ClaimStatus)
+  @IsIn([ClaimStatus.APPROVED, ClaimStatus.REJECTED])
   @IsNotEmpty()
   status: ClaimStatus;
 

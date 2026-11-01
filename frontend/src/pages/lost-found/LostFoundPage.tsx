@@ -17,6 +17,7 @@ import { SearchFilterBar } from './SearchFilterBar';
 import { ReportModal } from './ReportModal';
 import { ClaimModal } from './ClaimModal';
 import { HandoverVerifyModal } from './HandoverVerifyModal';
+import { ClaimHandoverCode } from './ClaimHandoverCode';
 import { AiMatchesModal } from './AiMatchesModal';
 import { ItemDetailModal } from './ItemDetailModal';
 import { LeaderboardView } from './LeaderboardView';
@@ -552,21 +553,7 @@ export const LostFoundPage: React.FC = () => {
                     </p>
 
                     {/* 6-Digit OTP display for claimant */}
-                    {claim.verificationCode && (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-                            Your Handover OTP Code
-                          </span>
-                          <span className="font-mono text-xl font-black text-emerald-950 tracking-widest">
-                            {claim.verificationCode}
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-emerald-700 max-w-[180px] text-right">
-                          Present this code to the finder upon collecting item.
-                        </span>
-                      </div>
-                    )}
+                    <ClaimHandoverCode claim={claim} onUpdated={fetchMyItems} />
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
                       <span>Submitted: {new Date(claim.createdAt).toLocaleDateString()}</span>

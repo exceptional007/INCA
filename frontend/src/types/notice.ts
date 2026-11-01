@@ -1,31 +1,28 @@
 export type NoticeCategory =
-  | 'ACADEMIC'
-  | 'EXAMINATION'
-  | 'PLACEMENT'
-  | 'EVENT'
-  | 'CIRCULAR'
-  | 'ADMINISTRATIVE'
-  | 'HOLIDAY'
-  | 'URGENT'
-  | 'GENERAL';
+  | "ACADEMIC"
+  | "EXAMINATION"
+  | "PLACEMENT"
+  | "EVENT"
+  | "CIRCULAR"
+  | "ADMINISTRATIVE"
+  | "HOLIDAY"
+  | "URGENT"
+  | "GENERAL";
 
-export type NoticePriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+export type NoticePriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
 
 export type NoticeTargetScope =
-  | 'ALL'
-  | 'STUDENTS'
-  | 'FACULTY'
-  | 'DEPARTMENT'
-  | 'PROGRAM'
-  | 'CUSTOM';
+  "ALL" | "STUDENTS" | "FACULTY" | "DEPARTMENT" | "PROGRAM" | "CUSTOM";
 
 export type NoticeStatus =
-  | 'DRAFT'
-  | 'SCHEDULED'
-  | 'PUBLISHED'
-  | 'EXPIRED'
-  | 'WITHDRAWN'
-  | 'ARCHIVED';
+  | "PENDING_REVIEW"
+  | "REJECTED"
+  | "DRAFT"
+  | "SCHEDULED"
+  | "PUBLISHED"
+  | "EXPIRED"
+  | "WITHDRAWN"
+  | "ARCHIVED";
 
 export interface NoticeAttachment {
   id: string;
@@ -51,6 +48,10 @@ export interface Notice {
   title: string;
   content: string;
   aiSummary?: string | null;
+  aiDeadlines?: { label: string; when: string; sourceQuote: string }[] | null;
+  aiActionItems?: string[] | null;
+  aiKeyHighlights?: string[] | null;
+  aiTags?: string[] | null;
   category: NoticeCategory | string;
   priority: NoticePriority | string;
   status: NoticeStatus | string;
@@ -66,6 +67,17 @@ export interface Notice {
   expiresAt?: string | null;
   isArchived?: boolean;
   createdAt: string;
+  updatedAt?: string;
+  authorId?: string;
+  approvedById?: string | null;
+  approvedAt?: string | null;
+  rejectionReason?: string | null;
+  approvalRequired?: boolean;
+  canDelete?: boolean;
+  canEdit?: boolean;
+  canSubmit?: boolean;
+  canReview?: boolean;
+
   author: {
     id: string;
     name: string;
@@ -138,4 +150,3 @@ export interface AcademicScopeData {
   }[];
   academicSessions: { id: string; name: string; isActive: boolean }[];
 }
-

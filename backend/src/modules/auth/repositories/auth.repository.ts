@@ -21,6 +21,7 @@ export class AuthRepository {
           select: {
             id: true,
             code: true,
+            isActive: true,
             name: true,
           },
         },
@@ -105,7 +106,7 @@ export class AuthRepository {
   async updateUser(id: string, data: { email?: string; password?: string; isActive?: boolean }) {
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: {...data,...(data.password?{mustChangePassword:true}:{})},
       include: {
         role: true,
       },

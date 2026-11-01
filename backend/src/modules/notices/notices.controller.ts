@@ -1,3 +1,4 @@
+import { NoticeRevisionDto, RejectNoticeDto } from './dto/review-notice.dto';
 import {
   Controller,
   Get,
@@ -55,6 +56,66 @@ export class NoticesController {
     return this.noticesService.getManagedNotices(req.user.id, userRole, query);
   }
 
+  @Get('management/review-queue')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  getReviewQueue(@Req() req: any, @Query() query: QueryNoticesDto) {
+    return this.noticesService.getManagedNotices(
+      req.user.id,
+      this.extractUserRole(req),
+      query,
+      true,
+    );
+  }
+
+  @Post(':id/submit')
+  @HttpCode(HttpStatus.OK)
+  @Roles('FACULTY', 'HOD', 'ADMIN', 'SUPER_ADMIN')
+  submitForReview(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: NoticeRevisionDto,
+  ) {
+    return this.noticesService.submitForReview(
+      req.user.id,
+      this.extractUserRole(req),
+      id,
+      dto.expectedUpdatedAt,
+    );
+  }
+
+  @Post(':id/approve')
+  @HttpCode(HttpStatus.OK)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  approveNotice(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: NoticeRevisionDto,
+  ) {
+    return this.noticesService.approveNotice(
+      req.user.id,
+      this.extractUserRole(req),
+      id,
+      dto.expectedUpdatedAt,
+    );
+  }
+
+  @Post(':id/reject')
+  @HttpCode(HttpStatus.OK)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  rejectNotice(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: RejectNoticeDto,
+  ) {
+    return this.noticesService.rejectNotice(
+      req.user.id,
+      this.extractUserRole(req),
+      id,
+      dto.expectedUpdatedAt,
+      dto.reason,
+    );
+  }
+
   // 4. NOTICE DETAILS
   @Get(':id')
   getNoticeById(@Req() req: any, @Param('id') id: string) {
@@ -104,7 +165,12 @@ export class NoticesController {
     @Body('reason') reason?: string,
   ) {
     const userRole = this.extractUserRole(req);
-    return this.noticesService.withdrawNotice(req.user.id, userRole, id, reason);
+    return this.noticesService.withdrawNotice(
+      req.user.id,
+      userRole,
+      id,
+      reason,
+    );
   }
 
   // 10. ARCHIVE NOTICE
@@ -141,7 +207,12 @@ export class NoticesController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     const userRole = this.extractUserRole(req);
-    return this.noticesService.uploadAttachment(req.user.id, userRole, id, file);
+    return this.noticesService.uploadAttachment(
+      req.user.id,
+      userRole,
+      id,
+      file,
+    );
   }
 
   // 14. ATTACHMENT: DELETE
@@ -153,7 +224,12 @@ export class NoticesController {
     @Param('attachmentId') attachmentId: string,
   ) {
     const userRole = this.extractUserRole(req);
-    return this.noticesService.deleteAttachment(req.user.id, userRole, id, attachmentId);
+    return this.noticesService.deleteAttachment(
+      req.user.id,
+      userRole,
+      id,
+      attachmentId,
+    );
   }
 
   // 15. ATTACHMENT: STREAM PDF PREVIEW / DOWNLOAD
@@ -180,4 +256,3 @@ export class NoticesController {
     (stream as any).pipe(res);
   }
 }
-

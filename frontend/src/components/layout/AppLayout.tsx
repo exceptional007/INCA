@@ -37,6 +37,7 @@ export function AppLayout() {
   // Determine breadcrumb labels based on pathname
   const getBreadcrumbs = (): BreadcrumbEntry[] => {
     const path = location.pathname
+    if (path === "/profile") return [{ label: "My Profile", isCurrent: true }]
     if (path === "/dashboard") {
       return [{ label: "ASSAM Dashboard", isCurrent: true }]
     }
@@ -183,6 +184,7 @@ export function AppLayout() {
                     <p className="text-[10px] leading-none text-muted-foreground font-medium">{role}</p>
                   </div>
                 </DropdownMenuLabel>
+                <DropdownMenuItem asChild><Link to="/profile">My profile & security</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/hub" className="cursor-pointer text-xs flex items-center gap-2 px-2.5 py-1.5 rounded-lg">

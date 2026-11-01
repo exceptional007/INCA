@@ -1,4 +1,19 @@
-import { Body, Controller, Post, Get, Patch, Delete, Param, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Req,
+  Res,
+  Header,
+  UseGuards,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { SessionService } from './session.service';
+import { setRefresh, assertOrigin } from './session.controller';
 import express from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -15,6 +30,10 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CreateCoordinatorDto } from './dto/create-coordinator.dto';
+import { UpdateCoordinatorDto } from './dto/update-coordinator.dto';
 
 @ApiTags('Authentication')
 @Controller({
@@ -22,7 +41,11 @@ import { CurrentUser } from './decorators/current-user.decorator';
   version: '1',
 })
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly sessions: SessionService,
+    private readonly config: ConfigService,
+  ) {}
 
   @ApiOperation({
     summary: 'Login to the system',
@@ -31,13 +54,24 @@ export class AuthController {
     type: LoginDto,
   })
   @Post('login')
-  login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() req: express.Request,
+    @Res({ passthrough: true }) res: express.Response,
+  ) {
+    assertOrigin(req, this.config);
+    await this.sessions.throttle('login-ip', req.ip || 'unknown', 50);
+    await this.sessions.throttle('login-email', loginDto.email, 15);
+    const result = await this.authService.login(loginDto);
+    const { refreshToken, ...data } = result.data;
+    setRefresh(res, this.config, refreshToken);
+    return { ...result, data };
   }
 
   @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @Get('me')
+  @Header('Cache-Control', 'no-store')
   getProfile(@CurrentUser() user: any) {
     return {
       success: true,
@@ -117,7 +151,10 @@ export class AuthController {
   @ApiOperation({
     summary: 'Toggle admin active/suspended status (SUPER_ADMIN only)',
   })
-  async toggleAdminStatus(@Req() req: express.Request, @Param('id') id: string) {
+  async toggleAdminStatus(
+    @Req() req: express.Request,
+    @Param('id') id: string,
+  ) {
     const user = req.user as { role: string };
     return {
       success: true,
@@ -143,54 +180,68 @@ export class AuthController {
 
   @Get('coordinators')
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiOperation({
-    summary: 'Get all coordinators',
+    summary: 'Get all coordinators (ADMIN only)',
   })
-  async getAllCoordinators() {
+  async getAllCoordinators(@CurrentUser() user: { role: string }) {
     return {
       success: true,
       message: 'Coordinators fetched successfully.',
-      data: await this.authService.getAllCoordinators(),
+      data: await this.authService.getAllCoordinators(user.role),
     };
   }
 
   @Post('coordinators')
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiOperation({
-    summary: 'Create a coordinator user',
+    summary: 'Create a coordinator user (ADMIN only)',
   })
-  async createCoordinator(@Body() dto: { email: string; password?: string }) {
+  async createCoordinator(
+    @CurrentUser() user: { role: string },
+    @Body() dto: CreateCoordinatorDto,
+  ) {
     return {
       success: true,
       message: 'Coordinator created successfully.',
-      data: await this.authService.createCoordinator(dto),
+      data: await this.authService.createCoordinator(user.role, dto),
     };
   }
 
   @Patch('coordinators/:id')
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiOperation({
-    summary: 'Update coordinator details',
+    summary: 'Update coordinator details (ADMIN only)',
   })
-  async updateCoordinator(@Param('id') id: string, @Body() dto: any) {
+  async updateCoordinator(
+    @CurrentUser() user: { role: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateCoordinatorDto,
+  ) {
     return {
       success: true,
       message: 'Coordinator updated successfully.',
-      data: await this.authService.updateCoordinator(id, dto),
+      data: await this.authService.updateCoordinator(user.role, id, dto),
     };
   }
 
   @Delete('coordinators/:id')
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiOperation({
-    summary: 'Delete a coordinator',
+    summary: 'Delete a coordinator (ADMIN only)',
   })
-  async deleteCoordinator(@Param('id') id: string) {
-    await this.authService.deleteCoordinator(id);
+  async deleteCoordinator(
+    @CurrentUser() user: { role: string },
+    @Param('id') id: string,
+  ) {
+    await this.authService.deleteCoordinator(user.role, id);
     return {
       success: true,
       message: 'Coordinator deleted successfully.',
