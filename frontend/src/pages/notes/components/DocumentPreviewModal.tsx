@@ -87,8 +87,8 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-5xl h-[88vh] flex flex-col p-0 overflow-hidden bg-background border-border">
         {/* Header */}
-        <DialogHeader className="p-4 border-b border-border flex flex-row items-center justify-between shrink-0 bg-card">
-          <div className="flex items-center gap-3 min-w-0 pr-4">
+        <DialogHeader className="p-4 pr-12 border-b border-border flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between shrink-0 bg-card text-left">
+          <div className="flex w-full min-w-0 max-w-full items-center gap-3 sm:flex-1">
             <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <FileText className="size-5" />
             </div>

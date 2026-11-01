@@ -103,9 +103,9 @@ export const SchedulingPage: React.FC = () => {
         </div>
 
         {/* Tab Switcher & Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-3 sm:w-auto">
           {/* Tab Switcher */}
-          <div className="flex items-center gap-1 bg-muted/70 p-1 rounded-xl border border-border/80">
+          <div className="flex max-w-full min-w-0 items-center gap-1 overflow-x-auto bg-muted/70 p-1 rounded-xl border border-border/80">
             <button
               onClick={() => handleTabChange('schedules')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${

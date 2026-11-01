@@ -573,7 +573,7 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
               </div>
 
               {targetScope === "PROGRAM" && (
-                <div className="pt-2 border-t grid grid-cols-2 gap-3">
+                <div className="pt-2 border-t grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <Label className="text-[11px] text-muted-foreground font-semibold">
                       Semester (Optional)
@@ -769,7 +769,7 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
             Cancel
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Button
               type="button"
               variant="outline"

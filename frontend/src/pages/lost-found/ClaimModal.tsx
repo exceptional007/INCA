@@ -57,9 +57,9 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-border shadow-xl overflow-hidden flex flex-col">
+      <div role="dialog" aria-modal="true" aria-label="Claim" data-mobile-modal="true" className="bg-white rounded-2xl max-w-lg w-full border border-border shadow-xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-slate-50/50">
+        <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5" />
@@ -75,14 +75,14 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label="Close dialog" className="p-2 shrink-0 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {submittedClaim ? (
             /* Success & 6-digit OTP Display */
             <div className="space-y-4 text-center py-2">

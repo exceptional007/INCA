@@ -359,7 +359,7 @@ export const TimetableReviewGrid: React.FC<TimetableReviewGridProps> = ({
 
       {/* Full Width Modern AttendEase-Style Day-Wise Layout */}
       <Card className="shadow-md">
-        <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+        <CardHeader className="pb-3 border-b flex flex-col gap-3 sm:flex-row sm:items-center justify-between">
           <div>
             <CardTitle className="text-lg">Extracted Timetable Preview</CardTitle>
             <CardDescription>Review extracted lecture cards, edit details, or add missing sessions.</CardDescription>

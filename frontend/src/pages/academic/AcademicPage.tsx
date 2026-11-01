@@ -1528,7 +1528,7 @@ export const AcademicPage: React.FC = () => {
             Manage institutional departments, programs, subjects, rooms, faculty, and students
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           {['departments', 'programs', 'subjects', 'faculty', 'students'].includes(activeTab) && (
             <Button
               variant={showInactive ? 'secondary' : 'outline'}
@@ -1731,7 +1731,7 @@ export const AcademicPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-muted/40 rounded-lg border border-border">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
             {/* Search Input */}
-            <div className="relative min-w-[200px] max-w-xs flex-1">
+            <div className="relative min-w-0 w-full sm:min-w-[200px] max-w-xs flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search name, employee code..."
@@ -1760,7 +1760,7 @@ export const AcademicPage: React.FC = () => {
                 </select>
               </div>
             ) : (
-              <div className="flex items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
+              <div className="flex max-w-full flex-wrap items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
                 <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="text-xs font-medium text-foreground whitespace-nowrap">Assigned Department:</span>
                 <Badge variant="secondary" className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-0.5">
@@ -1777,7 +1777,7 @@ export const AcademicPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-muted/40 rounded-lg border border-border">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
             {/* Search Input */}
-            <div className="relative min-w-[200px] max-w-xs flex-1">
+            <div className="relative min-w-0 w-full sm:min-w-[200px] max-w-xs flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search name, roll no, college ID..."
@@ -1806,7 +1806,7 @@ export const AcademicPage: React.FC = () => {
                 </select>
               </div>
             ) : (
-              <div className="flex items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
+              <div className="flex max-w-full flex-wrap items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
                 <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="text-xs font-medium text-foreground whitespace-nowrap">Assigned Department:</span>
                 <Badge variant="secondary" className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-0.5">
@@ -2331,7 +2331,7 @@ export const AcademicPage: React.FC = () => {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="year"
@@ -2468,7 +2468,7 @@ export const AcademicPage: React.FC = () => {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="year"
@@ -2622,7 +2622,7 @@ export const AcademicPage: React.FC = () => {
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="capacity"
@@ -2721,7 +2721,7 @@ export const AcademicPage: React.FC = () => {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="capacity"
@@ -2824,7 +2824,7 @@ export const AcademicPage: React.FC = () => {
       >
         {(form) => (
           <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="firstName"
@@ -2852,7 +2852,7 @@ export const AcademicPage: React.FC = () => {
                 )}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="employeeCode"
@@ -2928,7 +2928,7 @@ export const AcademicPage: React.FC = () => {
                 )}
               />
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="gender"
@@ -2990,7 +2990,7 @@ export const AcademicPage: React.FC = () => {
         >
           {(form) => (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="firstName"
@@ -3018,7 +3018,7 @@ export const AcademicPage: React.FC = () => {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="employeeCode"
@@ -3802,7 +3802,7 @@ export const AcademicPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <span className="font-semibold text-muted-foreground">Enrollment No</span>
                       <p className="font-mono text-foreground">{detailItem.item.enrollmentNumber || '—'}</p>
@@ -3852,7 +3852,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'faculty' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Full Name</span>
                     <p className="font-medium text-foreground">{`${detailItem.item.firstName || ''} ${detailItem.item.lastName || ''}`.trim() || '—'}</p>
@@ -3891,7 +3891,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'programs' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Program Name</span>
                     <p className="font-medium text-foreground">{detailItem.item.name || '—'}</p>
@@ -3920,7 +3920,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'subjects' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Subject Name</span>
                     <p className="font-medium text-foreground">{detailItem.item.name || '—'}</p>
@@ -3960,7 +3960,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'rooms' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Room Code</span>
                     <p className="font-mono font-medium text-foreground">{detailItem.item.code || '—'}</p>

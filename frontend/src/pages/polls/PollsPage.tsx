@@ -260,7 +260,7 @@ export const PollsPage: React.FC = () => {
         </div>
 
         {/* Search Input */}
-        <div className="relative min-w-[260px]">
+        <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[260px]">
           <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
           <input
             type="text"

@@ -471,20 +471,20 @@ export const ChatDealModal: React.FC<ChatDealModalProps> = ({
       <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-4 border-b bg-muted/30 shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <Avatar className="size-9 border">
                 <AvatarFallback className="font-bold bg-primary/10 text-primary">
                   {otherPartyName.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+                <DialogTitle className="text-sm font-semibold flex flex-wrap items-center gap-2">
                   <span>{otherPartyName}</span>
                   <Badge variant="outline" className="text-[10px]">
                     {otherPartyBadge}
                   </Badge>
                 </DialogTitle>
-                <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-1.5 mt-0.5">
                   <span className="font-medium text-foreground">
                     {currentListing?.title}
                   </span>

@@ -21,7 +21,7 @@ export const NotesPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-w-0 space-y-6 max-w-7xl mx-auto py-3 sm:py-6">
       {/* Top Bar with Title and Role Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/80">
         <div>
@@ -42,7 +42,7 @@ export const NotesPage: React.FC = () => {
 
         {/* View Switcher for Faculty & Admin users */}
         {isStaff && (
-          <div className="flex items-center p-1 rounded-xl bg-muted/60 border border-border/60 self-start sm:self-center shrink-0">
+          <div className="flex max-w-full min-w-0 items-center overflow-x-auto p-1 rounded-xl bg-muted/60 border border-border/60 self-start sm:self-center">
             <button
               type="button"
               onClick={() => setViewMode("FACULTY")}

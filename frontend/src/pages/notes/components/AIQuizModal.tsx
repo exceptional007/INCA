@@ -227,7 +227,7 @@ export const AIQuizModal: React.FC<AIQuizModalProps> = ({
       <DialogContent className="w-[calc(100%-1rem)] max-w-3xl max-h-[92dvh] flex flex-col gap-0 p-0 overflow-hidden bg-background border-border">
         {/* Header */}
         <DialogHeader className="p-3 pr-10 sm:p-4 sm:pr-12 border-b border-border flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between shrink-0 bg-card">
-          <div className="flex items-center gap-3 min-w-0 pr-4">
+          <div className="flex w-full min-w-0 max-w-full items-center gap-3 pr-4 sm:flex-1">
             <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
               <HelpCircle className="size-5" />
             </div>

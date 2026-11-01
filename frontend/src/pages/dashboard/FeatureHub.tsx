@@ -104,7 +104,7 @@ export const FeatureHub: React.FC = () => {
   return (
     <div className="min-h-screen bg-canvas-parchment flex flex-col font-sans select-none">
       {/* Pinned top bar (Apple style: Frosted glass, 52px height) */}
-      <header className="h-[52px] bg-white border-b border-[#e0e0e0] flex items-center justify-between px-6 z-30 sticky top-0">
+      <header className="h-[52px] bg-white border-b border-[#e0e0e0] flex items-center justify-between px-4 sm:px-6 z-30 sticky top-0">
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
           <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate('/hub')}>
             <div className="w-8 h-8 rounded-full bg-action-blue flex items-center justify-center">
@@ -147,7 +147,7 @@ export const FeatureHub: React.FC = () => {
       </header>
 
       {/* Main Hub Content Area */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12 flex flex-col justify-center">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 flex flex-col justify-center">
         <div className="mb-10 text-left">
           <span className="text-xs uppercase text-action-blue tracking-widest font-semibold">Post-Login Hub</span>
           <h2 className="text-3xl font-semibold tracking-tight text-ink mt-1.5">Select a Platform Module</h2>

@@ -672,11 +672,11 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Navigation Tabs & Department Badge */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:w-auto sm:max-w-full">
           {/* Department Green Tag */}
           <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-semibold px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 shadow-2xs hover:bg-emerald-50">
             <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>{departmentDisplayName || 'Unassigned'}</span>
+            <span className="whitespace-normal break-words">{departmentDisplayName || 'Unassigned'}</span>
           </Badge>
 
           {/* Navigation Tabs */}
@@ -991,7 +991,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex flex-col gap-3 pb-4 border-b mb-6">
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
               {/* Search Bar */}
-              <div className="relative flex-1 min-w-[240px]">
+              <div className="relative flex-1 min-w-0 sm:min-w-[240px]">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-ink-muted-48" />
                 <Input
                   type="search"
@@ -1257,7 +1257,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="space-y-4">
               {activeTab === 'faculty' ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">First Name</label>
                       <Input
@@ -1279,7 +1279,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">Gender</label>
                       <select
@@ -1398,7 +1398,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="space-y-4">
               {activeTab === 'faculty' ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">First Name</label>
                       <Input
@@ -1418,7 +1418,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">Gender</label>
                       <select

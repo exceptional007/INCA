@@ -56,7 +56,7 @@ interface NavSection {
 export function AppSidebar() {
   const { user, logout } = useAuth()
   const role = user?.role?.code
-  const { state } = useSidebar()
+  const { state, setOpenMobile } = useSidebar()
 
   const navigationSections: NavSection[] = [
     {
@@ -158,6 +158,7 @@ export function AppSidebar() {
       )}>
         <Link
           to="/hub"
+          onClick={() => setOpenMobile(false)}
           title="Return to Feature Hub"
           className={cn(
             "flex items-center overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg",
@@ -193,6 +194,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild tooltip={item.title}>
                       <NavLink
                         to={item.url}
+                        onClick={() => setOpenMobile(false)}
                         className={({ isActive }) =>
                           cn(
                             "flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -256,7 +258,7 @@ export function AppSidebar() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/hub" className="cursor-pointer text-xs flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
+                  <Link to="/hub" onClick={() => setOpenMobile(false)} className="cursor-pointer text-xs flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
                     <LayoutGrid className="h-4 w-4 text-muted-foreground" />
                     Feature Hub
                   </Link>

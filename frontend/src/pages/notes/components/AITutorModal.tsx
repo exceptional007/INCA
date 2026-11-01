@@ -223,7 +223,7 @@ export const AITutorModal: React.FC<AITutorModalProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[calc(100%-1rem)] max-w-5xl h-[92dvh] max-h-[92dvh] sm:h-[88dvh] flex flex-col gap-0 p-0 overflow-hidden bg-background">
         <DialogHeader className="p-3 pr-10 sm:p-5 sm:pr-12 border-b border-border flex flex-col gap-3 lg:flex-row lg:items-center justify-between shrink-0 bg-card text-left">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex w-full min-w-0 max-w-full items-center gap-3 lg:flex-1">
             <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
               <Sparkles className="size-5" />
             </div>

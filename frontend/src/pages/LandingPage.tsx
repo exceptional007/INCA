@@ -59,7 +59,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Desktop Nav Links */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <button 
               onClick={() => scrollToSection('overview')}
               className="hover:text-foreground transition-colors cursor-pointer"
@@ -87,7 +87,7 @@ export const LandingPage: React.FC = () => {
           </nav>
 
           {/* Action Buttons */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             <button
               onClick={() => navigate('/login')}
               className="text-sm font-medium text-foreground hover:text-primary px-3 py-1.5 transition-colors cursor-pointer"
@@ -104,7 +104,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Mobile Menu Hamburger Toggle */}
-          <div className="flex md:hidden items-center gap-2">
+          <div className="flex lg:hidden items-center gap-2">
             <Button
               size="sm"
               onClick={() => navigate('/login')}
@@ -116,6 +116,8 @@ export const LandingPage: React.FC = () => {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted focus:outline-none"
               aria-label="Toggle navigation menu"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="landing-navigation"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -124,7 +126,7 @@ export const LandingPage: React.FC = () => {
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-b border-border bg-background px-4 pt-2 pb-6 space-y-3 animate-fadeIn">
+          <div id="landing-navigation" className="lg:hidden border-b border-border bg-background px-4 pt-2 pb-6 space-y-3 animate-fadeIn">
             <button
               onClick={() => scrollToSection('overview')}
               className="block w-full text-left py-2 text-sm font-medium text-foreground hover:text-primary"

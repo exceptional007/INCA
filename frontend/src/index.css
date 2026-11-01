@@ -164,6 +164,44 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  :where(.grid) > * {
+    min-width: 0;
+  }
+  input, select, textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* Keep every dialog reachable on short screens and when the phone keyboard opens.
+   Individual dialogs retain their own desktop widths and scroll containers. */
+[data-responsive-dialog] {
+  max-height: calc(100dvh - 1.5rem);
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+[data-mobile-modal] {
+  min-width: 0;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 640px) {
+  [data-responsive-dialog] {
+    max-height: min(90dvh, calc(100dvh - 2rem));
+  }
+}
+@media (max-width: 639px) {
+  [data-responsive-dialog] {
+    max-width: calc(100vw - 1.5rem);
+    border-radius: 1rem;
+  }
+  /* iOS zooms focused fields smaller than 16px and disrupts the layout. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select, textarea {
+    font-size: 16px;
+  }
 }
 
 /* Apple Typography Utility Classes (defined in Inter) */

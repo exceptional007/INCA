@@ -49,7 +49,7 @@ export const PollResultsModal: React.FC<PollResultsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
+      <div role="dialog" aria-modal="true" aria-label="Poll Results" data-mobile-modal="true" className="relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800">
           <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export const PollResultsModal: React.FC<PollResultsModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[80vh]">
+        <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[70dvh]">
           {/* Top Badges */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {poll.isAnonymous ? (

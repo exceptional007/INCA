@@ -264,7 +264,7 @@ export const LostFoundPage: React.FC = () => {
             </button>
 
             {showNotificationDropdown && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-border rounded-2xl shadow-xl z-50 p-4 space-y-3 animate-fadeIn">
+              <div className="fixed left-3 right-3 top-32 sm:absolute sm:left-auto sm:right-0 sm:top-auto mt-2 sm:w-96 max-h-[60dvh] overflow-y-auto bg-white border border-border rounded-2xl shadow-xl z-50 p-4 space-y-3 animate-fadeIn">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <span className="font-bold text-xs text-slate-900">
                     Notifications ({notifications.length})
