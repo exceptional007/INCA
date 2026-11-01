@@ -94,4 +94,16 @@ describe('Student registration with photo (isolated HTTP integration)', () => {
     await request(app.getHttpServer()).get('/students/registration-options').set('x-test-role', 'HOD').expect(200);
     expect(db.department.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: departmentId, isActive: true } }));
   });
+  it.each(['ADMIN', 'SUPER_ADMIN'])('lets %s choose any active department and matching section', async role => {
+    const result = await request(app.getHttpServer()).get('/students/registration-options').set('x-test-role', role).expect(200);
+    expect(result.body.departmentLocked).toBe(false);
+    expect(db.department.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+    expect(db.section.findMany.mock.calls[0][0].where.semester.program.departmentId).toBeUndefined();
+    const otherDepartment = '10000000-0000-4000-8000-000000000099';
+    db.department.findFirst.mockResolvedValue({ id: otherDepartment });
+    db.section.findFirst.mockResolvedValue({ id: sectionId });
+    const saved = await create({ ...dto, departmentId: otherDepartment }, role, null).expect(201);
+    expect(saved.body.data.student.departmentId).toBe(otherDepartment);
+    expect(db.section.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ semester: { isActive: true, program: { isActive: true, departmentId: otherDepartment } } }) }));
+  });
 });

@@ -29,15 +29,12 @@ export class StudentRegistrationService {
       throw new ForbiddenException(
         'Student registration requires Admin or HOD access.',
       );
-    const departmentId =
-      actor.role.code === 'ADMIN'
-        ? actor.adminProfile?.departmentId
-        : actor.faculty?.departmentId;
-    if (actor.role.code !== 'SUPER_ADMIN' && !departmentId)
+    const departmentId = actor.faculty?.departmentId;
+    if (actor.role.code === 'HOD' && !departmentId)
       throw new ForbiddenException(
         'Your department must be assigned before registering students.',
       );
-    return actor.role.code === 'SUPER_ADMIN' ? null : departmentId;
+    return actor.role.code === 'HOD' ? departmentId : null;
   }
   async options(userId: string) {
     const departmentId = await this.scope(userId);

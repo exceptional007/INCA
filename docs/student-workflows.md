@@ -8,7 +8,7 @@ Select a department and a program/semester/section. The section links the studen
 Personal details include name, gender, date of birth, phone, blood group, address, and emergency contacts.
 An optional JPG, PNG, or WebP photo (maximum 5 MB) previews before submission.
 
-Admins and HODs register students in their assigned department; Super Admins may choose any active department.
+Admins and Super Admins may select any active department; HODs register students in their assigned department.
 The server checks the section belongs to that department and is active. Missing academic configuration is shown clearly.
 Initial passwords may be entered or generated securely. The credentials dialog appears only after the server confirms account and profile creation.
 New accounts must change their password at first login.
