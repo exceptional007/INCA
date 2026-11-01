@@ -38,6 +38,14 @@ export function AppLayout() {
   // Determine breadcrumb labels based on pathname
   const getBreadcrumbs = (): BreadcrumbEntry[] => {
     const path = location.pathname
+    const moduleLabels: Record<string, string> = {
+      '/notes': 'AI Notes & Tutor',
+      '/marketplace': 'Campus Marketplace',
+      '/lost-found': 'Lost & Found',
+      '/notices': 'Digital Notice Board',
+      '/polls': 'Community Polls',
+    }
+    if (moduleLabels[path]) return [{ label: moduleLabels[path], isCurrent: true }]
     if (path === "/profile") return [{ label: "My Profile", isCurrent: true }]
     if (path === "/dashboard") {
       return [{ label: "ASSAM Dashboard", isCurrent: true }]
@@ -56,7 +64,7 @@ export function AppLayout() {
     }
     if (path.startsWith("/attendance")) {
       return [
-        { label: "Campus Operations" },
+        { label: "Campus Operations", url: '/dashboard' },
         { label: "Take Attendance", isCurrent: true },
       ]
     }
@@ -109,7 +117,7 @@ export function AppLayout() {
             <div className="h-4 w-px bg-border/80 hidden sm:block" />
 
             {/* Breadcrumb Hierarchy */}
-            <Breadcrumb className="hidden sm:flex">
+            <Breadcrumb motionKey={location.pathname} className="hidden sm:flex">
               <BreadcrumbList>
                 <BreadcrumbItem>
                   <BreadcrumbLink asChild>

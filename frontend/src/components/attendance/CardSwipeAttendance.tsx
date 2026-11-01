@@ -90,6 +90,8 @@ interface CardSwipeAttendanceProps {
   onSubmit: () => void;
   isSubmitting?: boolean;
   onReloadStudents?: () => void;
+  keyboardEnabled?: boolean;
+  demonstrationStep?: { id: number; status: 'PRESENT' | 'ABSENT' };
 }
 
 export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
@@ -101,10 +103,13 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
   onSubmit,
   isSubmitting = false,
   onReloadStudents,
+  keyboardEnabled = true,
+  demonstrationStep,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const editingDisabled = isLocked || isSubmitting;
+  const lastDemonstrationStep = useRef<number | undefined>(undefined);
 
   // Drag physics motion values with improved spring and rotation response
   const x = useMotionValue(0);
@@ -168,9 +173,16 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
     }
   }, [currentStudent, editingDisabled, onMarkStatus, x, handleNext]);
 
+  useEffect(() => {
+    if (!demonstrationStep || demonstrationStep.id === lastDemonstrationStep.current) return;
+    lastDemonstrationStep.current = demonstrationStep.id;
+    handleMark(demonstrationStep.status);
+  }, [demonstrationStep, handleMark]);
+
   // Keyboard shortcut listener for rapid grading
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!keyboardEnabled) return;
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       const activeDialog = Array.from(document.querySelectorAll('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')).at(-1);
       if (activeDialog && !activeDialog.contains(rootRef.current)) return;
@@ -206,7 +218,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleMark, handlePrev, handleNext, isAtSummary]);
+  }, [handleMark, handlePrev, handleNext, isAtSummary, keyboardEnabled]);
 
   // Handle Drag End physics with responsive threshold and smooth spring release
   const onDragEnd = (_: any, info: any) => {
@@ -370,7 +382,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
             </div>
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 divide-y divide-border/30 border border-border rounded-xl p-2 bg-muted/20">
               {studentList.map((st, idx) => {
-                const stStatus = attendanceMap[st.id] || 'PRESENT';
+                const stStatus = attendanceMap[st.id];
                 return (
                   <div key={st.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-1.5 px-2 hover:bg-muted/40 rounded-lg transition-colors text-xs">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -431,7 +443,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
               <Button
                 type="button"
                 size="default"
-                disabled={isSubmitting}
+                disabled={isSubmitting || markedCount < total || total === 0}
                 onClick={onSubmit}
                 className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shadow-md h-9 px-4"
               >
@@ -693,7 +705,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
               type="button"
               size="sm"
               onClick={onSubmit}
-              disabled={isSubmitting || markedCount === 0}
+              disabled={isSubmitting || markedCount < total || total === 0}
               className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 w-full sm:w-auto"
             >
               {isSubmitting ? (

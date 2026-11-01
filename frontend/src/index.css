@@ -312,3 +312,30 @@
   line-height: 1.0;
   letter-spacing: -0.01em;
 }
+
+.landing-page .landing-eyebrow {
+  font-size: .68rem;
+  font-weight: 650;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.landing-page .landing-heading {
+  font-size: clamp(1.9rem, 4vw, 3.2rem);
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -.035em;
+  overflow-wrap: break-word;
+}
+.landing-page a, .landing-page button { -webkit-tap-highlight-color: transparent; }
+.landing-page a:focus-visible, .landing-page button:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.landing-page) { scroll-behavior: smooth; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-page *, .landing-page *::before, .landing-page *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

@@ -97,6 +97,7 @@ function Photo({
     <img
       src={src}
       alt={alt}
+      onError={() => setSrc('')}
       className={`${className} object-cover rounded-2xl`}
     />
   ) : (

@@ -8,6 +8,7 @@ import '../src/index.css';
 import { listing, report, claim, poll, note, notice, overview, reportDetail } from './layout-fixtures.mjs';
 
 const cases = {
+  'lecture-card': ['../src/components/timetable/LectureCard.tsx', 'LectureCard'],
   'listing-detail': ['../src/pages/marketplace/ListingDetailModal.tsx', 'ListingDetailModal'],
   'create-listing': ['../src/pages/marketplace/CreateListingModal.tsx', 'CreateListingModal'],
   'chat': ['../src/pages/marketplace/ChatDealModal.tsx', 'ChatDealModal'],
@@ -53,6 +54,7 @@ const Component = module[selected[1]];
 const noop = () => {};
 const props = { isOpen: true, onClose: noop, onSuccess: noop, onCreated: noop, onSave: async () => {}, onConfirm: async () => {}, currentUserId: 'layout-demo', userRole: 'ADMIN', listing, conversationId: 'demo-conversation', transactionId: 'demo-transaction', targetId: listing.id, targetType: 'listing', report, item: report, claim, matches: [{ id: 'demo-match', matchingScore: 92, matchReason: 'Similar bag found near the study area.', status: 'PENDING_REVIEW', lostReport: { ...report, type: 'LOST' }, foundReport: report }], poll, note, notice, noticeId: notice.id, defaultDay: 'MONDAY', onOpenChat: noop, onInitiateBuy: noop, onReport: noop, onReviewed: noop, onOpenClaim: noop, onOpenMatches: noop, onVerifyHandover: noop, onClaimSuccess: noop, onMatchUpdated: noop, onVoted: noop, onOpenVoterReport: noop, onDownload: noop, data: overview, onDrillDownStudent: noop, onDrillDownDepartment: noop };
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+Object.assign(props, { lecture: { id: 'sample-lecture', lectureNumber: 1, subjectCode: 'CS-302', subjectName: 'Database Management Systems', facultyName: 'Department Academic Coordinator', roomNumber: 'CSE-301', startTime: '09:10 AM', endTime: '10:05 AM', dayOfWeek: 'Monday' }, index: 0, readOnly: true });
 Object.assign(props, { data: name === 'reports-overview' ? overview : reportDetail, onBack: noop, onDrillDownSubject: noop, onDrillDownSection: noop, studentList: [{ id: 'demo-student', firstName: 'Aarav', lastName: 'Sharma', rollNumber: 'CSE-2026-001', collegeId: 'CSE-2026-001' }], attendanceMap: {}, onMarkStatus: noop, onSubmit: noop });
 Object.assign(props, { defaultDay: 'Monday', action: 'reject', onReviewed: noop, slots: [], sections: [], conflicts: [], onUpdateSlot: async () => {}, onAddSlot: async () => {}, onDeleteSlot: async () => {} });
 function InteractivePreview() {
