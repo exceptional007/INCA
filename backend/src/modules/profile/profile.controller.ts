@@ -18,7 +18,6 @@ import {
   IsString,
   MaxLength,
   IsOptional,
-  MinLength,
   Matches,
 } from 'class-validator';
 import type { Response } from 'express';
@@ -28,7 +27,7 @@ class ProfileRequestDto {
   @IsString() @Matches(/^[a-f0-9]{64}$/) revision: string;
 }
 class DecisionDto {
-  @IsOptional() @IsString() @MinLength(3) @MaxLength(2000) reason?: string;
+  @IsOptional() @IsString() @MaxLength(2000) reason?: string;
 }
 @Controller({ path: 'profile', version: '1' })
 @UseGuards(AuthGuard('jwt'))

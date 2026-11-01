@@ -9,6 +9,7 @@ import { Test } from '@nestjs/testing';
 import { AuthGuard } from '@nestjs/passport';
 import request from 'supertest';
 import { StudentController } from './student.controller';
+import { StudentRegistrationService } from './student-registration.service';
 import { StudentService } from './student.service';
 import { StudentRepository } from './repositories/student.repository';
 import { NoticesService } from '../notices/notices.service';
@@ -73,6 +74,7 @@ describe('Student dashboard notice-board integration', () => {
     const module = await Test.createTestingModule({
       controllers: [StudentController],
       providers: [
+        { provide: StudentRegistrationService, useValue: {} },
         StudentService,
         NoticesService,
         {provide: NoticeEnrichmentService, useValue: {enrich: jest.fn().mockResolvedValue(null)}},

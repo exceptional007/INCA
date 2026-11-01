@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useQueryClient } from '@tanstack/react-query';
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useProfileApprovals } from '@/hooks/useProfileApprovals';
 import {
   Camera,
   Check,
@@ -165,10 +166,14 @@ export default function ProfilePage() {
   );
   const [profile, setProfile] = useState<Profile | null>(null),
     [requests, setRequests] = useState<ChangeRequest[]>([]),
-    [queue, setQueue] = useState<ChangeRequest[]>([]),
     [sessions, setSessions] = useState<Session[]>([]);
-  const [tab, setTab] = useState("overview"),
-    [loading, setLoading] = useState(true),
+  const approvals = useProfileApprovals();
+  const queue: ChangeRequest[] = approvals.data || [];
+  const [params, setParams] = useSearchParams();
+  const requestedTab = params.get('tab') || 'overview';
+  const tab = ['overview', 'requests', 'security', ...(reviewer ? ['review'] : [])].includes(requestedTab) ? requestedTab : 'overview';
+  const setTab = (value: string) => setParams({ tab: value }, { replace: true });
+  const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [success, setSuccess] = useState("");
@@ -186,14 +191,13 @@ export default function ProfilePage() {
         api.get("/profile"),
         api.get("/profile/requests"),
         api.get("/auth/sessions"),
-        ...(reviewer ? [api.get("/profile/review-queue")] : []),
       ]);
       if (requestId !== loadId.current) return;
       setProfile(responses[0].data);
       profileCache.setQueryData(['profile-identity', user?.id], responses[0].data);
       setRequests(responses[1].data);
       setSessions(responses[2].data);
-      if (reviewer) setQueue(responses[3].data);
+      if (reviewer) await profileCache.invalidateQueries({ queryKey: ['profile-review-queue', user?.id] });
     } catch (e: any) {
       if (requestId !== loadId.current) return;
       setError(
@@ -275,7 +279,7 @@ export default function ProfilePage() {
           ),
         decision === "approve"
           ? "Profile changes approved and applied."
-          : "Request rejected with feedback.",
+          : "Request rejected.",
       )
     )
       setReview(null);
@@ -320,7 +324,7 @@ export default function ProfilePage() {
           <p className="text-[11px] uppercase tracking-[.2em] text-muted-foreground">
             Your campus identity
           </p>
-          <h1 className="text-2xl font-semibold mt-1">My profile</h1>
+          <h1 className="text-2xl font-semibold mt-1">{tab === 'review' ? 'Profile approvals' : 'My profile'}</h1>
         </div>
         <Button
           variant="outline"
@@ -332,7 +336,7 @@ export default function ProfilePage() {
           Refresh
         </Button>
       </div>
-      <section className="rounded-3xl border overflow-hidden bg-card shadow-sm">
+      {tab !== 'review' && <section className="rounded-3xl border overflow-hidden bg-card shadow-sm">
         <div className="h-28 sm:h-36 bg-gradient-to-br from-slate-950 via-indigo-950 to-teal-900 relative">
           <div className="absolute right-8 top-8 size-32 rounded-full border border-white/10" />
           <div className="absolute right-24 -top-10 size-40 rounded-full border border-white/10" />
@@ -392,7 +396,7 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-      </section>
+      </section>}
       <nav
         aria-label="Profile sections"
         className="flex gap-1 border-b overflow-x-auto"
@@ -535,13 +539,15 @@ export default function ProfilePage() {
       )}
       {tab === "review" && (
         <div className="space-y-4">
+          {approvals.isLoading && <p role="status">Loading profile requests…</p>}
+          {approvals.isError && <p role="alert" className="text-destructive">{(approvals.error as any)?.response?.data?.message || 'Could not load the approval inbox. Please refresh.'}</p>}
           <div>
             <h3 className="font-semibold">Profile approval inbox</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Review proposed changes before updating the campus record.
             </p>
           </div>
-          {!queue.length && (
+          {!queue.length && !approvals.isLoading && !approvals.isError && (
             <Empty
               title="All caught up"
               text="No profile requests currently need your approval."
@@ -782,7 +788,7 @@ export default function ProfilePage() {
           {review && <Diff request={review} />}
           <div className="space-y-2">
             <Label htmlFor="profile-rejection">
-              Feedback (required to reject)
+              Rejection remark (optional)
             </Label>
             <textarea
               id="profile-rejection"
@@ -807,7 +813,7 @@ export default function ProfilePage() {
             </Button>
             <Button
               variant="destructive"
-              disabled={busy || reason.trim().length < 3}
+              disabled={busy}
               onClick={() => void decide("reject")}
             >
               Reject

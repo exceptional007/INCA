@@ -22,6 +22,7 @@ const PollsPage = lazy(() => import('./pages/polls/PollsPage').then((m) => ({ de
 const FeatureHub = lazy(() => import('./pages/dashboard/FeatureHub').then((m) => ({ default: m.FeatureHub })));
 const PasswordPage = lazy(() => import('./pages/auth/PasswordPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
+const AttendanceObjectionsPage = lazy(() => import('./pages/attendance/AttendanceObjectionsPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -62,6 +63,9 @@ export const App: React.FC = () => {
                 <Route element={<AppLayout />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'HOD']} />}>
+                    <Route path="/attendance/objections" element={<AttendanceObjectionsPage />} />
+                  </Route>
                   <Route path="/schedules" element={<SchedulingPage />} />
                   <Route path="/activities" element={<ActivitiesPage />} />
                   <Route path="/reports" element={<ReportsPage />} />

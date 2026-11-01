@@ -18,6 +18,7 @@ import { DemoAttendanceModal } from '@/components/timetable/DemoAttendanceModal'
 import { TimetableImportPage } from '@/pages/academic/import/TimetableImportPage';
 import api from '../../api/axios';
 import { useAuth } from '@/context/AuthContext';
+import { StudentTimetablePage } from '@/pages/student/StudentWorkspace';
 
 export const SchedulingPage: React.FC = () => {
   const { user } = useAuth();
@@ -75,6 +76,7 @@ export const SchedulingPage: React.FC = () => {
   };
 
   // Faculty view has its dedicated past & upcoming lecture viewer without admin configurations or import tabs
+  if (roleCode === 'STUDENT') return <StudentTimetablePage />;
   if (isFaculty) {
     return (
       <div className="space-y-6">

@@ -388,9 +388,9 @@ describe('Password, session and approved profile lifecycle', () => {
       status: 'APPROVED',
       reviewerId: 'admin',
     });
-    expect(store.state.notifications).toHaveLength(1);
+    expect(store.state.notifications.filter(n => n.type === 'PROFILE_APPROVED')).toHaveLength(1);
   });
-  it.each(['student', 'faculty', 'otherAdmin', 'coordinator'])(
+  it.each(['student', 'faculty', 'coordinator'])(
     'blocks unauthorized/self/cross-department reviewer %s',
     async (id) => {
       const a = await login(),
@@ -424,20 +424,22 @@ describe('Password, session and approved profile lifecycle', () => {
       .expect(201);
     expect(store.state.adminProfile[0].name).toBe('Updated Admin');
   });
-  it('requires feedback on rejection and allows a corrected new request', async () => {
+  it('allows an optional rejection remark and a corrected new request', async () => {
     const a = await login(),
       b = await login('admin');
     const r = await submit(a.token);
     await post('/profile/requests/' + r.body.id + '/reject')
       .auth(b.token, { type: 'bearer' })
       .send({})
-      .expect(400);
-    await post('/profile/requests/' + r.body.id + '/reject')
+      .expect(201);
+    expect((await get('/profile/requests', a.token)).body[0].reason).toBeNull();
+    const corrected = await submit(a.token);
+    await post('/profile/requests/' + corrected.body.id + '/reject')
       .auth(b.token, { type: 'bearer' })
       .send({ reason: 'Please correct this number.' })
       .expect(201);
     expect(store.state.student[0].phone).toBe('1234567890');
-    expect((await get('/profile/requests', a.token)).body[0].reason).toBe(
+    expect((await get('/profile/requests', a.token)).body.find(row => row.id === corrected.body.id).reason).toBe(
       'Please correct this number.',
     );
     expect((await submit(a.token)).status).toBe(201);
@@ -462,7 +464,7 @@ describe('Password, session and approved profile lifecycle', () => {
         .send({}),
     ]);
     expect(decisions.map((r) => r.status).sort()).toEqual([201, 409]);
-    expect(store.state.notifications).toHaveLength(1);
+    expect(store.state.notifications.filter(n => n.type === 'PROFILE_APPROVED')).toHaveLength(1);
   });
   it('rolls back applied details if notification persistence fails', async () => {
     const a = await login(),
@@ -506,7 +508,7 @@ describe('Password, session and approved profile lifecycle', () => {
   it('keeps proposed photos private and only promotes after authorized approval', async () => {
     const a = await login(),
       b = await login('admin'),
-      c = await login('otherAdmin');
+      c = await login('faculty');
     const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0]);
     const r = await submit(a.token, {}, png);
     expect(r.status).toBe(201);
@@ -546,7 +548,23 @@ describe('Password, session and approved profile lifecycle', () => {
     ).toHaveLength(1);
     expect(
       (await get('/profile/review-queue', c.token).expect(200)).body,
-    ).toHaveLength(0);
+    ).toHaveLength(1);
     await get('/profile/review-queue', a.token).expect(403);
+  });
+  it('notifies campus-wide admins, hides foreign requests from HODs, and enforces decision scope', async () => {
+    const student = await login(), admin = await login('otherAdmin'), hod = await login('hod');
+    const request = await submit(student.token);
+    expect(store.state.notifications.some(n => n.userId === 'otherAdmin' && n.type === 'PROFILE_REVIEW_REQUESTED')).toBe(true);
+    store.state.faculty.find(f => f.userId === 'hod').departmentId = 'b';
+    expect((await get('/profile/review-queue', hod.token).expect(200)).body).toHaveLength(0);
+    await post(`/profile/requests/${request.body.id}/approve`).auth(hod.token, { type: 'bearer' }).send({}).expect(403);
+    await post(`/profile/requests/${request.body.id}/approve`).auth(admin.token, { type: 'bearer' }).send({}).expect(201);
+  });
+  it('finds section-department requests when the direct student department is missing', async () => {
+    store.state.student[0].departmentId = null;
+    store.state.student[0].section = { semester: { program: { departmentId: 'a' } } };
+    const student = await login(), hod = await login('hod');
+    await submit(student.token);
+    expect((await get('/profile/review-queue', hod.token).expect(200)).body).toHaveLength(1);
   });
 });

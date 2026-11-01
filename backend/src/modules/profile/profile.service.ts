@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 
 const include = {
   role: true,
-  student: { include: { department: true, section: true } },
+  student: { include: { department: true, section: { include: { semester: { include: { program: { include: { department: true } } } } } } } },
   faculty: { include: { department: true } },
   adminProfile: { include: { department: true } },
 };
@@ -59,19 +59,15 @@ export class ProfileService {
   private department(u: any) {
     return u.role.code === 'ADMIN'
       ? u.adminProfile?.departmentId
-      : u.student?.departmentId || u.faculty?.departmentId;
+      : u.student?.departmentId || u.student?.section?.semester?.program?.departmentId || u.faculty?.departmentId;
   }
   canReview(actor: any, target: any): boolean {
-    if (actor.id === target.id || !actor.isActive || !actor.role.isActive)
+    if (actor.id === target.id || !actor.isActive || !actor.role.isActive || !target.isActive || !target.role.isActive)
       return false;
     if (actor.role.code === 'SUPER_ADMIN') return true;
     if (['ADMIN', 'SUPER_ADMIN'].includes(target.role.code)) return false;
     const dept = this.department(target);
-    if (actor.role.code === 'ADMIN')
-      return (
-        (!!dept && dept === this.department(actor)) ||
-        (!dept && target.role.code === 'COORDINATOR')
-      );
+    if (actor.role.code === 'ADMIN') return true;
     return (
       actor.role.code === 'HOD' &&
       ['FACULTY', 'STUDENT'].includes(target.role.code) &&
@@ -90,7 +86,7 @@ export class ProfileService {
       values,
       revision: digest(values),
       editableFields: this.fields(u),
-      department: p?.department || u.adminProfile?.department || null,
+      department: p?.department || u.student?.section?.semester?.program?.department || u.adminProfile?.department || null,
       academic: u.student
         ? {
             collegeId: p.collegeId,
@@ -223,6 +219,10 @@ export class ProfileService {
         const request = await tx.profileChangeRequest.create({
           data: { userId: id, changes, previous, photoKey },
         });
+        const reviewers = await tx.user.findMany({ where: { isActive: true, role: { isActive: true, code: { in: ['ADMIN', 'SUPER_ADMIN', 'HOD'] } } }, include });
+        for (const reviewer of reviewers.filter(actor => this.canReview(actor, current))) {
+          await tx.notifications.create({ data: { userId: reviewer.id, type: 'PROFILE_REVIEW_REQUESTED', title: 'Profile update awaiting review', message: `${current.email} requested a profile update. Open Profile approvals to review it.` } });
+        }
         return request;
       });
     } catch (error) {
@@ -244,21 +244,17 @@ export class ProfileService {
       throw new ForbiddenException('Reviewer access required.');
     const departmentId = this.department(actor);
     const where: any = { status: 'PENDING', userId: { not: id } };
-    if (actor.role.code !== 'SUPER_ADMIN') {
-      const roles =
-        actor.role.code === 'HOD'
-          ? ['FACULTY', 'STUDENT']
-          : ['FACULTY', 'STUDENT', 'HOD', 'COORDINATOR'];
+    if (actor.role.code === 'ADMIN') {
+      where.user = { isActive: true, role: { isActive: true, code: { in: ['FACULTY', 'STUDENT', 'HOD', 'COORDINATOR'] } } };
+    } else if (actor.role.code === 'HOD') {
+      if (!departmentId) throw new ForbiddenException('Your HOD department must be assigned before reviewing profile requests.');
       where.user = {
         isActive: true,
-        role: { code: { in: roles }, isActive: true },
+        role: { code: { in: ['FACULTY', 'STUDENT'] }, isActive: true },
         OR: [
-          ...(departmentId
-            ? [{ student: { departmentId } }, { faculty: { departmentId } }]
-            : []),
-          ...(actor.role.code === 'ADMIN'
-            ? [{ role: { code: 'COORDINATOR' }, faculty: null, student: null }]
-            : []),
+          { student: { departmentId } },
+          { student: { departmentId: null, section: { semester: { program: { departmentId } } } } },
+          { faculty: { departmentId } },
         ],
       };
     }
@@ -278,13 +274,7 @@ export class ProfileService {
     decision: 'APPROVED' | 'REJECTED',
     reason?: string,
   ) {
-    if (
-      decision === 'REJECTED' &&
-      (!reason?.trim() || reason.trim().length < 3 || reason.length > 2000)
-    )
-      throw new BadRequestException(
-        'A rejection reason of 3–2000 characters is required.',
-      );
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 2000)) throw new BadRequestException('Remarks must be at most 2000 characters.');
     const actor = await this.user(actorId);
     const initial = await this.db.profileChangeRequest.findUnique({
       where: { id },
@@ -353,7 +343,7 @@ export class ProfileService {
             status: decision,
             reviewerId: actorId,
             reviewedAt: new Date(),
-            reason: decision === 'REJECTED' ? reason!.trim() : null,
+            reason: decision === 'REJECTED' ? reason?.trim() || null : null,
           },
         });
         await tx.notifications.create({
@@ -364,7 +354,7 @@ export class ProfileService {
             message:
               decision === 'APPROVED'
                 ? 'Your approved details are now live.'
-                : reason!.trim(),
+                : reason?.trim() || 'Your profile update request was rejected. You can submit a corrected request.',
           },
         });
         return result;

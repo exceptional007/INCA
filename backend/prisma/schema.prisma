@@ -50,6 +50,7 @@ model User {
   passwordResets     PasswordReset[]
   profileRequests    ProfileChangeRequest[] @relation("ProfileOwner")
   profileReviews     ProfileChangeRequest[] @relation("ProfileReviewer")
+  attendanceObjectionsReviewed AttendanceObjection[] @relation("ObjectionReviewer")
 
   lastLoginAt DateTime?
 
@@ -239,6 +240,7 @@ model Student {
   section   Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   attendanceRecords  AttendanceRecord[]
+  attendanceObjections AttendanceObjection[]
   tutorConversations TutorConversation[]
   quizAttempts       QuizAttempt[]
   createdQuizzes     LearningQuiz[]
@@ -595,6 +597,7 @@ model AttendanceSession {
   updatedAt DateTime @updatedAt
 
   records AttendanceRecord[]
+  objections AttendanceObjection[]
 
   @@index([scheduleId])
   @@index([activityId])
@@ -627,6 +630,37 @@ model AttendanceRecord {
   @@index([studentId])
   @@index([status])
   @@map("attendance_records")
+}
+
+enum AttendanceObjectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AttendanceObjection {
+  id String @id @default(uuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  attendanceSessionId String
+  attendanceSession AttendanceSession @relation(fields: [attendanceSessionId], references: [id], onDelete: Restrict)
+  reason String
+  originalStatus AttendanceStatus?
+  requestedStatus AttendanceStatus?
+  status AttendanceObjectionStatus @default(PENDING)
+  reviewerId String?
+  reviewer User? @relation("ObjectionReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewRemark String?
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A migration adds the partial unique index for one PENDING request per student/session.
+  @@index([studentId, createdAt])
+  @@index([attendanceSessionId, status])
+  @@index([status, createdAt])
+  @@index([reviewerId])
+  @@map("attendance_objections")
 }
 
 model AttendanceAudit {

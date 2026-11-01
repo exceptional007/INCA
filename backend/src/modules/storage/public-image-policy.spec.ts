@@ -13,6 +13,7 @@ import { StrictR2StorageService } from './strict-r2-storage.service';
 import { StorageController } from './storage.controller';
 import { MarketplaceMediaController } from '../marketplace/marketplace-media.controller';
 import { StudentController } from '../student/student.controller';
+import { StudentRegistrationService } from '../student/student-registration.service';
 import { StudentService } from '../student/student.service';
 import { NoticesService } from '../notices/notices.service';
 import { StudentRepository } from '../student/repositories/student.repository';
@@ -141,6 +142,7 @@ describe('Public storage HTTP routes', () => {
         StudentController,
       ],
       providers: [
+        { provide: StudentRegistrationService, useValue: {} },
         StrictR2StorageService,
         StudentService,
         { provide: ConfigService, useValue: { get: () => undefined } },

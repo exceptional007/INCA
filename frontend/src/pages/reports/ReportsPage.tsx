@@ -18,6 +18,7 @@ import { SectionReportView } from './SectionReportView';
 import { FacultyReportView } from './FacultyReportView';
 import { FacultyReportsWorkspace } from './FacultyReportsWorkspace';
 import { useAuth } from '@/context/AuthContext';
+import { StudentAttendancePage } from '@/pages/student/StudentWorkspace';
 
 interface BreadcrumbItem {
   type: ReportType;
@@ -30,6 +31,7 @@ export const ReportsPage: React.FC = () => {
   const roleCode = user?.role?.code || (typeof (user as any)?.role === 'string' ? (user as any).role : '');
   const isFaculty = roleCode === 'FACULTY' || !!user?.faculty;
 
+  if (roleCode === 'STUDENT') return <StudentAttendancePage />;
   if (isFaculty) {
     return <FacultyReportsWorkspace />;
   }

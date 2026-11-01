@@ -152,6 +152,7 @@ export const FeatureHub: React.FC = () => {
           <InstallAppButton />
         </div>
         {user?.role.code === 'FACULTY' && <div className="mb-6"><OfflineAttendanceStatus /><Link className="inline-block text-sm text-primary mt-2" to="/attendance/mark">Take attendance →</Link></div>}
+        {['ADMIN', 'HOD', 'SUPER_ADMIN'].includes(user?.role.code || '') && <div className="mb-6 flex flex-wrap gap-3"><Button asChild variant="outline"><Link to="/profile?tab=review">Profile approvals</Link></Button>{user?.role.code !== 'SUPER_ADMIN' && <Button asChild variant="outline"><Link to="/attendance/objections">Attendance objections</Link></Button>}</div>}
         <div className="mb-10 text-left">
           <span className="text-xs uppercase text-action-blue tracking-widest font-semibold">Post-Login Hub</span>
           <h2 className="text-3xl font-semibold tracking-tight text-ink mt-1.5">Select a Platform Module</h2>

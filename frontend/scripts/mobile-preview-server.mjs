@@ -23,7 +23,7 @@ const server = await createServer({
         return;
       }
       if (url.pathname === '/__fixture') {
-        resetInteractions(url.searchParams.get('failNext') || '');
+        if (url.searchParams.get('preserve') !== '1') resetInteractions(url.searchParams.get('failNext') || '');
         role = roles.has(url.searchParams.get('role')) ? url.searchParams.get('role') : 'ADMIN';
         const destination = url.searchParams.get('page') || '/hub';
         res.setHeader('Content-Type', 'text/html');

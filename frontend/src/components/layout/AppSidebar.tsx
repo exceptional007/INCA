@@ -1,6 +1,7 @@
-import { NavLink, Link } from "react-router-dom"
+import { NavLink, Link, useLocation } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
+import { useProfileApprovals } from '@/hooks/useProfileApprovals';
 import {
   Sidebar,
   SidebarContent,
@@ -57,6 +58,8 @@ export function AppSidebar() {
   const { name } = useProfileIdentity();
   const { user, logout } = useAuth()
   const role = user?.role?.code
+  const approvals = useProfileApprovals();
+  const location = useLocation();
   const { state, setOpenMobile } = useSidebar()
 
   const navigationSections: NavSection[] = [
@@ -105,6 +108,8 @@ export function AppSidebar() {
       title: "Academic Administration",
       roles: ["SUPER_ADMIN", "ADMIN", "HOD"],
       items: [
+        { title: `Profile approvals${approvals.data?.length ? ` (${approvals.data.length})` : ''}`, url: '/profile?tab=review', icon: UserIcon, roles: ['SUPER_ADMIN', 'ADMIN', 'HOD'] },
+        { title: 'Attendance objections', url: '/attendance/objections', icon: CheckSquare, roles: ['ADMIN', 'HOD'] },
         {
           title: "Academic Master",
           url: "/academic",
@@ -199,7 +204,7 @@ export function AppSidebar() {
                         className={({ isActive }) =>
                           cn(
                             "flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                            isActive
+                            (isActive && (item.url.startsWith('/profile') ? (item.url.includes('tab=review') === (new URLSearchParams(location.search).get('tab') === 'review')) : true))
                               ? "bg-primary/10 font-semibold text-primary"
                               : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                           )
