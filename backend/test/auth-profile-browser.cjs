@@ -31,4 +31,3 @@ const fs=require('node:fs'),path=require('node:path');
  await navigate('/reset-password#token='+ 'r'.repeat(43));await wait(`!!document.getElementById('new-password')`,'reset screen');if(await evaluate('!!location.hash'))throw Error('Recovery token remains in URL');console.log('PASS: recovery form and reset token scrubbing');
  if(errors.length)throw Error(errors.join('\n'));console.log('All synthetic browser checks passed.');await send('Browser.close').catch(()=>{});ws.close();
 })().catch(e=>{console.error(e.message);process.exitCode=1;setTimeout(()=>process.exit(1),100);});
-
