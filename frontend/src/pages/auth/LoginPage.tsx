@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import gsap from 'gsap';
+import { DemoAccounts } from './DemoAccounts';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -301,6 +302,14 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
         </div>
+        <DemoAccounts disabled={isLoading} onSelect={account => {
+          setEmail(account.email);
+          setPassword(account.password);
+          setShowPassword(false);
+          setError(null);
+          cardRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+          document.getElementById('email')?.focus({ preventScroll: true });
+        }} />
       </div>
 
       {/* Understated Institutional Footer */}
