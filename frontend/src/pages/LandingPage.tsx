@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { InstallAppButton } from '@/components/InstallAppButton';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -190,6 +191,7 @@ export const LandingPage: React.FC = () => {
               </p>
 
               {/* Primary Calls to Action */}
+              <div className="mb-4"><InstallAppButton /></div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full sm:w-auto mb-14">
                 <Button 
                   size="lg" 

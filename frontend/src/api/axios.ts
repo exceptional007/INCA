@@ -6,7 +6,7 @@ const api = axios.create({
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
-const transport = axios.create({ baseURL: authBaseURL, withCredentials: true });
+const transport = axios.create({ baseURL: authBaseURL, withCredentials: true, timeout: 20_000 });
 let refreshPending: Promise<string> | null = null;
 let generation = 0;
 export function clearSession() {
@@ -79,7 +79,9 @@ api.interceptors.response.use(
         );
         await refreshSession(previous);
         return api(config);
-      } catch {
+      } catch (refreshError: any) {
+        // A disconnected device must retain its signed-in offline workspace.
+        if (!refreshError.response || refreshError.response.status >= 500) return Promise.reject(refreshError);
         clearSession();
         if (
           !["/login", "/forgot-password", "/reset-password"].includes(

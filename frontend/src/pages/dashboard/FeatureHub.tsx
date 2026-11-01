@@ -1,9 +1,11 @@
 import React from 'react';
+import { InstallAppButton } from '@/components/InstallAppButton';
+import { OfflineAttendanceStatus } from '@/offline/AttendanceOfflineProvider';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { UserAvatar, useProfileIdentity } from '@/components/profile/UserIdentity';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -14,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { 
   ShieldCheck, 
-  User as UserIcon, 
+
   LogOut, 
   Clock, 
   Sparkles, 
@@ -26,6 +28,7 @@ import {
 } from 'lucide-react';
 
 export const FeatureHub: React.FC = () => {
+  const { name } = useProfileIdentity();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -120,15 +123,11 @@ export const FeatureHub: React.FC = () => {
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-8 w-8 rounded-full border border-[#e0e0e0] cursor-pointer hover:opacity-90 active:scale-95 transition-all">
-                  <AvatarFallback className="rounded-full bg-canvas-parchment text-ink font-semibold text-xs">
-                    {user?.email?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4" />}
-                  </AvatarFallback>
-                </Avatar>
+                <button type="button" aria-label="User profile and settings" className="rounded-full focus-visible:ring-2 focus-visible:ring-primary"><UserAvatar className="h-8 w-8 rounded-full border border-[#e0e0e0] cursor-pointer hover:opacity-90 active:scale-95 transition-all" /></button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 rounded-[11px] mt-1 shadow-none border border-[#e0e0e0] bg-white font-sans" align="end">
                 <DropdownMenuLabel className="p-3 text-left">
-                  <p className="text-xs font-semibold text-ink leading-none">{user?.email?.split('@')[0]}</p>
+                  <p className="text-xs font-semibold text-ink leading-none">{name}</p>
                   <p className="text-[10px] text-ink-muted-48 mt-1.5">{user?.role?.name || user?.role?.code}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-[#f0f0f0]" />
@@ -148,6 +147,11 @@ export const FeatureHub: React.FC = () => {
 
       {/* Main Hub Content Area */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 flex flex-col justify-center">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-white p-4">
+          <Link to="/profile" className="flex min-w-0 items-center gap-3"><UserAvatar className="size-12 shrink-0 border" /><div className="min-w-0"><p className="font-semibold break-words">{name}</p><p className="text-xs text-muted-foreground break-all">{user?.email}</p><span className="text-xs text-primary">View profile & security</span></div></Link>
+          <InstallAppButton />
+        </div>
+        {user?.role.code === 'FACULTY' && <div className="mb-6"><OfflineAttendanceStatus /><Link className="inline-block text-sm text-primary mt-2" to="/attendance/mark">Take attendance →</Link></div>}
         <div className="mb-10 text-left">
           <span className="text-xs uppercase text-action-blue tracking-widest font-semibold">Post-Login Hub</span>
           <h2 className="text-3xl font-semibold tracking-tight text-ink mt-1.5">Select a Platform Module</h2>

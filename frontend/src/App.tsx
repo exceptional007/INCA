@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
+import { AttendanceOfflineProvider } from './offline/AttendanceOfflineProvider';
 
 const LandingPage = lazy(() => import('./pages/LandingPage').then((m) => ({ default: m.LandingPage })));
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
@@ -42,6 +43,7 @@ export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <AttendanceOfflineProvider>
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
             <Routes>
@@ -100,6 +102,7 @@ export const App: React.FC = () => {
             </Routes>
           </Suspense>
         </BrowserRouter>
+        </AttendanceOfflineProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

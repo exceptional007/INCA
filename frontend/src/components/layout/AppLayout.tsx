@@ -12,7 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { LayoutGrid, Building2, LogOut, User as UserIcon } from "lucide-react"
+import { LayoutGrid, Building2, LogOut } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar, useProfileIdentity } from '@/components/profile/UserIdentity';
 
 interface BreadcrumbEntry {
   label: string
@@ -30,6 +30,7 @@ interface BreadcrumbEntry {
 }
 
 export function AppLayout() {
+  const { name } = useProfileIdentity();
   const { user, logout } = useAuth()
   const location = useLocation()
   const role = user?.role?.code
@@ -166,11 +167,7 @@ export function AppLayout() {
                   className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
                   aria-label="User profile and settings"
                 >
-                  <Avatar className="h-8 w-8 border border-border shadow-2xs hover:opacity-90 transition-opacity">
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
-                      {user?.email?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4" />}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar className="h-8 w-8 border border-border shadow-2xs hover:opacity-90 transition-opacity" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -180,7 +177,7 @@ export function AppLayout() {
               >
                 <DropdownMenuLabel className="p-2 font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-xs font-semibold leading-none text-foreground truncate">{user?.email}</p>
+                    <p className="text-xs font-semibold leading-none text-foreground truncate">{name}</p>
                     <p className="text-[10px] leading-none text-muted-foreground font-medium">{role}</p>
                   </div>
                 </DropdownMenuLabel>

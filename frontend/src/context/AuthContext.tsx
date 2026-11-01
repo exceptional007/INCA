@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         if (!localStorage.getItem("inca_token")) await refreshSession();
         const requestToken = localStorage.getItem("inca_token");
-        const response = await api.get("/auth/me");
+        const response = await api.get("/auth/me", { timeout: 20_000 });
         if (!alive || localStorage.getItem("inca_token") !== requestToken)
           return;
         const current = response.data.data;
@@ -56,8 +56,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           ...current,
           role: { ...existing?.role, code: current.role },
         });
-      } catch {
-        if (alive && localStorage.getItem("inca_token") === startupToken)
+      } catch (error: any) {
+        if (alive && [401, 403].includes(error.response?.status) && localStorage.getItem("inca_token") === startupToken)
           clearSession();
       } finally {
         if (alive) setLoading(false);

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from "react-router-dom";
 import {
   Camera,
@@ -155,6 +156,7 @@ function Diff({ request }: { request: ChangeRequest }) {
 }
 
 export default function ProfilePage() {
+  const profileCache = useQueryClient();
   const loadId = useRef(0);
   const { user, logout } = useAuth();
   const reviewer = ["HOD", "ADMIN", "SUPER_ADMIN"].includes(
@@ -187,6 +189,7 @@ export default function ProfilePage() {
       ]);
       if (requestId !== loadId.current) return;
       setProfile(responses[0].data);
+      profileCache.setQueryData(['profile-identity', user?.id], responses[0].data);
       setRequests(responses[1].data);
       setSessions(responses[2].data);
       if (reviewer) setQueue(responses[3].data);

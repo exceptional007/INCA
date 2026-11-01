@@ -38,7 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar, useProfileIdentity } from '@/components/profile/UserIdentity';
 
 interface NavEntry {
   title: string
@@ -54,6 +54,7 @@ interface NavSection {
 }
 
 export function AppSidebar() {
+  const { name } = useProfileIdentity();
   const { user, logout } = useAuth()
   const role = user?.role?.code
   const { state, setOpenMobile } = useSidebar()
@@ -226,13 +227,9 @@ export function AppSidebar() {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground rounded-xl"
                   aria-label="User account menu"
                 >
-                  <Avatar className="h-8 w-8 rounded-lg border border-border">
-                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold text-xs">
-                      {user?.email?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4" />}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar className="h-8 w-8 rounded-lg border border-border" />
                   <div className="grid flex-1 text-left text-xs leading-tight min-w-0">
-                    <span className="truncate font-semibold text-foreground">{user?.email?.split('@')[0]}</span>
+                    <span className="truncate font-semibold text-foreground">{name}</span>
                     <span className="truncate text-[10px] text-muted-foreground font-medium">{role || 'User'}</span>
                   </div>
                 </SidebarMenuButton>
@@ -245,11 +242,7 @@ export function AppSidebar() {
               >
                 <DropdownMenuLabel className="p-2 font-normal">
                   <div className="flex items-center gap-2.5 text-left text-xs">
-                    <Avatar className="h-8 w-8 rounded-lg border border-border shrink-0">
-                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold">
-                        {user?.email?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4" />}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar className="h-8 w-8 rounded-lg border border-border shrink-0" />
                     <div className="grid flex-1 text-left text-xs leading-tight min-w-0">
                       <span className="truncate font-semibold text-foreground">{user?.email}</span>
                       <span className="truncate text-[10px] text-primary font-medium">{role}</span>

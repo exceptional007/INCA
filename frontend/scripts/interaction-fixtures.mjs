@@ -33,7 +33,7 @@ export async function interactionResponse(req, res, path, send, role = 'ADMIN') 
   if (state.failNext === path) { state.failNext = ''; res.statusCode = 503; send({ message: 'Synthetic temporary failure. Please retry.' }); return true; }
   const get = req.method === 'GET';
   const wrapped = data => send({ success: true, data });
-  const profile = { id: 'layout-demo', email: 'layout.preview@bit.ac.in', role, roleName: role, values: state.profileValues, revision: 'layout-revision', editableFields: Object.keys(initialProfileValues), department, academic: { program: 'B.Tech Computer Science and Engineering', semester: '6' }, joinedAt: date };
+  const profile = { id: 'layout-demo', email: 'layout.preview@bit.ac.in', role, roleName: role, values: { ...state.profileValues, photoKey: 'synthetic-avatar' }, revision: 'layout-revision', editableFields: Object.keys(initialProfileValues), department, academic: { program: 'B.Tech Computer Science and Engineering', semester: '6' }, joinedAt: date };
   if (path === '/profile' && get) { send(profile); return true; }
   if (path === '/auth/sessions' && get) { send(state.sessions); return true; }
   if (path.startsWith('/auth/sessions/') && req.method === 'DELETE') { state.sessions = state.sessions.filter(session => session.id !== path.split('/').at(-1)); send({ success: true }); return true; }
@@ -54,6 +54,8 @@ export async function interactionResponse(req, res, path, send, role = 'ADMIN') 
   if (get && path === '/students') { wrapped(students.map(student => ({ ...student, gender: 'MALE', departmentId: department.id, department, isActive: true, enrollments: [], user: { email: 'student.preview@bit.ac.in', isActive: true } }))); return true; }
   if (/^\/notes\/demo-note\/(preview|download)$/.test(path) || path === '/notices/attachments/demo-attachment/stream') { res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Content-Disposition', 'inline; filename="synthetic-course-notes.pdf"'); res.end(previewPdf); return true; }
   if (path === '/__test/state') { send(state); return true; }
+  if (path === '/attendance/sessions/demo-session' && get) { wrapped(state.session); return true; }
+  if (path === '/attendance/sessions/demo-session/sync' && !get) { const body = await readJson(req); state.session.records = body.records.map((record, i) => ({ ...record, id: `demo-record-${i + 1}` })); state.session.status = 'SUBMITTED'; wrapped(state.session); return true; }
   if (path === '/schedules/today') { wrapped([schedule]); return true; }
   if (path === '/attendance/sessions' && !get) { await readJson(req); wrapped(state.session); return true; }
   if (path === '/attendance/sessions/demo-session/roster') { wrapped(students); return true; }

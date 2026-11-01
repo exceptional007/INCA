@@ -86,6 +86,7 @@ interface CardSwipeAttendanceProps {
   attendanceMap: Record<string, 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'>;
   onMarkStatus: (studentId: string, status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED') => void;
   isLocked?: boolean;
+  lockedMessage?: string;
   onSubmit: () => void;
   isSubmitting?: boolean;
   onReloadStudents?: () => void;
@@ -96,6 +97,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
   attendanceMap,
   onMarkStatus,
   isLocked = false,
+  lockedMessage = 'Attendance Locked & Submitted',
   onSubmit,
   isSubmitting = false,
   onReloadStudents,
@@ -423,7 +425,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
             {isLocked ? (
               <Badge variant="destructive" className="py-2 px-4 text-xs font-bold gap-1.5">
                 <Lock className="w-3.5 h-3.5" />
-                Attendance Locked & Submitted
+                {lockedMessage}
               </Badge>
             ) : (
               <Button
@@ -684,7 +686,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
         <div className="w-full sm:w-auto flex justify-end">
           {isLocked ? (
             <Badge variant="destructive" className="py-1 px-3 text-xs flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Session Locked
+              <Lock className="w-3 h-3" /> {lockedMessage}
             </Badge>
           ) : (
             <Button
