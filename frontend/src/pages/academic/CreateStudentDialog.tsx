@@ -343,15 +343,15 @@ export function CreateStudentDialog({ open, onOpenChange, onCreated }: Props) {
                   </select>
                 </label>
                 <label className="text-sm">
-                  Program / semester / section *
+                  Program / semester / section {sections.length ? '*' : '(not yet configured)'}
                   <select
                     key={departmentId}
                     name="sectionId"
-                    required
+                    required={sections.length > 0}
                     defaultValue=""
                     className={fieldClass}
                   >
-                    <option value="">Select class</option>
+                    <option value="">{sections.length ? 'Select class' : 'Not assigned yet'}</option>
                     {sections.map((section: any) => (
                       <option key={section.id} value={section.id}>
                         {section.semester.program.name} · Semester{" "}
@@ -363,9 +363,8 @@ export function CreateStudentDialog({ open, onOpenChange, onCreated }: Props) {
               </div>
               {!sections.length && departmentId && (
                 <p className="text-sm text-amber-700 dark:text-amber-400">
-                  No active sections are available in this department. Create
-                  the program, semester, and section before registering a
-                  student.
+                  No active classes are configured for this department. You can create
+                  the student now; their timetable will be available after a section is assigned.
                 </p>
               )}
             </fieldset>
@@ -441,7 +440,7 @@ export function CreateStudentDialog({ open, onOpenChange, onCreated }: Props) {
               </Button>
               <Button
                 type="submit"
-                disabled={busy || !departmentId || !sections.length}
+                disabled={busy || !departmentId}
               >
                 {busy ? "Creating student…" : "Create student"}
               </Button>

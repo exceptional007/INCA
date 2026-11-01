@@ -4,7 +4,8 @@
 
 Open **Academic Master → Students → Add Student** as Admin, HOD, or Super Admin.
 Enter the actual college ID, roll number, university enrollment number, and institutional email.
-Select a department and a program/semester/section. The section links the student to their timetable.
+Select a department and an available program/semester/section. The section links the student to their timetable.
+If the department has no active classes configured, registration can proceed without a section; its timetable remains unavailable until a section is assigned.
 Personal details include name, gender, date of birth, phone, blood group, address, and emergency contacts.
 An optional JPG, PNG, or WebP photo (maximum 5 MB) previews before submission.
 

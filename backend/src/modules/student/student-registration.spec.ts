@@ -56,8 +56,11 @@ describe('Student registration with photo (isolated HTTP integration)', () => {
     expect(image.body).toEqual(photo);
   });
   it('accepts no photo and stores the provided actual enrollment number', async () => {
-    await create(dto, 'ADMIN', null).expect(201);
+    const { sectionId: unusedSection, ...unassigned } = dto;
+    await create(unassigned, 'ADMIN', null).expect(201);
     expect(storage.uploadStudentPhoto).not.toHaveBeenCalled();
+    expect(db.section.findFirst).not.toHaveBeenCalled();
+    expect(state.students[0].sectionId).toBeUndefined();
     expect(state.students[0].enrollmentNumber).toBe(dto.enrollmentNumber);
   });
   it('blocks foreign department and section before uploading', async () => {
