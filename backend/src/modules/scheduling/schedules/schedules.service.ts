@@ -1,19 +1,32 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ScheduleRepository } from './repositories/schedule.repository';
 import { TemplateRepository } from '../templates/repositories/template.repository';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { GenerateScheduleDto } from './dto/generate-schedule.dto';
+import { TimetableImportService } from '../timetable-import/timetable-import.service';
 import { ApiResponse } from '../../../common/interfaces/api-response.interface';
+
+export interface ScheduleActor { id: string; role: string; }
 
 @Injectable()
 export class SchedulesService {
   constructor(
     private readonly scheduleRepository: ScheduleRepository,
     private readonly templateRepository: TemplateRepository,
+    private readonly timetableImportService: TimetableImportService,
   ) {}
 
-  async create(createScheduleDto: CreateScheduleDto): Promise<ApiResponse<any>> {
+  private async adminDepartment(actor: ScheduleActor): Promise<string> {
+    if (!actor?.id || actor.role !== 'ADMIN') throw new ForbiddenException('Only ADMIN accounts can manage schedules.');
+    const departmentId = await this.templateRepository.getAdminDepartmentId(actor.id);
+    if (!departmentId) throw new ForbiddenException('An assigned department is required to manage schedules.');
+    return departmentId;
+  }
+
+  async create(createScheduleDto: CreateScheduleDto, actor: ScheduleActor): Promise<ApiResponse<any>> {
+    const departmentId = await this.adminDepartment(actor);
+    await this.assertTemplateDepartment(createScheduleDto.templateId, departmentId);
     const schedule = await this.scheduleRepository.create(createScheduleDto);
     return {
       success: true,
@@ -72,10 +85,10 @@ export class SchedulesService {
     queryFacultyId?: string,
     dateQuery?: string,
   ): Promise<ApiResponse<any>> {
-    const today = dateQuery ? new Date(dateQuery) : new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const now = new Date();
+    const day = dateQuery || now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const today = new Date(day + 'T00:00:00.000Z');
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     let facultyId = queryFacultyId;
     let sectionIds: string[] | undefined = undefined;
@@ -103,20 +116,6 @@ export class SchedulesService {
 
     let schedules = await this.scheduleRepository.findByDateRange(today, tomorrow, facultyId, sectionIds);
     
-    // If empty on local date boundary, try UTC day boundary
-    if (schedules.length === 0) {
-      const utcToday = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-      const utcTomorrow = new Date(utcToday);
-      utcTomorrow.setUTCDate(utcTomorrow.getUTCDate() + 1);
-      schedules = await this.scheduleRepository.findByDateRange(utcToday, utcTomorrow, facultyId, sectionIds);
-    }
-
-    // Only fallback to first 10 for students or if no specific date was queried and user is not faculty
-    if (schedules.length === 0 && !dateQuery && userRole !== 'FACULTY') {
-      const allSchedules = await this.scheduleRepository.findAll(facultyId, sectionIds);
-      schedules = allSchedules.slice(0, 10);
-    }
-
     return {
       success: true,
       message: 'Schedules retrieved successfully.',
@@ -124,7 +123,8 @@ export class SchedulesService {
     };
   }
 
-  async generate(generateDto: GenerateScheduleDto): Promise<ApiResponse<any>> {
+  async generate(generateDto: GenerateScheduleDto, actor: ScheduleActor): Promise<ApiResponse<any>> {
+    const departmentId = await this.adminDepartment(actor);
     const start = new Date(generateDto.startDate);
     const end = new Date(generateDto.endDate);
 
@@ -132,7 +132,13 @@ export class SchedulesService {
       throw new BadRequestException('Start date must be before or equal to end date.');
     }
 
-    const templates = await this.templateRepository.findAll();
+    // Synchronize active slots before generating legacy template-only sections.
+    const synced = await this.timetableImportService.syncTimetableToSchedules(
+      undefined, generateDto.startDate, generateDto.endDate, undefined, departmentId,
+    );
+    const managedSections = new Set(synced.sectionIds);
+    const templates = (await this.templateRepository.findAll(departmentId))
+      .filter((template) => !managedSections.has(template.sectionId));
     const existingSchedules = await this.scheduleRepository.findByDateRange(start, end);
     const existingKeySet = new Set(
       existingSchedules.map((s) => `${s.templateId}_${s.lectureDate instanceof Date ? s.lectureDate.toISOString().slice(0, 10) : new Date(s.lectureDate).toISOString().slice(0, 10)}`)
@@ -140,8 +146,8 @@ export class SchedulesService {
 
     const schedulesToCreate: any[] = [];
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay(); 
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const dayOfWeek = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
       const dateStr = d.toISOString().slice(0, 10);
       
       const dayTemplates = templates.filter(t => t.dayOfWeek === dayOfWeek && t.effectiveFrom <= d && (!t.effectiveTo || t.effectiveTo >= d));
@@ -160,24 +166,45 @@ export class SchedulesService {
     }
 
     if (schedulesToCreate.length === 0) {
-      return { success: true, message: 'All schedules for this date range have already been generated.', data: [] };
+      return { success: true, message: `${synced.schedulesCreated} schedules generated from active timetables; remaining schedules are already up to date.`, data: [] };
     }
 
     await this.scheduleRepository.createMany(schedulesToCreate);
 
     return {
       success: true,
-      message: `${schedulesToCreate.length} schedules generated successfully.`,
+      message: `${schedulesToCreate.length + synced.schedulesCreated} schedules generated successfully.`,
       data: null,
     };
   }
 
-  async update(id: string, updateScheduleDto: UpdateScheduleDto): Promise<ApiResponse<any>> {
+  private async assertTemplateDepartment(templateId: string, departmentId: string) {
+    const template = await this.templateRepository.findById(templateId);
+    if (!template) throw new NotFoundException('Schedule template not found.');
+    const actual = await this.templateRepository.getSectionDepartmentId(template.sectionId);
+    if (!actual || actual !== departmentId) {
+      throw new ForbiddenException('You can only update schedules within your assigned department.');
+    }
+  }
+
+  async update(id: string, updateScheduleDto: UpdateScheduleDto, actor: ScheduleActor): Promise<ApiResponse<any>> {
+    if (!actor?.id || actor.role !== 'ADMIN') {
+      throw new ForbiddenException('Only ADMIN accounts can update schedules.');
+    }
+    const departmentId = await this.templateRepository.getAdminDepartmentId(actor.id);
+    if (!departmentId) throw new ForbiddenException('An assigned department is required to update schedules.');
     const schedule = await this.scheduleRepository.findById(id);
     if (!schedule) {
       throw new NotFoundException(`Schedule with ID ${id} not found.`);
     }
 
+    await this.assertTemplateDepartment(schedule.templateId, departmentId);
+    if (updateScheduleDto.templateId !== undefined) {
+      if (updateScheduleDto.templateId === null) throw new BadRequestException('templateId cannot be null.');
+      if (updateScheduleDto.templateId !== schedule.templateId) {
+        await this.assertTemplateDepartment(updateScheduleDto.templateId, departmentId);
+      }
+    }
     const updated = await this.scheduleRepository.update(id, updateScheduleDto);
     return {
       success: true,

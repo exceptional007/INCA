@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Search,
   FileText,
@@ -17,17 +17,20 @@ import {
   ChevronRight,
   Filter,
   RotateCcw,
-} from 'lucide-react';
-import type { LearningNote } from '@/types';
-import api from '@/api/axios';
-import { DocumentPreviewModal } from './DocumentPreviewModal';
-import { AITutorModal } from './AITutorModal';
-import { AIQuizModal } from './AIQuizModal';
+  History,
+} from "lucide-react";
+import type { LearningNote } from "@/types";
+import api from "@/api/axios";
+import { DocumentPreviewModal } from "./DocumentPreviewModal";
+import { AITutorModal } from "./AITutorModal";
+import { AIQuizModal } from "./AIQuizModal";
 
 export const StudentNotesView: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [selectedSemester, setSelectedSemester] = useState<number | 'ALL'>('ALL');
-  const [selectedSourceType, setSelectedSourceType] = useState<string>('ALL');
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedSemester, setSelectedSemester] = useState<number | "ALL">(
+    "ALL",
+  );
+  const [selectedSourceType, setSelectedSourceType] = useState<string>("ALL");
   const [page, setPage] = useState<number>(1);
 
   // Active interaction modals
@@ -35,12 +38,16 @@ export const StudentNotesView: React.FC = () => {
   const [tutorNote, setTutorNote] = useState<LearningNote | null>(null);
   const [quizNote, setQuizNote] = useState<LearningNote | null>(null);
 
+  const [quizInitialView, setQuizInitialView] = useState<"CONFIG" | "HISTORY">(
+    "CONFIG",
+  );
+
   // Fetch student profile context (enrolled program, semester)
   const { data: studentContext } = useQuery({
-    queryKey: ['student-context'],
+    queryKey: ["student-context"],
     queryFn: async () => {
       try {
-        const res = await api.get('/notes/student/context');
+        const res = await api.get("/notes/student/context");
         return res.data;
       } catch {
         return null;
@@ -50,48 +57,63 @@ export const StudentNotesView: React.FC = () => {
 
   // Fetch published notes within student scope
   const { data, isLoading } = useQuery({
-    queryKey: ['student-notes', searchTerm, selectedSemester, selectedSourceType, page],
+    queryKey: [
+      "student-notes",
+      searchTerm,
+      selectedSemester,
+      selectedSourceType,
+      page,
+    ],
     queryFn: async () => {
       const params: any = { page, limit: 12 };
       if (searchTerm.trim()) params.search = searchTerm.trim();
-      if (selectedSemester !== 'ALL') params.semesterNumber = selectedSemester;
-      if (selectedSourceType !== 'ALL') params.sourceType = selectedSourceType;
+      if (selectedSemester !== "ALL") params.semesterNumber = selectedSemester;
+      if (selectedSourceType !== "ALL") params.sourceType = selectedSourceType;
 
-      const res = await api.get('/notes', { params });
+      const res = await api.get("/notes", { params });
       return res.data;
     },
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   const notes: LearningNote[] = data?.items || [];
-  const pagination = data?.pagination || { page: 1, totalPages: 1, totalItems: 0 };
+  const pagination = data?.pagination || {
+    page: 1,
+    totalPages: 1,
+    totalItems: 0,
+  };
 
   const handleDownload = async (note: LearningNote) => {
-    if (note.sourceType === 'DRIVE' && note.driveUrl) {
-      window.open(note.driveUrl, '_blank', 'noopener,noreferrer');
+    if (note.sourceType === "DRIVE" && note.driveUrl) {
+      window.open(note.driveUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
     try {
       const res = await api.get(`/notes/${note.id}/download`, {
-        responseType: 'blob',
+        responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.setAttribute('download', note.originalFilename || `${note.title}.pdf`);
+      link.setAttribute(
+        "download",
+        note.originalFilename || `${note.title}.pdf`,
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      console.error('Download failed:', err);
+      console.error("Download failed:", err);
     }
   };
 
   const resetFilters = () => {
-    setSearchTerm('');
-    setSelectedSemester('ALL');
-    setSelectedSourceType('ALL');
+    setSearchTerm("");
+    setSelectedSemester("ALL");
+    setSelectedSourceType("ALL");
     setPage(1);
   };
 
@@ -108,7 +130,9 @@ export const StudentNotesView: React.FC = () => {
             Course Notes & AI Tutor
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-xl leading-relaxed">
-            Browse lecture materials shared by your faculty, preview documents in-app, ask the grounded AI Tutor questions, and test your knowledge with interactive quizzes.
+            Browse lecture materials shared by your faculty, preview documents
+            in-app, ask the grounded AI Tutor questions, and test your knowledge
+            with interactive quizzes.
           </p>
         </div>
 
@@ -122,7 +146,9 @@ export const StudentNotesView: React.FC = () => {
                 {studentContext.program.name}
               </span>
               <span className="text-[11px] text-muted-foreground">
-                {studentContext.semesterNumber ? `Semester ${studentContext.semesterNumber}` : 'Enrolled Student'}
+                {studentContext.semesterNumber
+                  ? `Semester ${studentContext.semesterNumber}`
+                  : "Enrolled Student"}
               </span>
             </div>
           </div>
@@ -160,7 +186,9 @@ export const StudentNotesView: React.FC = () => {
               <option value="DRIVE">Google Drive Materials</option>
             </select>
 
-            {(searchTerm || selectedSemester !== 'ALL' || selectedSourceType !== 'ALL') && (
+            {(searchTerm ||
+              selectedSemester !== "ALL" ||
+              selectedSourceType !== "ALL") && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -183,13 +211,13 @@ export const StudentNotesView: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              setSelectedSemester('ALL');
+              setSelectedSemester("ALL");
               setPage(1);
             }}
             className={`px-3 py-1 rounded-lg font-medium transition-all text-xs shrink-0 ${
-              selectedSemester === 'ALL'
-                ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+              selectedSemester === "ALL"
+                ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                : "bg-muted/50 text-muted-foreground hover:text-foreground"
             }`}
           >
             All Semesters
@@ -204,8 +232,8 @@ export const StudentNotesView: React.FC = () => {
               }}
               className={`px-3 py-1 rounded-lg font-medium transition-all text-xs shrink-0 ${
                 selectedSemester === sem
-                  ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                  : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                  ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                  : "bg-muted/50 text-muted-foreground hover:text-foreground"
               }`}
             >
               Sem {sem}
@@ -218,7 +246,10 @@ export const StudentNotesView: React.FC = () => {
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-64 rounded-2xl bg-card border border-border animate-pulse p-5" />
+            <div
+              key={i}
+              className="h-64 rounded-2xl bg-card border border-border animate-pulse p-5"
+            />
           ))}
         </div>
       ) : notes.length === 0 ? (
@@ -227,14 +258,25 @@ export const StudentNotesView: React.FC = () => {
             <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
               <BookOpen className="size-6" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">No Learning Notes Available</h3>
+            <h3 className="text-base font-semibold text-foreground">
+              No Learning Notes Available
+            </h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {searchTerm || selectedSemester !== 'ALL' || selectedSourceType !== 'ALL'
-                ? 'No course notes match your search filters. Try broadening your criteria.'
-                : 'Your faculty have not published notes for this semester yet. Check back soon!'}
+              {searchTerm ||
+              selectedSemester !== "ALL" ||
+              selectedSourceType !== "ALL"
+                ? "No course notes match your search filters. Try broadening your criteria."
+                : "Your faculty have not published notes for this semester yet. Check back soon!"}
             </p>
-            {(searchTerm || selectedSemester !== 'ALL' || selectedSourceType !== 'ALL') && (
-              <Button onClick={resetFilters} variant="outline" size="sm" className="gap-1.5 mt-2">
+            {(searchTerm ||
+              selectedSemester !== "ALL" ||
+              selectedSourceType !== "ALL") && (
+              <Button
+                onClick={resetFilters}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 mt-2"
+              >
                 <RotateCcw className="size-3.5" />
                 Clear All Filters
               </Button>
@@ -244,8 +286,8 @@ export const StudentNotesView: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4.5">
           {notes.map((note) => {
-            const isDrive = note.sourceType === 'DRIVE';
-            const isPdf = note.originalFilename?.toLowerCase().endsWith('.pdf');
+            const isDrive = note.sourceType === "DRIVE";
+            const isPdf = note.originalFilename?.toLowerCase().endsWith(".pdf");
 
             return (
               <div
@@ -256,11 +298,17 @@ export const StudentNotesView: React.FC = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      <Badge variant="outline" className="text-[10px] font-mono uppercase bg-primary/5 text-primary border-primary/20">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-mono uppercase bg-primary/5 text-primary border-primary/20"
+                      >
                         {note.subject.code}
                       </Badge>
                       {note.semesterNumber && (
-                        <Badge variant="secondary" className="text-[10px] font-medium bg-muted text-muted-foreground">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] font-medium bg-muted text-muted-foreground"
+                        >
                           Sem {note.semesterNumber}
                         </Badge>
                       )}
@@ -293,7 +341,8 @@ export const StudentNotesView: React.FC = () => {
                       {note.title}
                     </h3>
                     <p className="text-xs text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
-                      {note.description || `${note.subject.name} lecture notes and study material.`}
+                      {note.description ||
+                        `${note.subject.name} lecture notes and study material.`}
                     </p>
                   </div>
 
@@ -302,7 +351,7 @@ export const StudentNotesView: React.FC = () => {
                     <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-1">
                       <span>Instructor:</span>
                       <span className="font-semibold text-foreground">
-                        {note.faculty.firstName} {note.faculty.lastName || ''}
+                        {note.faculty.firstName} {note.faculty.lastName || ""}
                       </span>
                     </div>
                   )}
@@ -332,7 +381,9 @@ export const StudentNotesView: React.FC = () => {
                         AI Tutor & Quiz Ready
                       </span>
                     ) : (
-                      <span className="text-[11px] text-muted-foreground">Document Reading Mode</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Document Reading Mode
+                      </span>
                     )}
 
                     {!isDrive && note.fileSize && (
@@ -358,7 +409,13 @@ export const StudentNotesView: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(note.driveUrl, '_blank', 'noopener,noreferrer')}
+                        onClick={() =>
+                          window.open(
+                            note.driveUrl,
+                            "_blank",
+                            "noopener,noreferrer",
+                          )
+                        }
                         className="gap-1.5 text-xs font-medium h-8"
                       >
                         <ExternalLink className="size-3.5 text-blue-600" />
@@ -377,6 +434,21 @@ export const StudentNotesView: React.FC = () => {
                     )}
                   </div>
 
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setQuizInitialView("HISTORY");
+                      setQuizNote(note);
+                    }}
+                    className="w-full justify-between text-xs text-muted-foreground h-8"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <History className="size-3.5" />
+                      Recent Quiz Results
+                    </span>
+                    <ChevronRight className="size-3.5" />
+                  </Button>
                   {/* AI Tutor & Quiz Row */}
                   {note.aiReady && (
                     <div className="grid grid-cols-2 gap-2 pt-0.5">
@@ -392,7 +464,10 @@ export const StudentNotesView: React.FC = () => {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => setQuizNote(note)}
+                        onClick={() => {
+                          setQuizInitialView("CONFIG");
+                          setQuizNote(note);
+                        }}
                         className="gap-1.5 text-xs font-semibold h-8 text-foreground"
                       >
                         <HelpCircle className="size-3.5 text-primary" />
@@ -429,7 +504,9 @@ export const StudentNotesView: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+              onClick={() =>
+                setPage((p) => Math.min(pagination.totalPages, p + 1))
+              }
               disabled={page >= pagination.totalPages}
               className="size-8 p-0"
             >
@@ -451,15 +528,18 @@ export const StudentNotesView: React.FC = () => {
         note={tutorNote}
         isOpen={!!tutorNote}
         onClose={() => setTutorNote(null)}
-        onOpenQuiz={(n) => setQuizNote(n)}
+        onOpenQuiz={(n) => {
+          setQuizInitialView("CONFIG");
+          setQuizNote(n);
+        }}
       />
 
       <AIQuizModal
         note={quizNote}
+        initialView={quizInitialView}
         isOpen={!!quizNote}
         onClose={() => setQuizNote(null)}
       />
     </div>
   );
 };
-

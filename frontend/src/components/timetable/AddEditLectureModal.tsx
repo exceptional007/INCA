@@ -218,7 +218,7 @@ export const AddEditLectureModal: React.FC<AddEditLectureModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {/* Day & Lecture Slot */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Day of Week</Label>
               <Select value={dayOfWeek} onValueChange={(val) => setDayOfWeek(val as DayOfWeek)}>
@@ -294,7 +294,7 @@ export const AddEditLectureModal: React.FC<AddEditLectureModalProps> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="space-y-1 col-span-1">
                 <Label className="text-[11px] text-muted-foreground font-medium">Subject Code</Label>
                 <Input
@@ -422,7 +422,7 @@ export const AddEditLectureModal: React.FC<AddEditLectureModalProps> = ({
           </div>
 
           {/* Timings */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Start Time</Label>
               <Input
@@ -447,7 +447,7 @@ export const AddEditLectureModal: React.FC<AddEditLectureModalProps> = ({
           </div>
 
           {/* Section & Sub-Batch Section Mapping */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Section</Label>
               <Input

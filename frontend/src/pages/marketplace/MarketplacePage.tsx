@@ -299,7 +299,7 @@ export const MarketplacePage: React.FC = () => {
               <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
                 Campus Marketplace
                 <Badge variant="outline" className="text-xs font-semibold">
-                  INR Verified
+                  Verified
                 </Badge>
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -433,11 +433,10 @@ export const MarketplacePage: React.FC = () => {
                   setSelectedCategory(cat.value);
                   setPage(1);
                 }}
-                className={`text-xs px-3.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-all border ${
-                  selectedCategory === cat.value
+                className={`text-xs px-3.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-all border ${selectedCategory === cat.value
                     ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
                     : 'bg-card text-muted-foreground border-border/80 hover:bg-muted'
-                }`}
+                  }`}
               >
                 {cat.label}
               </button>
@@ -474,12 +473,12 @@ export const MarketplacePage: React.FC = () => {
                 const sellerName = item.seller?.student
                   ? `${item.seller.student.firstName} ${item.seller.student.lastName || ''}`.trim()
                   : item.seller?.faculty
-                  ? `${item.seller.faculty.firstName} ${item.seller.faculty.lastName || ''}`.trim()
-                  : item.seller?.adminProfile?.name
-                  ? item.seller.adminProfile.name
-                  : item.seller?.email
-                  ? item.seller.email.split('@')[0]
-                  : 'Campus Member';
+                    ? `${item.seller.faculty.firstName} ${item.seller.faculty.lastName || ''}`.trim()
+                    : item.seller?.adminProfile?.name
+                      ? item.seller.adminProfile.name
+                      : item.seller?.email
+                        ? item.seller.email.split('@')[0]
+                        : 'Campus Member';
 
                 return (
                   <Card
@@ -503,9 +502,8 @@ export const MarketplacePage: React.FC = () => {
                         ) : null}
 
                         <div
-                          className={`card-img-fallback w-full h-full flex items-center justify-center ${
-                            coverImage ? 'hidden' : 'flex'
-                          }`}
+                          className={`card-img-fallback w-full h-full flex items-center justify-center ${coverImage ? 'hidden' : 'flex'
+                            }`}
                         >
                           <ShoppingBag className="size-10 text-muted-foreground/40" />
                         </div>
@@ -684,12 +682,12 @@ export const MarketplacePage: React.FC = () => {
                 const otherName = other?.student
                   ? `${other.student.firstName} ${other.student.lastName || ''}`.trim()
                   : other?.faculty
-                  ? `${other.faculty.firstName} ${other.faculty.lastName || ''}`.trim()
-                  : other?.adminProfile?.name
-                  ? other.adminProfile.name
-                  : other?.email
-                  ? other.email.split('@')[0]
-                  : 'Campus Member';
+                    ? `${other.faculty.firstName} ${other.faculty.lastName || ''}`.trim()
+                    : other?.adminProfile?.name
+                      ? other.adminProfile.name
+                      : other?.email
+                        ? other.email.split('@')[0]
+                        : 'Campus Member';
 
                 return (
                   <div
@@ -779,13 +777,12 @@ export const MarketplacePage: React.FC = () => {
                             </h3>
                             <Badge
                               variant={tx.status === 'COMPLETED' ? 'default' : 'outline'}
-                              className={`text-[10px] ${
-                                tx.status === 'COMPLETED'
+                              className={`text-[10px] ${tx.status === 'COMPLETED'
                                   ? 'bg-emerald-600 hover:bg-emerald-600 text-white font-bold'
                                   : tx.status === 'HANDOVER_PENDING'
-                                  ? 'border-primary text-primary font-semibold'
-                                  : ''
-                              }`}
+                                    ? 'border-primary text-primary font-semibold'
+                                    : ''
+                                }`}
                             >
                               {tx.status === 'COMPLETED' ? 'Order Received' : tx.status}
                             </Badge>
@@ -875,11 +872,10 @@ export const MarketplacePage: React.FC = () => {
                             </h3>
                             <Badge
                               variant={tx.status === 'COMPLETED' ? 'default' : 'outline'}
-                              className={`text-[10px] ${
-                                tx.status === 'COMPLETED'
+                              className={`text-[10px] ${tx.status === 'COMPLETED'
                                   ? 'bg-emerald-600 hover:bg-emerald-600 text-white font-bold'
                                   : 'border-emerald-600 text-emerald-700 font-semibold'
-                              }`}
+                                }`}
                             >
                               {tx.status === 'COMPLETED' ? 'Sold / Handover Completed' : tx.status}
                             </Badge>

@@ -9,7 +9,14 @@ export class RecordRepository {
   async findBySession(sessionId: string) {
     return this.prisma.attendanceRecord.findMany({
       where: { attendanceSessionId: sessionId },
-      include: { student: true, audits: { include: { editedBy: true } } },
+      include: {
+        student: true,
+        audits: {
+          include: {
+            editedBy: { select: { id: true, email: true, isActive: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -20,7 +27,11 @@ export class RecordRepository {
       include: {
         student: true,
         attendanceSession: true,
-        audits: { include: { editedBy: true } },
+        audits: {
+          include: {
+            editedBy: { select: { id: true, email: true, isActive: true } },
+          },
+        },
       },
     });
   }

@@ -1,6 +1,7 @@
-import { NavLink, Link } from "react-router-dom"
+import { NavLink, Link, useLocation } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
+import { useProfileApprovals } from '@/hooks/useProfileApprovals';
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +29,7 @@ import {
   Store,
   SearchCheck,
   Bell,
+  Vote,
 } from "lucide-react"
 
 import {
@@ -38,7 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar, useProfileIdentity } from '@/components/profile/UserIdentity';
 
 interface NavEntry {
   title: string
@@ -54,14 +56,18 @@ interface NavSection {
 }
 
 export function AppSidebar() {
+  const { name } = useProfileIdentity();
   const { user, logout } = useAuth()
   const role = user?.role?.code
-  const { state } = useSidebar()
+  const approvals = useProfileApprovals();
+  const location = useLocation();
+  const { state, setOpenMobile } = useSidebar()
 
   const navigationSections: NavSection[] = [
     {
       title: "Core Portal",
       items: [
+        { title: "My Profile", url: "/profile", icon: UserIcon },
         {
           title: "ASSAM Dashboard",
           url: "/dashboard",
@@ -97,12 +103,20 @@ export function AppSidebar() {
           icon: Bell,
           roles: ["SUPER_ADMIN", "ADMIN", "HOD", "COORDINATOR", "FACULTY", "STUDENT"],
         },
+        {
+          title: "Community Polls",
+          url: "/polls",
+          icon: Vote,
+          roles: ["SUPER_ADMIN", "ADMIN", "HOD", "COORDINATOR", "FACULTY", "STUDENT"],
+        },
       ],
     },
     {
       title: "Academic Administration",
       roles: ["SUPER_ADMIN", "ADMIN", "HOD"],
       items: [
+        { title: `Profile approvals${approvals.data?.length ? ` (${approvals.data.length})` : ''}`, url: '/profile?tab=review', icon: UserIcon, roles: ['SUPER_ADMIN', 'ADMIN', 'HOD'] },
+        { title: 'Attendance objections', url: '/attendance/objections', icon: CheckSquare, roles: ['ADMIN', 'HOD'] },
         {
           title: "Academic Master",
           url: "/academic",
@@ -157,6 +171,7 @@ export function AppSidebar() {
       )}>
         <Link
           to="/hub"
+          onClick={() => setOpenMobile(false)}
           title="Return to Feature Hub"
           className={cn(
             "flex items-center overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg",
@@ -192,10 +207,11 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild tooltip={item.title}>
                       <NavLink
                         to={item.url}
+                        onClick={() => setOpenMobile(false)}
                         className={({ isActive }) =>
                           cn(
                             "flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                            isActive
+                            (isActive && (item.url.startsWith('/profile') ? (item.url.includes('tab=review') === (new URLSearchParams(location.search).get('tab') === 'review')) : true))
                               ? "bg-primary/10 font-semibold text-primary"
                               : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                           )
@@ -223,13 +239,9 @@ export function AppSidebar() {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground rounded-xl"
                   aria-label="User account menu"
                 >
-                  <Avatar className="h-8 w-8 rounded-lg border border-border">
-                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold text-xs">
-                      {user?.email?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4" />}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar className="h-8 w-8 rounded-lg border border-border" />
                   <div className="grid flex-1 text-left text-xs leading-tight min-w-0">
-                    <span className="truncate font-semibold text-foreground">{user?.email?.split('@')[0]}</span>
+                    <span className="truncate font-semibold text-foreground">{name}</span>
                     <span className="truncate text-[10px] text-muted-foreground font-medium">{role || 'User'}</span>
                   </div>
                 </SidebarMenuButton>
@@ -242,11 +254,7 @@ export function AppSidebar() {
               >
                 <DropdownMenuLabel className="p-2 font-normal">
                   <div className="flex items-center gap-2.5 text-left text-xs">
-                    <Avatar className="h-8 w-8 rounded-lg border border-border shrink-0">
-                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold">
-                        {user?.email?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4" />}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar className="h-8 w-8 rounded-lg border border-border shrink-0" />
                     <div className="grid flex-1 text-left text-xs leading-tight min-w-0">
                       <span className="truncate font-semibold text-foreground">{user?.email}</span>
                       <span className="truncate text-[10px] text-primary font-medium">{role}</span>
@@ -255,7 +263,7 @@ export function AppSidebar() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/hub" className="cursor-pointer text-xs flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
+                  <Link to="/hub" onClick={() => setOpenMobile(false)} className="cursor-pointer text-xs flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
                     <LayoutGrid className="h-4 w-4 text-muted-foreground" />
                     Feature Hub
                   </Link>

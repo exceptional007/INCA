@@ -1,4 +1,4 @@
-import api from '@/api/axios';
+import api from "@/api/axios";
 import type {
   Notice,
   NoticeFeedResponse,
@@ -9,7 +9,7 @@ import type {
   NoticeTargetScope,
   NoticeStatus,
   TargetAudienceConfig,
-} from '@/types/notice';
+} from "@/types/notice";
 
 export interface NoticeQueryParams {
   search?: string;
@@ -39,20 +39,56 @@ export interface CreateNoticePayload {
   requiresAcknowledgement?: boolean;
   isPinned?: boolean;
   publishAt?: string;
-  expiresAt?: string;
+  expiresAt?: string | null;
   status?: NoticeStatus | string;
 }
 
 export const noticeApi = {
+  getReviewQueue: async (
+    params?: NoticeQueryParams,
+  ): Promise<{
+    items: Notice[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> => {
+    return (await api.get("/notices/management/review-queue", { params })).data;
+  },
+  submitForReview: async (
+    id: string,
+    expectedUpdatedAt: string,
+  ): Promise<Notice> => {
+    return (await api.post(`/notices/${id}/submit`, { expectedUpdatedAt }))
+      .data;
+  },
+  approveNotice: async (
+    id: string,
+    expectedUpdatedAt: string,
+  ): Promise<Notice> => {
+    return (await api.post(`/notices/${id}/approve`, { expectedUpdatedAt }))
+      .data;
+  },
+  rejectNotice: async (
+    id: string,
+    expectedUpdatedAt: string,
+    reason: string,
+  ): Promise<Notice> => {
+    return (
+      await api.post(`/notices/${id}/reject`, { expectedUpdatedAt, reason })
+    ).data;
+  },
   // 1. RECIPIENT NOTICES FEED
-  getRecipientNotices: async (params?: NoticeQueryParams): Promise<NoticeFeedResponse> => {
-    const res = await api.get<NoticeFeedResponse>('/notices', { params });
+  getRecipientNotices: async (
+    params?: NoticeQueryParams,
+  ): Promise<NoticeFeedResponse> => {
+    const res = await api.get<NoticeFeedResponse>("/notices", { params });
     return res.data;
   },
 
   // 2. ACADEMIC SCOPES
   getAcademicScopes: async (): Promise<AcademicScopeData> => {
-    const res = await api.get<AcademicScopeData>('/notices/academic-scopes');
+    const res = await api.get<AcademicScopeData>("/notices/academic-scopes");
     return res.data;
   },
 
@@ -63,13 +99,19 @@ export const noticeApi = {
   },
 
   // 4. READ TRACKING
-  markAsRead: async (id: string): Promise<{ success: boolean; readAt: string }> => {
-    const res = await api.post<{ success: boolean; readAt: string }>(`/notices/${id}/read`);
+  markAsRead: async (
+    id: string,
+  ): Promise<{ success: boolean; readAt: string }> => {
+    const res = await api.post<{ success: boolean; readAt: string }>(
+      `/notices/${id}/read`,
+    );
     return res.data;
   },
 
   // 5. ACKNOWLEDGE
-  acknowledgeNotice: async (id: string): Promise<{ success: boolean; acknowledgedAt: string }> => {
+  acknowledgeNotice: async (
+    id: string,
+  ): Promise<{ success: boolean; acknowledgedAt: string }> => {
     const res = await api.post<{ success: boolean; acknowledgedAt: string }>(
       `/notices/${id}/acknowledge`,
     );
@@ -79,25 +121,34 @@ export const noticeApi = {
   // 6. MANAGEMENT: MY NOTICES
   getManagedNotices: async (
     params?: NoticeQueryParams,
-  ): Promise<{ items: Notice[]; total: number; page: number; limit: number; totalPages: number }> => {
+  ): Promise<{
+    items: Notice[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> => {
     const res = await api.get<{
       items: Notice[];
       total: number;
       page: number;
       limit: number;
       totalPages: number;
-    }>('/notices/management/my-notices', { params });
+    }>("/notices/management/my-notices", { params });
     return res.data;
   },
 
   // 7. CREATE NOTICE
   createNotice: async (payload: CreateNoticePayload): Promise<Notice> => {
-    const res = await api.post<Notice>('/notices', payload);
+    const res = await api.post<Notice>("/notices", payload);
     return res.data;
   },
 
   // 8. UPDATE NOTICE
-  updateNotice: async (id: string, payload: Partial<CreateNoticePayload>): Promise<Notice> => {
+  updateNotice: async (
+    id: string,
+    payload: Partial<CreateNoticePayload> & { expectedUpdatedAt?: string },
+  ): Promise<Notice> => {
     const res = await api.put<Notice>(`/notices/${id}`, payload);
     return res.data;
   },
@@ -129,14 +180,17 @@ export const noticeApi = {
   // 13. ATTACHMENT UPLOAD (PDF)
   uploadAttachment: async (noticeId: string, file: File): Promise<any> => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     // Don't set explicit Content-Type header so browser sets multipart boundary automatically
     const res = await api.post(`/notices/${noticeId}/attachments`, formData);
     return res.data;
   },
 
   // 14. ATTACHMENT DELETE
-  deleteAttachment: async (noticeId: string, attachmentId: string): Promise<{ success: boolean }> => {
+  deleteAttachment: async (
+    noticeId: string,
+    attachmentId: string,
+  ): Promise<{ success: boolean }> => {
     const res = await api.delete<{ success: boolean }>(
       `/notices/${noticeId}/attachments/${attachmentId}`,
     );

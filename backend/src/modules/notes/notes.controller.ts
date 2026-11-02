@@ -14,6 +14,7 @@ import {
   UseInterceptors,
   UploadedFile,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -271,6 +272,16 @@ export class NotesController {
     return this.quizService.getStudentQuizHistory(student.id, noteId);
   }
 
+  @Get(':id/quiz/history/:attemptId')
+  async getQuizAttempt(
+    @Req() req: any,
+    @Param('id') noteId: string,
+    @Param('attemptId') attemptId: string,
+  ) {
+    const student = await this.resolveStudent(req.user.id);
+    return this.quizService.getStudentQuizAttempt(student.id, noteId, attemptId);
+  }
+
   private async resolveStudent(userId: string) {
     const student = await this.notesService['prisma'].student.findUnique({
       where: { userId },
@@ -278,10 +289,6 @@ export class NotesController {
 
     if (student) return student;
 
-    // Fallback for faculty/admin testing student tutor features
-    const anyStudent = await this.notesService['prisma'].student.findFirst();
-    if (anyStudent) return anyStudent;
-
-    throw new Error('Student account required for AI tutor and quiz sessions.');
+    throw new ForbiddenException('A student profile belonging to this account is required for tutor and quiz sessions.');
   }
 }

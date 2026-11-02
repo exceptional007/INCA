@@ -2,17 +2,21 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
 } from '@nestjs/common';
 import { SessionRepository } from './repositories/session.repository';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ApiResponse } from '../../../common/interfaces/api-response.interface';
+import { AttendanceAccessService } from './attendance-access.service';
+import type { AttendanceActor } from './attendance-access.service';
 
 @Injectable()
 export class SessionsService {
-  constructor(private readonly sessionRepository: SessionRepository) {}
+  constructor(
+    private readonly sessionRepository: SessionRepository,
+    private readonly access: AttendanceAccessService,
+  ) {}
 
-  async create(dto: CreateSessionDto): Promise<ApiResponse<any>> {
+  async create(dto: CreateSessionDto, actor: AttendanceActor): Promise<ApiResponse<any>> {
     // Enforce: exactly one of scheduleId or activityId must be provided
     const hasSchedule = !!dto.scheduleId;
     const hasActivity = !!dto.activityId;
@@ -34,6 +38,7 @@ export class SessionsService {
         dto.scheduleId!,
       );
       if (existing) {
+        await this.access.assertSessionAccess(existing.id, actor, true);
         return {
           success: true,
           message: 'Existing attendance session retrieved.',
@@ -47,6 +52,7 @@ export class SessionsService {
         dto.activityId!,
       );
       if (existing) {
+        await this.access.assertSessionAccess(existing.id, actor, true);
         return {
           success: true,
           message: 'Existing attendance session retrieved.',
@@ -55,7 +61,9 @@ export class SessionsService {
       }
     }
 
-    const session = await this.sessionRepository.create(dto);
+    await this.access.assertSourceAccess(actor, dto);
+    const takenById = await this.access.facultyIdForActor(actor);
+    const session = await this.sessionRepository.create({ ...dto, takenById });
     return {
       success: true,
       message: 'Attendance session created successfully.',
@@ -63,8 +71,8 @@ export class SessionsService {
     };
   }
 
-  async findAll(): Promise<ApiResponse<any>> {
-    const sessions = await this.sessionRepository.findAll();
+  async findAll(actor: AttendanceActor): Promise<ApiResponse<any>> {
+    const sessions = await this.sessionRepository.findAll(await this.access.sessionScope(actor));
     return {
       success: true,
       message: 'Attendance sessions retrieved successfully.',
@@ -72,7 +80,8 @@ export class SessionsService {
     };
   }
 
-  async findOne(id: string): Promise<ApiResponse<any>> {
+  async findOne(id: string, actor: AttendanceActor): Promise<ApiResponse<any>> {
+    await this.access.assertSessionAccess(id, actor);
     const session = await this.sessionRepository.findById(id);
     if (!session) {
       throw new NotFoundException(`Attendance session with ID ${id} not found.`);
@@ -84,8 +93,8 @@ export class SessionsService {
     };
   }
 
-  async findToday(): Promise<ApiResponse<any>> {
-    const sessions = await this.sessionRepository.findToday();
+  async findToday(actor: AttendanceActor): Promise<ApiResponse<any>> {
+    const sessions = await this.sessionRepository.findToday(await this.access.sessionScope(actor));
     return {
       success: true,
       message: "Today's attendance sessions retrieved successfully.",
@@ -93,8 +102,18 @@ export class SessionsService {
     };
   }
 
-  async findByFaculty(facultyId: string): Promise<ApiResponse<any>> {
-    const sessions = await this.sessionRepository.findByFaculty(facultyId);
+  async getRoster(id: string, actor: AttendanceActor): Promise<ApiResponse<any>> {
+    await this.access.assertSessionAccess(id, actor);
+    const students = await this.sessionRepository.getRoster(id);
+    return {
+      success: true,
+      message: 'Attendance roster retrieved successfully.',
+      data: students,
+    };
+  }
+
+  async findByFaculty(facultyId: string, actor: AttendanceActor): Promise<ApiResponse<any>> {
+    const sessions = await this.sessionRepository.findByFaculty(facultyId, await this.access.sessionScope(actor));
     return {
       success: true,
       message: 'Faculty attendance sessions retrieved successfully.',
@@ -102,34 +121,12 @@ export class SessionsService {
     };
   }
 
-  async findForUser(userId?: string, userRole?: string): Promise<ApiResponse<any>> {
-    if (userRole === 'FACULTY' && userId) {
-      const facultyId = await this.sessionRepository.getFacultyIdForUser(userId);
-      if (!facultyId) {
-        return {
-          success: true,
-          message: 'Faculty attendance sessions retrieved successfully.',
-          data: [],
-        };
-      }
-      const sessions = await this.sessionRepository.findByFaculty(facultyId);
-      return {
-        success: true,
-        message: 'Faculty attendance sessions retrieved successfully.',
-        data: sessions,
-      };
-    }
-
-    // Default for Admin / Super Admin
-    const sessions = await this.sessionRepository.findAll();
-    return {
-      success: true,
-      message: 'Attendance sessions retrieved successfully.',
-      data: sessions,
-    };
+  async findForUser(actor: AttendanceActor): Promise<ApiResponse<any>> {
+    return this.findAll(actor);
   }
 
-  async submitSession(id: string): Promise<ApiResponse<any>> {
+  async submitSession(id: string, actor: AttendanceActor): Promise<ApiResponse<any>> {
+    await this.access.assertSessionAccess(id, actor, true);
     const session = await this.sessionRepository.findById(id);
     if (!session) {
       throw new NotFoundException(`Attendance session with ID ${id} not found.`);

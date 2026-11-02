@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
   Logger,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StrictR2StorageService } from '../storage/strict-r2-storage.service';
@@ -15,6 +16,9 @@ import {
 } from './dto/create-notice.dto';
 import { UpdateNoticeDto } from './dto/update-notice.dto';
 import { QueryNoticesDto } from './dto/query-notices.dto';
+import { Prisma } from '@prisma/client';
+import { NoticeEnrichmentService } from './notice-enrichment.service';
+import type { NoticeEnrichment } from './notice-enrichment.service';
 
 const MAX_PDF_SIZE = 25 * 1024 * 1024; // 25 MB
 
@@ -25,7 +29,342 @@ export class NoticesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly r2Storage: StrictR2StorageService,
+    private readonly enrichment: NoticeEnrichmentService,
   ) {}
+
+  private enrichmentData(value: NoticeEnrichment | null) {
+    return {
+      aiSummary: value?.summary ?? null,
+      aiDeadlines: value
+        ? value.deadlines.map(({ label, when, sourceQuote }) => ({
+            label,
+            when,
+            sourceQuote,
+          }))
+        : Prisma.DbNull,
+      aiActionItems: value?.actionItems ?? Prisma.DbNull,
+      aiKeyHighlights: value?.keyHighlights ?? Prisma.DbNull,
+      aiTags: value?.tags ?? Prisma.DbNull,
+    };
+  }
+
+  private enrichmentResponse(notice: any) {
+    return {
+      aiSummary: notice.aiSummary ?? null,
+      aiDeadlines: notice.aiDeadlines ?? null,
+      aiActionItems: notice.aiActionItems ?? null,
+      aiKeyHighlights: notice.aiKeyHighlights ?? null,
+      aiTags: notice.aiTags ?? null,
+    };
+  }
+
+  private nextRevision(notice: any, now = new Date()): Date {
+    const previous = notice.updatedAt
+      ? new Date(notice.updatedAt).getTime()
+      : 0;
+    return new Date(Math.max(now.getTime(), previous + 1));
+  }
+
+  private requiresApproval(role: string): boolean {
+    return !['ADMIN', 'SUPER_ADMIN'].includes(role);
+  }
+
+  private assertWriteStatus(status?: string) {
+    if (
+      status !== undefined &&
+      !['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SCHEDULED'].includes(status)
+    ) {
+      throw new BadRequestException(
+        'Use the dedicated review, withdrawal, or archive action to change this state.',
+      );
+    }
+  }
+
+  private canReview(ctx: any, notice: any): boolean {
+    return (
+      notice.authorId !== ctx.userId &&
+      (ctx.role === 'SUPER_ADMIN' ||
+        (ctx.role === 'ADMIN' &&
+          !!ctx.departmentId &&
+          notice.departmentId === ctx.departmentId))
+    );
+  }
+
+  private canManage(ctx: any, notice: any): boolean {
+    if (!this.isFacultyOrAdmin(ctx.role)) return false;
+    return (
+      notice.authorId === ctx.userId ||
+      ctx.role === 'SUPER_ADMIN' ||
+      (ctx.role === 'ADMIN' &&
+        !!ctx.departmentId &&
+        notice.departmentId === ctx.departmentId)
+    );
+  }
+
+  private permissions(ctx: any, notice: any) {
+    return {
+      approvalRequired: this.requiresApproval(
+        notice.users_notices_authorIdTousers?.role?.code ||
+          (notice.authorId === ctx.userId ? ctx.role : 'FACULTY'),
+      ),
+      canDelete:
+        notice.status === 'DRAFT' &&
+        !notice.isArchived &&
+        this.canManage(ctx, notice) &&
+        notice._count?.notice_audit_logs === 0,
+      canEdit: !notice.isArchived && this.canManage(ctx, notice),
+      canSubmit:
+        !notice.isArchived &&
+        notice.authorId === ctx.userId &&
+        ['DRAFT', 'REJECTED', 'WITHDRAWN'].includes(notice.status),
+      canReview:
+        !notice.isArchived &&
+        notice.status === 'PENDING_REVIEW' &&
+        this.canReview(ctx, notice),
+    };
+  }
+
+  private async withLockedNotice<T>(
+    noticeId: string,
+    expectedUpdatedAt: string | undefined,
+    work: (tx: Prisma.TransactionClient, notice: any) => Promise<T>,
+  ): Promise<T> {
+    if (
+      expectedUpdatedAt !== undefined &&
+      !Number.isFinite(new Date(expectedUpdatedAt).getTime())
+    )
+      throw new BadRequestException('A valid notice revision is required.');
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<
+        { id: string }[]
+      >`SELECT id FROM notices WHERE id = ${noticeId} FOR UPDATE`;
+      if (!rows.length) throw new NotFoundException('Notice not found');
+      const notice = await tx.notices.findUnique({ where: { id: noticeId } });
+      if (!notice) throw new NotFoundException('Notice not found');
+      if (
+        expectedUpdatedAt !== undefined &&
+        new Date(notice.updatedAt).getTime() !==
+          new Date(expectedUpdatedAt).getTime()
+      ) {
+        throw new ConflictException(
+          'The notice changed. Reload and review the current revision before trying again.',
+        );
+      }
+      return work(tx, notice);
+    });
+  }
+
+  private async reviewContext(
+    userId: string,
+    userRole: string,
+    reviewer = false,
+  ) {
+    const allowed = reviewer
+      ? ['ADMIN', 'SUPER_ADMIN']
+      : ['FACULTY', 'HOD', 'ADMIN', 'SUPER_ADMIN'];
+    if (!userId || !allowed.includes(userRole))
+      throw new ForbiddenException('You cannot perform this notice action.');
+    const ctx = await this.getUserAcademicContext(userId);
+    if (ctx.userId !== userId || ctx.role !== userRole)
+      throw new ForbiddenException(
+        'Current account role does not allow this action.',
+      );
+    return ctx;
+  }
+
+  async submitForReview(
+    userId: string,
+    userRole: string,
+    noticeId: string,
+    expectedUpdatedAt: string,
+  ) {
+    const ctx = await this.reviewContext(userId, userRole);
+    if (!expectedUpdatedAt)
+      throw new BadRequestException('A notice revision is required.');
+    return this.withLockedNotice(
+      noticeId,
+      expectedUpdatedAt,
+      async (tx, notice) => {
+        if (notice.authorId !== userId)
+          throw new ForbiddenException(
+            'Only the author can submit a notice for review.',
+          );
+        if (
+          notice.isArchived ||
+          !['DRAFT', 'REJECTED', 'WITHDRAWN'].includes(notice.status)
+        )
+          throw new ConflictException(
+            'Only a draft, rejected, or withdrawn notice can be submitted.',
+          );
+        if (
+          this.requiresApproval(userRole) &&
+          (!ctx.departmentId || notice.departmentId !== ctx.departmentId)
+        )
+          throw new ForbiddenException(
+            'An assigned department matching the notice is required.',
+          );
+        if (!notice.title?.trim() || !notice.content?.trim())
+          throw new BadRequestException(
+            'A title and body are required before review.',
+          );
+        if (notice.expiresAt && notice.expiresAt <= new Date())
+          throw new BadRequestException(
+            'Update the expired schedule before submitting.',
+          );
+        const updated = await tx.notices.update({
+          where: { id: noticeId },
+          data: {
+            status: 'PENDING_REVIEW',
+            approvedById: null,
+            approvedAt: null,
+            rejectionReason: null,
+            updatedAt: this.nextRevision(notice),
+          },
+        });
+        await tx.notice_audit_logs.create({
+          data: {
+            noticeId,
+            userId,
+            action: 'SUBMITTED_FOR_REVIEW',
+            details:
+              'Author submitted the current notice revision for approval.',
+          },
+        });
+        return updated;
+      },
+    );
+  }
+
+  async approveNotice(
+    userId: string,
+    userRole: string,
+    noticeId: string,
+    expectedUpdatedAt: string,
+  ) {
+    const ctx = await this.reviewContext(userId, userRole, true);
+    if (!expectedUpdatedAt)
+      throw new BadRequestException('A reviewed notice revision is required.');
+    return this.withLockedNotice(
+      noticeId,
+      expectedUpdatedAt,
+      async (tx, notice) => {
+        if (!this.canReview(ctx, notice))
+          throw new ForbiddenException(
+            'You cannot review your own notice or another department’s notice.',
+          );
+        if (notice.isArchived || notice.status !== 'PENDING_REVIEW')
+          throw new ConflictException('Only a pending notice can be approved.');
+        const now = new Date();
+        if (!notice.title?.trim() || !notice.content?.trim())
+          throw new BadRequestException(
+            'A title and body are required before approval.',
+          );
+        if (notice.expiresAt && notice.expiresAt <= now)
+          throw new BadRequestException(
+            'An expired notice cannot be approved.',
+          );
+        const status = notice.publishAt > now ? 'SCHEDULED' : 'PUBLISHED';
+        const updated = await tx.notices.update({
+          where: { id: noticeId },
+          data: {
+            status,
+            approvedById: userId,
+            approvedAt: now,
+            rejectionReason: null,
+            updatedAt: this.nextRevision(notice, now),
+          },
+        });
+        await tx.notice_audit_logs.create({
+          data: {
+            noticeId,
+            userId,
+            action: 'APPROVED',
+            details: 'Reviewed revision approved; resulting state: ' + status,
+          },
+        });
+        await tx.notifications.createMany({
+          data: [
+            {
+              userId: notice.authorId,
+              noticeId,
+              type: 'NOTICE_APPROVED',
+              title: 'Notice approved: ' + notice.title,
+              message:
+                status === 'SCHEDULED'
+                  ? 'Your notice was approved and scheduled for publication.'
+                  : 'Your notice was approved and published.',
+              isRead: false,
+            },
+          ],
+        });
+        if (status === 'PUBLISHED') await this.notifyAudience(updated, tx);
+        return updated;
+      },
+    );
+  }
+
+  async rejectNotice(
+    userId: string,
+    userRole: string,
+    noticeId: string,
+    expectedUpdatedAt: string,
+    reason: string,
+  ) {
+    const ctx = await this.reviewContext(userId, userRole, true);
+    if (!expectedUpdatedAt)
+      throw new BadRequestException('A reviewed notice revision is required.');
+    if (
+      typeof reason !== 'string' ||
+      reason.trim().length < 3 ||
+      reason.trim().length > 2000
+    )
+      throw new BadRequestException(
+        'A rejection reason of 3 to 2000 characters is required.',
+      );
+    return this.withLockedNotice(
+      noticeId,
+      expectedUpdatedAt,
+      async (tx, notice) => {
+        if (!this.canReview(ctx, notice))
+          throw new ForbiddenException(
+            'You cannot review your own notice or another department’s notice.',
+          );
+        if (notice.isArchived || notice.status !== 'PENDING_REVIEW')
+          throw new ConflictException('Only a pending notice can be rejected.');
+        const updated = await tx.notices.update({
+          where: { id: noticeId },
+          data: {
+            status: 'REJECTED',
+            approvedById: null,
+            approvedAt: null,
+            rejectionReason: reason.trim(),
+            updatedAt: this.nextRevision(notice),
+          },
+        });
+        await tx.notice_audit_logs.create({
+          data: {
+            noticeId,
+            userId,
+            action: 'REJECTED',
+            details: reason.trim(),
+          },
+        });
+        await tx.notifications.createMany({
+          data: [
+            {
+              userId: notice.authorId,
+              noticeId,
+              type: 'NOTICE_REJECTED',
+              title: 'Notice needs revision: ' + notice.title,
+              message: reason.trim(),
+              isRead: false,
+            },
+          ],
+        });
+        return updated;
+      },
+    );
+  }
 
   private isFacultyOrAdmin(userRole: string): boolean {
     const role = (userRole || '').toUpperCase();
@@ -50,6 +389,7 @@ export class NoticesService {
       where: { id: userId },
       include: {
         role: true,
+        adminProfile: { select: { departmentId: true } },
         student: {
           include: {
             department: true,
@@ -76,13 +416,19 @@ export class NoticesService {
       throw new NotFoundException('User profile not found');
     }
 
+    return this.audienceContext(user);
+  }
+
+  private audienceContext(user: any) {
     const roleCode = user.role?.code?.toUpperCase() || 'STUDENT';
     const departmentId =
-      user.student?.departmentId || user.faculty?.departmentId || null;
-    const programId =
-      user.student?.section?.semester?.programId || null;
-    const semesterNumber =
-      user.student?.section?.semester?.number || null;
+      roleCode === 'ADMIN'
+        ? user.adminProfile?.departmentId || null
+        : roleCode === 'STUDENT'
+          ? user.student?.departmentId || null
+          : user.faculty?.departmentId || null;
+    const programId = user.student?.section?.semester?.programId || null;
+    const semesterNumber = user.student?.section?.semester?.number || null;
     const sectionId = user.student?.sectionId || null;
 
     return {
@@ -100,9 +446,9 @@ export class NoticesService {
   /**
    * Check whether a specific notice matches the recipient's audience criteria
    */
-  matchesAudience(notice: any, ctx: any): boolean {
+  matchesAudience(notice: any, ctx: any, allowAdminOverride = true): boolean {
     // Admins and Super Admins can see all official notices
-    if (this.isAdmin(ctx.role)) {
+    if (allowAdminOverride && this.isAdmin(ctx.role)) {
       return true;
     }
 
@@ -120,11 +466,22 @@ export class NoticesService {
         return false;
       }
     } else if (targetScope === 'PROGRAM') {
-      if (ctx.role !== 'STUDENT' || !notice.programId || notice.programId !== ctx.programId) {
+      if (
+        ctx.role !== 'STUDENT' ||
+        !notice.programId ||
+        notice.programId !== ctx.programId
+      ) {
         return false;
       }
     }
 
+    if (
+      notice.targetYear &&
+      ctx.role === 'STUDENT' &&
+      (!ctx.semesterNumber ||
+        Math.ceil(ctx.semesterNumber / 2) !== notice.targetYear)
+    )
+      return false;
     // 2. Specific Target Year & Semester checks on notice columns
     if (notice.targetSemester && ctx.role === 'STUDENT') {
       if (ctx.semesterNumber !== notice.targetSemester) return false;
@@ -144,7 +501,10 @@ export class NoticesService {
 
       // Department filter
       if (Array.isArray(aud.departmentIds) && aud.departmentIds.length > 0) {
-        if (!ctx.departmentId || !aud.departmentIds.includes(ctx.departmentId)) {
+        if (
+          !ctx.departmentId ||
+          !aud.departmentIds.includes(ctx.departmentId)
+        ) {
           return false;
         }
       }
@@ -157,8 +517,14 @@ export class NoticesService {
       }
 
       // Semesters filter
-      if (Array.isArray(aud.targetSemesters) && aud.targetSemesters.length > 0) {
-        if (!ctx.semesterNumber || !aud.targetSemesters.includes(ctx.semesterNumber)) {
+      if (
+        Array.isArray(aud.targetSemesters) &&
+        aud.targetSemesters.length > 0
+      ) {
+        if (
+          !ctx.semesterNumber ||
+          !aud.targetSemesters.includes(ctx.semesterNumber)
+        ) {
           return false;
         }
       }
@@ -184,6 +550,24 @@ export class NoticesService {
   /**
    * RECIPIENT FEED: Retrieve official notices relevant to the authenticated user
    */
+  private assertRecipientAccess(notice: any, ctx: any) {
+    const now = Date.now();
+    if (
+      notice.status !== 'PUBLISHED' ||
+      !notice.publishAt ||
+      new Date(notice.publishAt).getTime() > now ||
+      notice.isArchived ||
+      (notice.expiresAt && new Date(notice.expiresAt).getTime() <= now)
+    )
+      throw new ForbiddenException(
+        'This notice is not currently published and available.',
+      );
+    if (!this.matchesAudience(notice, ctx))
+      throw new ForbiddenException(
+        'You are not in the authorized audience for this notice.',
+      );
+  }
+
   async getRecipientNotices(userId: string, query: QueryNoticesDto) {
     const ctx = await this.getUserAcademicContext(userId);
     const now = new Date();
@@ -238,10 +622,7 @@ export class NoticesService {
     // Fetch candidate notices
     const candidateNotices = await this.prisma.notices.findMany({
       where,
-      orderBy: [
-        { isPinned: 'desc' },
-        { publishAt: 'desc' },
-      ],
+      orderBy: [{ isPinned: 'desc' }, { publishAt: 'desc' }],
       include: {
         departments: { select: { id: true, name: true, code: true } },
         programs: { select: { id: true, name: true, code: true } },
@@ -326,6 +707,7 @@ export class NoticesService {
         id: n.id,
         title: n.title,
         content: n.content,
+        ...this.enrichmentResponse(n),
         category: n.category,
         priority: n.priority,
         status: n.status,
@@ -344,10 +726,12 @@ export class NoticesService {
           name: n.users_notices_authorIdTousers.faculty
             ? `${n.users_notices_authorIdTousers.faculty.firstName} ${n.users_notices_authorIdTousers.faculty.lastName || ''}`.trim()
             : n.users_notices_authorIdTousers.student
-            ? `${n.users_notices_authorIdTousers.student.firstName} ${n.users_notices_authorIdTousers.student.lastName || ''}`.trim()
-            : n.users_notices_authorIdTousers.email,
-          designation: n.users_notices_authorIdTousers.faculty?.designation || null,
-          department: n.users_notices_authorIdTousers.faculty?.department?.name || null,
+              ? `${n.users_notices_authorIdTousers.student.firstName} ${n.users_notices_authorIdTousers.student.lastName || ''}`.trim()
+              : n.users_notices_authorIdTousers.email,
+          designation:
+            n.users_notices_authorIdTousers.faculty?.designation || null,
+          department:
+            n.users_notices_authorIdTousers.faculty?.department?.name || null,
         },
         attachments: n.notice_attachments,
         isRead: !!readEntry,
@@ -398,6 +782,7 @@ export class NoticesService {
           select: {
             id: true,
             email: true,
+            role: { select: { code: true } },
             faculty: {
               select: {
                 firstName: true,
@@ -422,22 +807,19 @@ export class NoticesService {
 
     // Permission check
     const isAuthor = notice.authorId === userId;
-    const isMod = this.isHodOrAdmin(ctx.role);
+    const isMod = this.canManage(ctx, notice);
 
-    if (!isAuthor && !isMod) {
-      // Must match audience and must be active/published
-      const now = new Date();
-      if (notice.status !== 'PUBLISHED' || new Date(notice.publishAt) > now) {
-        throw new ForbiddenException('This notice is not yet published');
-      }
-      if (!this.matchesAudience(notice, ctx)) {
-        throw new ForbiddenException('You do not have access to view this announcement');
-      }
-    }
+    if (!isAuthor && !isMod) this.assertRecipientAccess(notice, ctx);
 
     // Auto mark as read if not already recorded
     let readEntry = notice.notice_reads[0] || null;
-    if (!readEntry) {
+    if (
+      !readEntry &&
+      notice.status === 'PUBLISHED' &&
+      !notice.isArchived &&
+      new Date(notice.publishAt) <= new Date() &&
+      (!notice.expiresAt || notice.expiresAt > new Date())
+    ) {
       try {
         readEntry = await this.prisma.notice_reads.create({
           data: {
@@ -455,6 +837,7 @@ export class NoticesService {
       id: notice.id,
       title: notice.title,
       content: notice.content,
+      ...this.enrichmentResponse(notice),
       category: notice.category,
       priority: notice.priority,
       status: notice.status,
@@ -470,13 +853,22 @@ export class NoticesService {
       expiresAt: notice.expiresAt,
       isArchived: notice.isArchived,
       createdAt: notice.createdAt,
+      updatedAt: notice.updatedAt,
+      authorId: notice.authorId,
+      approvedById: notice.approvedById,
+      approvedAt: notice.approvedAt,
+      rejectionReason: notice.rejectionReason,
+      ...this.permissions(ctx, notice),
       author: {
         id: notice.users_notices_authorIdTousers.id,
         name: notice.users_notices_authorIdTousers.faculty
           ? `${notice.users_notices_authorIdTousers.faculty.firstName} ${notice.users_notices_authorIdTousers.faculty.lastName || ''}`.trim()
           : notice.users_notices_authorIdTousers.email,
-        designation: notice.users_notices_authorIdTousers.faculty?.designation || null,
-        department: notice.users_notices_authorIdTousers.faculty?.department?.name || null,
+        designation:
+          notice.users_notices_authorIdTousers.faculty?.designation || null,
+        department:
+          notice.users_notices_authorIdTousers.faculty?.department?.name ||
+          null,
       },
       attachments: notice.notice_attachments.map((att) => ({
         id: att.id,
@@ -486,8 +878,8 @@ export class NoticesService {
         createdAt: att.createdAt,
         streamUrl: `/api/v1/notices/${notice.id}/attachments/${att.id}/stream`,
       })),
-      isRead: true,
-      readAt: readEntry?.readAt || new Date(),
+      isRead: !!readEntry,
+      readAt: readEntry?.readAt || null,
       isAcknowledged: !!readEntry?.acknowledgedAt,
       acknowledgedAt: readEntry?.acknowledgedAt || null,
     };
@@ -497,12 +889,15 @@ export class NoticesService {
    * READ TRACKING: Explicitly mark a notice as read
    */
   async markAsRead(userId: string, noticeId: string) {
+    const ctx = await this.getUserAcademicContext(userId);
     const notice = await this.prisma.notices.findUnique({
       where: { id: noticeId },
     });
     if (!notice) {
       throw new NotFoundException('Notice not found');
     }
+
+    this.assertRecipientAccess(notice, ctx);
 
     const read = await this.prisma.notice_reads.upsert({
       where: { noticeId_userId: { noticeId, userId } },
@@ -530,12 +925,18 @@ export class NoticesService {
       throw new NotFoundException('Notice not found');
     }
 
+    this.assertRecipientAccess(notice, ctx);
+
     if (!notice.requiresAcknowledgement) {
-      throw new BadRequestException('This notice does not require formal acknowledgement');
+      throw new BadRequestException(
+        'This notice does not require formal acknowledgement',
+      );
     }
 
     if (!this.matchesAudience(notice, ctx)) {
-      throw new ForbiddenException('You are not in the authorized target audience for this notice');
+      throw new ForbiddenException(
+        'You are not in the authorized target audience for this notice',
+      );
     }
 
     const now = new Date();
@@ -571,30 +972,45 @@ export class NoticesService {
   /**
    * PUBLISHER MANAGEMENT: Get notices authored by user or in authorized department
    */
-  async getManagedNotices(userId: string, userRole: string, query: QueryNoticesDto) {
+  async getManagedNotices(
+    userId: string,
+    userRole: string,
+    query: QueryNoticesDto,
+    reviewOnly = false,
+  ) {
     if (!this.isFacultyOrAdmin(userRole)) {
-      throw new ForbiddenException('Only faculty and administrators can manage notices');
+      throw new ForbiddenException(
+        'Only faculty and administrators can manage notices',
+      );
     }
 
     const ctx = await this.getUserAcademicContext(userId);
+    if (ctx.userId !== userId || ctx.role !== userRole)
+      throw new ForbiddenException(
+        'Current account role does not allow notice management.',
+      );
     const where: any = {};
 
-    // Scope:
-    // SUPER_ADMIN / ADMIN: can see all
-    // HOD: can see own notices + department notices
-    // FACULTY: can see own notices
-    if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') {
-      // unrestricted
-    } else if (userRole === 'HOD' && ctx.departmentId) {
-      where.OR = [
-        { authorId: userId },
-        { departmentId: ctx.departmentId },
-      ];
+    if (reviewOnly && !this.isAdmin(userRole))
+      throw new ForbiddenException('Only admins can review notices.');
+    if (userRole === 'SUPER_ADMIN') {
+      // Institution-wide review and management.
+    } else if (userRole === 'ADMIN' && ctx.departmentId) {
+      where.OR = [{ authorId: userId }, { departmentId: ctx.departmentId }];
     } else {
+      if (reviewOnly)
+        throw new ForbiddenException(
+          'An assigned department is required to review notices.',
+        );
       where.authorId = userId;
     }
+    if (reviewOnly) {
+      where.authorId = { not: userId };
+      where.status = 'PENDING_REVIEW';
+      where.isArchived = false;
+    }
 
-    if (query.status) {
+    if (query.status && !reviewOnly) {
       where.status = query.status.toUpperCase();
     }
 
@@ -612,14 +1028,34 @@ export class NoticesService {
         skip: (page - 1) * limit,
         take: limit,
         include: {
+          users_notices_authorIdTousers: {
+            select: {
+              id: true,
+              email: true,
+              role: { select: { code: true } },
+              faculty: { select: { firstName: true, lastName: true } },
+            },
+          },
           departments: { select: { id: true, name: true, code: true } },
           programs: { select: { id: true, name: true, code: true } },
           notice_attachments: {
-            select: { id: true, fileName: true, fileSize: true, fileType: true },
+            select: {
+              id: true,
+              fileName: true,
+              fileSize: true,
+              fileType: true,
+            },
           },
           _count: {
             select: {
               notice_reads: true,
+              notice_audit_logs: {
+                where: {
+                  action: {
+                    in: ['SUBMITTED_FOR_REVIEW', 'APPROVED', 'REJECTED'],
+                  },
+                },
+              },
             },
           },
         },
@@ -630,6 +1066,19 @@ export class NoticesService {
     return {
       items: items.map((item) => ({
         ...item,
+        author: {
+          id: item.authorId,
+          name: item.users_notices_authorIdTousers.faculty
+            ? [
+                item.users_notices_authorIdTousers.faculty.firstName,
+                item.users_notices_authorIdTousers.faculty.lastName,
+              ]
+                .filter(Boolean)
+                .join(' ')
+            : item.users_notices_authorIdTousers.email,
+        },
+        attachments: item.notice_attachments,
+        ...this.permissions(ctx, item),
         readCount: item._count.notice_reads,
       })),
       total,
@@ -643,11 +1092,29 @@ export class NoticesService {
    * CREATE NOTICE: Publish, Schedule, or Save as Draft
    */
   async createNotice(userId: string, userRole: string, dto: CreateNoticeDto) {
+    if (
+      typeof dto.title !== 'string' ||
+      !dto.title.trim() ||
+      typeof dto.content !== 'string' ||
+      !dto.content.trim()
+    )
+      throw new BadRequestException('A notice title and body are required.');
     if (!this.isFacultyOrAdmin(userRole)) {
-      throw new ForbiddenException('Only faculty and administrators can create notices');
+      throw new ForbiddenException(
+        'Only faculty and administrators can create notices',
+      );
     }
 
+    this.assertWriteStatus(dto.status);
     const ctx = await this.getUserAcademicContext(userId);
+    if (ctx.userId !== userId || ctx.role !== userRole)
+      throw new ForbiddenException(
+        'Current account role does not allow publishing.',
+      );
+    if (this.requiresApproval(userRole) && !ctx.departmentId)
+      throw new ForbiddenException(
+        'An assigned department is required to submit notices.',
+      );
 
     // Faculty department scoping
     let departmentId = dto.departmentId || null;
@@ -663,58 +1130,79 @@ export class NoticesService {
     const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
 
     if (expiresAt && expiresAt <= publishAt) {
-      throw new BadRequestException('Expiration time must be after the publication time');
+      throw new BadRequestException(
+        'Expiration time must be after the publication time',
+      );
     }
 
-    let status = dto.status || NoticeStatus.PUBLISHED;
-    if (status !== NoticeStatus.DRAFT) {
-      if (publishAt > now) {
-        status = NoticeStatus.SCHEDULED;
-      } else {
-        status = NoticeStatus.PUBLISHED;
-      }
-    }
+    const status =
+      dto.status === NoticeStatus.DRAFT
+        ? NoticeStatus.DRAFT
+        : this.requiresApproval(userRole) ||
+            dto.status === NoticeStatus.PENDING_REVIEW
+          ? NoticeStatus.PENDING_REVIEW
+          : publishAt > now
+            ? NoticeStatus.SCHEDULED
+            : NoticeStatus.PUBLISHED;
 
-    const notice = await this.prisma.notices.create({
-      data: {
-        title: dto.title.trim(),
-        content: dto.content.trim(),
-        aiSummary: dto.aiSummary?.trim() || null,
-        category: dto.category || 'GENERAL',
-        priority: dto.priority || 'NORMAL',
-        targetScope: dto.targetScope || 'ALL',
-        departmentId,
-        programId: dto.programId || null,
-        targetYear: dto.targetYear || null,
-        targetSemester: dto.targetSemester || null,
-        targetAudience: (dto.targetAudience as any) || null,
-        requiresAcknowledgement: Boolean(dto.requiresAcknowledgement),
-        isPinned: Boolean(dto.isPinned),
-        publishAt,
-        expiresAt,
-        status,
-        authorId: userId,
-      },
-      include: {
-        departments: true,
-        programs: true,
-      },
-    });
+    const generated = await this.enrichment.enrich(
+      dto.title.trim(),
+      dto.content.trim(),
+    );
+    const notice = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.notices.create({
+        data: {
+          title: dto.title.trim(),
+          content: dto.content.trim(),
+          ...this.enrichmentData(generated),
+          ...(dto.aiSummary !== undefined
+            ? { aiSummary: dto.aiSummary?.trim() || null }
+            : {}),
+          category: dto.category || 'GENERAL',
+          priority: dto.priority || 'NORMAL',
+          targetScope: dto.targetScope || 'ALL',
+          departmentId,
+          programId: dto.programId || null,
+          targetYear: dto.targetYear || null,
+          targetSemester: dto.targetSemester || null,
+          targetAudience: (dto.targetAudience as any) || null,
+          requiresAcknowledgement: Boolean(dto.requiresAcknowledgement),
+          isPinned: Boolean(dto.isPinned),
+          publishAt,
+          expiresAt,
+          status,
+          authorId: userId,
+          approvedById: null,
+          approvedAt: null,
+          rejectionReason: null,
+        },
+        include: {
+          departments: true,
+          programs: true,
+        },
+      });
 
-    // Record audit log
-    await this.prisma.notice_audit_logs.create({
-      data: {
-        noticeId: notice.id,
-        userId,
-        action: 'CREATED',
-        details: `Notice created with status: ${status}, priority: ${notice.priority}`,
-      },
+      // Record audit log
+      await tx.notice_audit_logs.create({
+        data: {
+          noticeId: created.id,
+          userId,
+          action:
+            status === 'PENDING_REVIEW' ? 'SUBMITTED_FOR_REVIEW' : 'CREATED',
+          details: `Notice created with status: ${status}, priority: ${created.priority}`,
+        },
+      });
+
+      return created;
     });
 
     // Dispatch in-app notifications if published immediately
     if (status === NoticeStatus.PUBLISHED) {
       this.notifyAudience(notice).catch((e) =>
-        this.logger.error(`Error notifying recipients for notice ${notice.id}`, e),
+        this.logger.error(
+          `Error notifying recipients for notice ${notice.id}`,
+          e,
+        ),
       );
     }
 
@@ -724,89 +1212,240 @@ export class NoticesService {
   /**
    * UPDATE NOTICE: Edit content, targeting, or schedule
    */
-  async updateNotice(userId: string, userRole: string, noticeId: string, dto: UpdateNoticeDto) {
+  async updateNotice(
+    userId: string,
+    userRole: string,
+    noticeId: string,
+    dto: UpdateNoticeDto,
+  ) {
+    this.assertWriteStatus(dto.status);
+    if (
+      (dto.title !== undefined &&
+        (typeof dto.title !== 'string' || !dto.title.trim())) ||
+      (dto.content !== undefined &&
+        (typeof dto.content !== 'string' || !dto.content.trim()))
+    )
+      throw new BadRequestException('Notice title and body cannot be empty.');
     const notice = await this.prisma.notices.findUnique({
       where: { id: noticeId },
+      include: {
+        users_notices_authorIdTousers: {
+          select: { role: { select: { code: true } } },
+        },
+      },
     });
 
     if (!notice) {
       throw new NotFoundException('Notice not found');
     }
-
-    const isAuthor = notice.authorId === userId;
-    const isSuperOrAdmin = this.isAdmin(userRole);
-    const ctx = await this.getUserAcademicContext(userId);
-    const isDeptHod =
-      userRole === 'HOD' && ctx.departmentId && notice.departmentId === ctx.departmentId;
-
-    if (!isAuthor && !isSuperOrAdmin && !isDeptHod) {
-      throw new ForbiddenException('Not authorized to edit this notice');
+    if (
+      dto.expectedUpdatedAt &&
+      new Date(dto.expectedUpdatedAt).getTime() !== notice.updatedAt.getTime()
+    ) {
+      throw new ConflictException(
+        'The notice changed. Reload it before editing.',
+      );
     }
+
+    const ctx = await this.getUserAcademicContext(userId);
+    if (
+      ctx.userId !== userId ||
+      ctx.role !== userRole ||
+      !this.canManage(ctx, notice)
+    )
+      throw new ForbiddenException('Not authorized to edit this notice');
+    if (notice.isArchived)
+      throw new ConflictException('Archived notices cannot be edited.');
+    if (['FACULTY', 'HOD'].includes(userRole) && !ctx.departmentId)
+      throw new ForbiddenException('An assigned department is required.');
+    if (
+      dto.departmentId !== undefined &&
+      userRole !== 'SUPER_ADMIN' &&
+      dto.departmentId !==
+        (['FACULTY', 'HOD'].includes(userRole)
+          ? ctx.departmentId
+          : notice.departmentId)
+    )
+      throw new ForbiddenException(
+        'You cannot move this notice outside its department.',
+      );
 
     const now = new Date();
-    const publishAt = dto.publishAt ? new Date(dto.publishAt) : notice.publishAt;
-    const expiresAt = dto.expiresAt !== undefined
-      ? (dto.expiresAt ? new Date(dto.expiresAt) : null)
-      : notice.expiresAt;
+    const publishAt = dto.publishAt
+      ? new Date(dto.publishAt)
+      : notice.publishAt;
+    const expiresAt =
+      dto.expiresAt !== undefined
+        ? dto.expiresAt
+          ? new Date(dto.expiresAt)
+          : null
+        : notice.expiresAt;
 
     if (expiresAt && expiresAt <= publishAt) {
-      throw new BadRequestException('Expiration time must be after publication time');
+      throw new BadRequestException(
+        'Expiration time must be after publication time',
+      );
     }
 
-    let status = dto.status || (notice.status as any);
-    if (status !== NoticeStatus.DRAFT && status !== NoticeStatus.WITHDRAWN) {
-      if (publishAt > now) {
-        status = NoticeStatus.SCHEDULED;
-      } else if (expiresAt && expiresAt <= now) {
-        status = NoticeStatus.EXPIRED;
-      } else {
-        status = NoticeStatus.PUBLISHED;
-      }
+    const authorRole =
+      notice.users_notices_authorIdTousers?.role?.code ||
+      (notice.authorId === userId ? userRole : 'FACULTY');
+    const approvalRequired = this.requiresApproval(authorRole);
+    const changes = [
+      'title',
+      'content',
+      'aiSummary',
+      'category',
+      'priority',
+      'targetScope',
+      'departmentId',
+      'programId',
+      'targetYear',
+      'targetSemester',
+      'targetAudience',
+      'requiresAcknowledgement',
+      'isPinned',
+      'publishAt',
+      'expiresAt',
+    ] as const;
+    const materialChanged = changes.some(
+      (key) =>
+        dto[key] !== undefined &&
+        JSON.stringify(dto[key]) !== JSON.stringify(notice[key]),
+    );
+    const publishRequested = ['PUBLISHED', 'SCHEDULED'].includes(
+      dto.status || '',
+    );
+    if (
+      publishRequested &&
+      ['PENDING_REVIEW', 'REJECTED'].includes(notice.status)
+    )
+      throw new ConflictException(
+        'Use the approval workflow; pending or rejected notices cannot be published through an edit.',
+      );
+    let status = notice.status as NoticeStatus;
+    if (dto.status === NoticeStatus.DRAFT) status = NoticeStatus.DRAFT;
+    else if (dto.status === NoticeStatus.PENDING_REVIEW)
+      status = NoticeStatus.PENDING_REVIEW;
+    else if (approvalRequired && (materialChanged || publishRequested)) {
+      status =
+        ['DRAFT', 'REJECTED', 'WITHDRAWN'].includes(notice.status) &&
+        !publishRequested
+          ? NoticeStatus.DRAFT
+          : NoticeStatus.PENDING_REVIEW;
+    } else if (
+      !approvalRequired &&
+      (publishRequested || ['PUBLISHED', 'SCHEDULED'].includes(notice.status))
+    ) {
+      status =
+        publishAt > now
+          ? NoticeStatus.SCHEDULED
+          : expiresAt && expiresAt <= now
+            ? NoticeStatus.EXPIRED
+            : NoticeStatus.PUBLISHED;
     }
+    const invalidateApproval =
+      materialChanged || ['DRAFT', 'PENDING_REVIEW'].includes(status);
 
-    const updated = await this.prisma.notices.update({
-      where: { id: noticeId },
-      data: {
-        ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
-        ...(dto.content !== undefined ? { content: dto.content.trim() } : {}),
-        ...(dto.aiSummary !== undefined ? { aiSummary: dto.aiSummary?.trim() || null } : {}),
-        ...(dto.category !== undefined ? { category: dto.category } : {}),
-        ...(dto.priority !== undefined ? { priority: dto.priority } : {}),
-        ...(dto.targetScope !== undefined ? { targetScope: dto.targetScope } : {}),
-        ...(dto.departmentId !== undefined ? { departmentId: dto.departmentId || null } : {}),
-        ...(dto.programId !== undefined ? { programId: dto.programId || null } : {}),
-        ...(dto.targetYear !== undefined ? { targetYear: dto.targetYear || null } : {}),
-        ...(dto.targetSemester !== undefined ? { targetSemester: dto.targetSemester || null } : {}),
-        ...(dto.targetAudience !== undefined ? { targetAudience: dto.targetAudience as any } : {}),
-        ...(dto.requiresAcknowledgement !== undefined
-          ? { requiresAcknowledgement: dto.requiresAcknowledgement }
-          : {}),
-        ...(dto.isPinned !== undefined ? { isPinned: dto.isPinned } : {}),
-        ...(dto.isArchived !== undefined ? { isArchived: dto.isArchived } : {}),
-        ...(dto.rejectionReason !== undefined ? { rejectionReason: dto.rejectionReason } : {}),
-        publishAt,
-        expiresAt,
-        status,
-        updatedAt: now,
-      },
-    });
+    const textChanged =
+      (dto.title !== undefined && dto.title.trim() !== notice.title) ||
+      (dto.content !== undefined && dto.content.trim() !== notice.content);
+    const generated = textChanged
+      ? await this.enrichment.enrich(
+          dto.title !== undefined ? dto.title.trim() : notice.title,
+          dto.content !== undefined ? dto.content.trim() : notice.content,
+        )
+      : null;
+    const updated = await this.prisma
+      .$transaction(async (tx) => {
+        const saved = await tx.notices.update({
+          // Do not attach AI results to a different revision if another edit won
+          // while the external request was in flight.
+          where: { id: noticeId, updatedAt: notice.updatedAt },
+          data: {
+            ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+            ...(dto.content !== undefined
+              ? { content: dto.content.trim() }
+              : {}),
+            ...(textChanged ? this.enrichmentData(generated) : {}),
+            ...(dto.aiSummary !== undefined
+              ? { aiSummary: dto.aiSummary?.trim() || null }
+              : {}),
+            ...(dto.category !== undefined ? { category: dto.category } : {}),
+            ...(dto.priority !== undefined ? { priority: dto.priority } : {}),
+            ...(dto.targetScope !== undefined
+              ? { targetScope: dto.targetScope }
+              : {}),
+            ...(dto.departmentId !== undefined
+              ? { departmentId: dto.departmentId || null }
+              : {}),
+            ...(dto.programId !== undefined
+              ? { programId: dto.programId || null }
+              : {}),
+            ...(dto.targetYear !== undefined
+              ? { targetYear: dto.targetYear || null }
+              : {}),
+            ...(dto.targetSemester !== undefined
+              ? { targetSemester: dto.targetSemester || null }
+              : {}),
+            ...(dto.targetAudience !== undefined
+              ? { targetAudience: dto.targetAudience as any }
+              : {}),
+            ...(dto.requiresAcknowledgement !== undefined
+              ? { requiresAcknowledgement: dto.requiresAcknowledgement }
+              : {}),
+            ...(dto.isPinned !== undefined ? { isPinned: dto.isPinned } : {}),
+            ...(invalidateApproval
+              ? { approvedById: null, approvedAt: null }
+              : {}),
+            ...(status === NoticeStatus.PENDING_REVIEW
+              ? { rejectionReason: null }
+              : {}),
+            publishAt,
+            expiresAt,
+            status,
+            updatedAt: this.nextRevision(notice),
+          },
+        });
 
-    await this.prisma.notice_audit_logs.create({
-      data: {
-        noticeId,
-        userId,
-        action: 'UPDATED',
-        details: `Updated notice details`,
-      },
-    });
+        await tx.notice_audit_logs.create({
+          data: {
+            noticeId,
+            userId,
+            action:
+              status === NoticeStatus.PENDING_REVIEW && notice.status !== status
+                ? 'SUBMITTED_FOR_REVIEW'
+                : 'UPDATED',
+            details: `Updated notice details`,
+          },
+        });
 
+        if (saved.status === 'PUBLISHED' && notice.status !== 'PUBLISHED')
+          await this.notifyAudience(saved, tx);
+        return saved;
+      })
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2025'
+        )
+          throw new ConflictException(
+            'The notice changed. Reload it before saving again.',
+          );
+        throw error;
+      });
     return updated;
   }
 
   /**
    * WITHDRAW NOTICE: Remove from active publication with withdrawal reason
    */
-  async withdrawNotice(userId: string, userRole: string, noticeId: string, reason?: string) {
+  async withdrawNotice(
+    userId: string,
+    userRole: string,
+    noticeId: string,
+    reason?: string,
+  ) {
     const notice = await this.prisma.notices.findUnique({
       where: { id: noticeId },
     });
@@ -815,22 +1454,21 @@ export class NoticesService {
       throw new NotFoundException('Notice not found');
     }
 
-    const isAuthor = notice.authorId === userId;
-    const isSuperOrAdmin = this.isAdmin(userRole);
     const ctx = await this.getUserAcademicContext(userId);
-    const isDeptHod =
-      userRole === 'HOD' && ctx.departmentId && notice.departmentId === ctx.departmentId;
-
-    if (!isAuthor && !isSuperOrAdmin && !isDeptHod) {
-      throw new ForbiddenException('Not authorized to withdraw this notice');
-    }
+    if (
+      ctx.userId !== userId ||
+      ctx.role !== userRole ||
+      !this.canManage(ctx, notice)
+    )
+      throw new ForbiddenException('Not authorized to manage this notice.');
 
     const withdrawn = await this.prisma.notices.update({
-      where: { id: noticeId },
+      where: { id: noticeId, updatedAt: notice.updatedAt },
       data: {
         status: NoticeStatus.WITHDRAWN,
-        rejectionReason: reason || 'Withdrawn by publisher',
-        updatedAt: new Date(),
+        approvedById: null,
+        approvedAt: null,
+        updatedAt: this.nextRevision(notice),
       },
     });
 
@@ -858,25 +1496,27 @@ export class NoticesService {
       throw new NotFoundException('Notice not found');
     }
 
-    const isAuthor = notice.authorId === userId;
-    const isSuperOrAdmin = this.isAdmin(userRole);
-
-    if (!isAuthor && !isSuperOrAdmin) {
-      throw new ForbiddenException('Not authorized to archive this notice');
-    }
+    const ctx = await this.getUserAcademicContext(userId);
+    if (
+      ctx.userId !== userId ||
+      ctx.role !== userRole ||
+      !this.canManage(ctx, notice)
+    )
+      throw new ForbiddenException('Not authorized to manage this notice.');
 
     return this.prisma.notices.update({
-      where: { id: noticeId },
+      where: { id: noticeId, updatedAt: notice.updatedAt },
       data: {
         isArchived: true,
         archivedAt: new Date(),
+        updatedAt: this.nextRevision(notice),
         status: NoticeStatus.ARCHIVED,
       },
     });
   }
 
   /**
-   * DELETE NOTICE: Hard delete draft or obsolete notice (and clean up attachments)
+   * DELETE NOTICE: Delete only unsubmitted drafts; retain review history through archival.
    */
   async deleteNotice(userId: string, userRole: string, noticeId: string) {
     const notice = await this.prisma.notices.findUnique({
@@ -888,23 +1528,40 @@ export class NoticesService {
       throw new NotFoundException('Notice not found');
     }
 
-    const isAuthor = notice.authorId === userId;
-    const isSuperOrAdmin = this.isAdmin(userRole);
+    const ctx = await this.getUserAcademicContext(userId);
+    if (
+      ctx.userId !== userId ||
+      ctx.role !== userRole ||
+      !this.canManage(ctx, notice)
+    )
+      throw new ForbiddenException('Not authorized to manage this notice.');
 
-    if (!isAuthor && !isSuperOrAdmin) {
-      throw new ForbiddenException('Not authorized to delete this notice');
+    await this.withLockedNotice(
+      noticeId,
+      notice.updatedAt?.toISOString(),
+      async (tx, current) => {
+        if (current.status !== 'DRAFT' || current.isArchived)
+          throw new ConflictException(
+            'Use archive to retain the history of submitted or published notices.',
+          );
+        const history = await tx.notice_audit_logs.findFirst({
+          where: {
+            noticeId,
+            action: { in: ['SUBMITTED_FOR_REVIEW', 'APPROVED', 'REJECTED'] },
+          },
+          select: { id: true },
+        });
+        if (history)
+          throw new ConflictException(
+            'This notice has review history and must be archived instead of deleted.',
+          );
+        await tx.notices.delete({ where: { id: noticeId } });
+      },
+    );
+    for (const attachment of notice.notice_attachments) {
+      if (attachment.fileKey)
+        await this.r2Storage.deleteObject(attachment.fileKey).catch(() => {});
     }
-
-    // Clean up attachments in R2
-    for (const att of notice.notice_attachments) {
-      if (att.fileKey) {
-        await this.r2Storage.deleteObject(att.fileKey).catch(() => {});
-      }
-    }
-
-    await this.prisma.notices.delete({
-      where: { id: noticeId },
-    });
 
     return { success: true };
   }
@@ -956,7 +1613,9 @@ export class NoticesService {
     const isAuthor = notice.authorId === userId;
     const isSuperOrAdmin = this.isAdmin(userRole);
     if (!isAuthor && !isSuperOrAdmin) {
-      throw new ForbiddenException('Not authorized to view analytics for this notice');
+      throw new ForbiddenException(
+        'Not authorized to view analytics for this notice',
+      );
     }
 
     // Aggregate counts
@@ -971,15 +1630,25 @@ export class NoticesService {
     let intendedCount = 0;
     const scope = (notice.targetScope || 'ALL').toUpperCase();
     if (scope === 'ALL') {
-      intendedCount = await this.prisma.user.count({ where: { isActive: true } });
+      intendedCount = await this.prisma.user.count({
+        where: { isActive: true },
+      });
     } else if (scope === 'STUDENTS') {
-      intendedCount = await this.prisma.student.count({ where: { isActive: true } });
+      intendedCount = await this.prisma.student.count({
+        where: { isActive: true },
+      });
     } else if (scope === 'FACULTY') {
-      intendedCount = await this.prisma.faculty.count({ where: { isActive: true } });
+      intendedCount = await this.prisma.faculty.count({
+        where: { isActive: true },
+      });
     } else if (scope === 'DEPARTMENT' && notice.departmentId) {
       const [sCount, fCount] = await Promise.all([
-        this.prisma.student.count({ where: { departmentId: notice.departmentId, isActive: true } }),
-        this.prisma.faculty.count({ where: { departmentId: notice.departmentId, isActive: true } }),
+        this.prisma.student.count({
+          where: { departmentId: notice.departmentId, isActive: true },
+        }),
+        this.prisma.faculty.count({
+          where: { departmentId: notice.departmentId, isActive: true },
+        }),
       ]);
       intendedCount = sCount + fCount;
     } else if (scope === 'PROGRAM' && notice.programId) {
@@ -994,24 +1663,32 @@ export class NoticesService {
     }
 
     const readPercentage =
-      intendedCount > 0 ? Math.min(100, Math.round((readCount / intendedCount) * 100)) : 0;
+      intendedCount > 0
+        ? Math.min(100, Math.round((readCount / intendedCount) * 100))
+        : 0;
     const acknowledgementPercentage =
-      intendedCount > 0 ? Math.min(100, Math.round((acknowledgementCount / intendedCount) * 100)) : 0;
+      intendedCount > 0
+        ? Math.min(
+            100,
+            Math.round((acknowledgementCount / intendedCount) * 100),
+          )
+        : 0;
 
     const recentReaders = notice.notice_reads.map((r) => {
       const u = r.users;
       const name = u.student
         ? `${u.student.firstName} ${u.student.lastName || ''}`.trim()
         : u.faculty
-        ? `${u.faculty.firstName} ${u.faculty.lastName || ''}`.trim()
-        : u.email;
+          ? `${u.faculty.firstName} ${u.faculty.lastName || ''}`.trim()
+          : u.email;
 
       return {
         userId: u.id,
         name,
         role: u.role?.code || 'STUDENT',
         rollNumber: u.student?.rollNumber || null,
-        department: u.student?.department?.code || u.faculty?.department?.code || null,
+        department:
+          u.student?.department?.code || u.faculty?.department?.code || null,
         readAt: r.readAt,
         acknowledgedAt: r.acknowledgedAt,
       };
@@ -1046,18 +1723,29 @@ export class NoticesService {
   ) {
     const notice = await this.prisma.notices.findUnique({
       where: { id: noticeId },
-      include: { notice_attachments: true },
+      include: {
+        notice_attachments: true,
+        users_notices_authorIdTousers: {
+          select: { role: { select: { code: true } } },
+        },
+      },
     });
 
     if (!notice) {
       throw new NotFoundException('Notice not found');
     }
 
-    const isAuthor = notice.authorId === userId;
-    const isSuperOrAdmin = this.isAdmin(userRole);
-    if (!isAuthor && !isSuperOrAdmin) {
-      throw new ForbiddenException('Not authorized to add attachments to this notice');
-    }
+    const ctx = await this.getUserAcademicContext(userId);
+    if (
+      ctx.userId !== userId ||
+      ctx.role !== userRole ||
+      !this.canManage(ctx, notice)
+    )
+      throw new ForbiddenException(
+        'Not authorized to add attachments to this notice',
+      );
+    if (notice.isArchived)
+      throw new ConflictException('Archived notices cannot be edited.');
 
     if (!file) {
       throw new BadRequestException('No PDF file provided');
@@ -1065,21 +1753,30 @@ export class NoticesService {
 
     // Validate MIME type
     const mime = (file.mimetype || '').toLowerCase();
-    if (mime !== 'application/pdf' && !file.originalname.toLowerCase().endsWith('.pdf')) {
-      throw new BadRequestException('Only PDF documents are supported for official notice attachments');
+    if (
+      mime !== 'application/pdf' &&
+      !file.originalname.toLowerCase().endsWith('.pdf')
+    ) {
+      throw new BadRequestException(
+        'Only PDF documents are supported for official notice attachments',
+      );
     }
 
     // Validate file size (max 25MB)
     const fileSize = file.size || (file.buffer ? file.buffer.length : 0);
     if (fileSize > MAX_PDF_SIZE) {
-      throw new BadRequestException('PDF file exceeds the 25MB maximum upload size limit');
+      throw new BadRequestException(
+        'PDF file exceeds the 25MB maximum upload size limit',
+      );
     }
 
     // Validate PDF magic bytes: %PDF
     if (file.buffer && file.buffer.length >= 4) {
       const header = file.buffer.subarray(0, 4).toString();
       if (!header.startsWith('%PDF')) {
-        throw new BadRequestException('Invalid PDF file content. The file is corrupted or not a valid PDF.');
+        throw new BadRequestException(
+          'Invalid PDF file content. The file is corrupted or not a valid PDF.',
+        );
       }
     }
 
@@ -1090,18 +1787,60 @@ export class NoticesService {
       'application/pdf',
     );
 
-    const attachment = await this.prisma.notice_attachments.create({
-      data: {
+    try {
+      return await this.withLockedNotice(
         noticeId,
-        fileName: file.originalname,
-        fileKey,
-        fileUrl: `/api/v1/notices/${noticeId}/attachments/${fileKey}/stream`,
-        fileType: 'application/pdf',
-        fileSize,
-      },
-    });
+        notice.updatedAt?.toISOString(),
+        async (tx, current) => {
+          if (current.isArchived)
+            throw new ConflictException('Archived notices cannot be edited.');
+          const authorRole =
+            notice.users_notices_authorIdTousers?.role?.code ||
+            (notice.authorId === userId ? userRole : 'FACULTY');
+          const status = this.requiresApproval(authorRole)
+            ? ['PUBLISHED', 'SCHEDULED', 'PENDING_REVIEW'].includes(
+                current.status,
+              )
+              ? 'PENDING_REVIEW'
+              : 'DRAFT'
+            : current.status === 'REJECTED'
+              ? 'DRAFT'
+              : current.status;
+          const revised = await tx.notices.update({
+            where: { id: noticeId },
+            data: {
+              status,
+              approvedById: null,
+              approvedAt: null,
+              updatedAt: this.nextRevision(current),
+            },
+          });
+          const attachment = await tx.notice_attachments.create({
+            data: {
+              noticeId,
+              fileName: file.originalname,
+              fileKey,
+              fileUrl: `/api/v1/notices/${noticeId}/attachments/${fileKey}/stream`,
+              fileType: 'application/pdf',
+              fileSize,
+            },
+          });
 
-    return attachment;
+          await tx.notice_audit_logs.create({
+            data: {
+              noticeId,
+              userId,
+              action: 'ATTACHMENT_ADDED',
+              details: 'Attachment changed; prior approval invalidated.',
+            },
+          });
+          return { ...attachment, noticeUpdatedAt: revised.updatedAt };
+        },
+      );
+    } catch (error) {
+      await this.r2Storage.deleteObject(fileKey).catch(() => {});
+      throw error;
+    }
   }
 
   /**
@@ -1115,17 +1854,28 @@ export class NoticesService {
   ) {
     const notice = await this.prisma.notices.findUnique({
       where: { id: noticeId },
+      include: {
+        users_notices_authorIdTousers: {
+          select: { role: { select: { code: true } } },
+        },
+      },
     });
 
     if (!notice) {
       throw new NotFoundException('Notice not found');
     }
 
-    const isAuthor = notice.authorId === userId;
-    const isSuperOrAdmin = this.isAdmin(userRole);
-    if (!isAuthor && !isSuperOrAdmin) {
-      throw new ForbiddenException('Not authorized to delete attachments from this notice');
-    }
+    const ctx = await this.getUserAcademicContext(userId);
+    if (
+      ctx.userId !== userId ||
+      ctx.role !== userRole ||
+      !this.canManage(ctx, notice)
+    )
+      throw new ForbiddenException(
+        'Not authorized to delete attachments from this notice',
+      );
+    if (notice.isArchived)
+      throw new ConflictException('Archived notices cannot be edited.');
 
     const attachment = await this.prisma.notice_attachments.findUnique({
       where: { id: attachmentId },
@@ -1135,13 +1885,46 @@ export class NoticesService {
       throw new NotFoundException('Attachment not found');
     }
 
-    if (attachment.fileKey) {
+    await this.withLockedNotice(
+      noticeId,
+      notice.updatedAt?.toISOString(),
+      async (tx, current) => {
+        if (current.isArchived)
+          throw new ConflictException('Archived notices cannot be edited.');
+        const authorRole =
+          notice.users_notices_authorIdTousers?.role?.code ||
+          (notice.authorId === userId ? userRole : 'FACULTY');
+        const status = this.requiresApproval(authorRole)
+          ? ['PUBLISHED', 'SCHEDULED', 'PENDING_REVIEW'].includes(
+              current.status,
+            )
+            ? 'PENDING_REVIEW'
+            : 'DRAFT'
+          : current.status === 'REJECTED'
+            ? 'DRAFT'
+            : current.status;
+        await tx.notices.update({
+          where: { id: noticeId },
+          data: {
+            status,
+            approvedById: null,
+            approvedAt: null,
+            updatedAt: this.nextRevision(current),
+          },
+        });
+        await tx.notice_attachments.delete({ where: { id: attachmentId } });
+        await tx.notice_audit_logs.create({
+          data: {
+            noticeId,
+            userId,
+            action: 'ATTACHMENT_REMOVED',
+            details: 'Attachment changed; prior approval invalidated.',
+          },
+        });
+      },
+    );
+    if (attachment.fileKey)
       await this.r2Storage.deleteObject(attachment.fileKey).catch(() => {});
-    }
-
-    await this.prisma.notice_attachments.delete({
-      where: { id: attachmentId },
-    });
 
     return { success: true };
   }
@@ -1149,7 +1932,11 @@ export class NoticesService {
   /**
    * ATTACHMENTS: Stream PDF for authorized in-app preview or download
    */
-  async streamAttachment(userId: string, noticeId: string, attachmentId: string) {
+  async streamAttachment(
+    userId: string,
+    noticeId: string,
+    attachmentId: string,
+  ) {
     const ctx = await this.getUserAcademicContext(userId);
 
     const notice = await this.prisma.notices.findUnique({
@@ -1161,10 +1948,8 @@ export class NoticesService {
     }
 
     const isAuthor = notice.authorId === userId;
-    const isMod = this.isHodOrAdmin(ctx.role);
-    if (!isAuthor && !isMod && !this.matchesAudience(notice, ctx)) {
-      throw new ForbiddenException('Not authorized to view this document');
-    }
+    const isMod = this.canManage(ctx, notice);
+    if (!isAuthor && !isMod) this.assertRecipientAccess(notice, ctx);
 
     const attachment = await this.prisma.notice_attachments.findUnique({
       where: { id: attachmentId },
@@ -1226,66 +2011,75 @@ export class NoticesService {
   /**
    * NOTIFICATION TRIGGER: Send notifications to targeted recipients
    */
-  private async notifyAudience(notice: any) {
+  async notifyAudience(
+    notice: any,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     try {
-      const scope = (notice.targetScope || 'ALL').toUpperCase();
-      let targetUserIds: string[] = [];
-
-      if (scope === 'ALL') {
+      let cursor: string | undefined;
+      let total = 0;
+      while (true) {
         const users =
-          (await this.prisma.user.findMany({
-            where: { isActive: true },
-            select: { id: true },
-            take: 500, // safety cap
+          (await db.user.findMany({
+            where: { isActive: true, role: { isActive: true } },
+            orderBy: { id: 'asc' },
+            take: 500,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            select: {
+              id: true,
+              role: { select: { code: true } },
+              student: {
+                select: {
+                  departmentId: true,
+                  sectionId: true,
+                  section: {
+                    select: {
+                      semester: { select: { number: true, programId: true } },
+                    },
+                  },
+                },
+              },
+              faculty: { select: { departmentId: true } },
+            },
           })) || [];
-        targetUserIds = users.map((u) => u.id);
-      } else if (scope === 'DEPARTMENT' && notice.departmentId) {
-        const [students = [], faculty = []] = await Promise.all([
-          this.prisma.student.findMany({
-            where: { departmentId: notice.departmentId, isActive: true },
-            select: { userId: true },
-            take: 300,
-          }),
-          this.prisma.faculty.findMany({
-            where: { departmentId: notice.departmentId, isActive: true },
-            select: { userId: true },
-            take: 100,
-          }),
-        ]);
-        targetUserIds = [
-          ...(students || []).map((s) => s.userId),
-          ...(faculty || []).map((f) => f.userId),
-        ];
-      }
-
-      // Filter out author
-      const recipientIds = targetUserIds.filter((id) => id !== notice.authorId);
-      if (recipientIds.length === 0) return;
-
-      const priorityLabel =
-        ['CRITICAL', 'URGENT'].includes(notice.priority.toUpperCase())
+        const recipientIds = users
+          .filter(
+            (user) =>
+              user.id !== notice.authorId &&
+              this.matchesAudience(notice, this.audienceContext(user), false),
+          )
+          .map((user) => user.id);
+        const priorityLabel = ['CRITICAL', 'URGENT'].includes(
+          notice.priority.toUpperCase(),
+        )
           ? '[CRITICAL] '
           : '';
-
-      const title = `${priorityLabel}Official Notice: ${notice.title}`;
-      const message = notice.aiSummary || notice.content.substring(0, 160);
-
-      // Batch create notifications
-      await this.prisma.notifications.createMany({
-        data: recipientIds.map((uId) => ({
-          userId: uId,
-          title,
-          message,
-          type: 'NOTICE_NEW',
-          noticeId: notice.id,
-          isRead: false,
-        })),
-        skipDuplicates: true,
-      });
-
-      this.logger.log(`Created in-app notifications for notice ${notice.id} to ${recipientIds.length} recipients`);
+        if (recipientIds.length)
+          await db.notifications.createMany({
+            data: recipientIds.map((userId) => ({
+              userId,
+              title: priorityLabel + 'Official Notice: ' + notice.title,
+              message: notice.aiSummary || notice.content.substring(0, 160),
+              type: 'NOTICE_NEW',
+              noticeId: notice.id,
+              isRead: false,
+            })),
+            skipDuplicates: true,
+          });
+        total += recipientIds.length;
+        if (users.length < 500) break;
+        cursor = users[users.length - 1].id;
+      }
+      this.logger.log(
+        'Created in-app notifications for notice ' +
+          notice.id +
+          ' to ' +
+          total +
+          ' recipients',
+      );
     } catch (err) {
       this.logger.error('Failed to dispatch notice notifications', err);
+      throw err;
     }
   }
 }

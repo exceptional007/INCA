@@ -1,0 +1,100 @@
+// In-memory localhost responses for UI interactions. No external services.
+import { date, department, listing, note, poll, claim, person } from './layout-fixtures.mjs';
+import { previewPdf } from './preview-document.mjs';
+export const students = ['Aarav Sharma', 'Diya Patel', 'Rohan Verma', 'Ananya Chandrasekhar Venkataraman'].map((name, i) => ({ id: `demo-student-${i + 1}`, firstName: name.split(' ')[0], lastName: name.split(' ').slice(1).join(' '), rollNumber: `CSE-2026-00${i + 1}`, collegeId: `INCA-ENGINEERING-2026-00${i + 1}`, currentStatus: 'PRESENT' }));
+const schedule = { id: 'demo-schedule', date, status: 'SCHEDULED', template: { subject: note.subject, section: { id: 'demo-section', name: 'Section A' }, room: { code: 'CSE-301' }, startTime: '09:10 AM', endTime: '10:05 AM', faculty: { firstName: 'Department', lastName: 'Coordinator' } } };
+const session = { id: 'demo-session', status: 'OPEN', records: students.map((student, i) => ({ id: `demo-record-${i + 1}`, studentId: student.id, status: 'PRESENT' })) };
+const initialProfileValues = { firstName: 'Aarav', lastName: 'Sharma', phone: '+91 98765 43210', address: 'Campus residence, Computer Science department' };
+const initialSessions = [{ id: 'preview-current', current: true, createdAt: date, expiresAt: '2026-11-08T10:00:00Z' }, { id: 'preview-other', current: false, createdAt: date, expiresAt: '2026-11-08T10:00:00Z' }];
+const state = { session, history: [], messages: [], tutorMessages: [], quizAnswers: {}, requests: [], objections: [], studentRecords: [], attendanceStatus: 'ABSENT', failNext: '', calls: [], offer: null, transaction: null, profileValues: { ...initialProfileValues }, sessions: [...initialSessions] };
+export function resetInteractions(failNext = '') {
+  state.session = { ...session, status: 'OPEN', records: students.map((student, i) => ({ id: `demo-record-${i + 1}`, studentId: student.id, status: 'PRESENT' })) };
+  state.history = []; state.messages = []; state.tutorMessages = []; state.requests = []; state.calls = []; state.failNext = failNext;
+  state.offer = null; state.transaction = null;
+  state.objections = []; state.studentRecords = []; state.attendanceStatus = 'ABSENT';
+  state.profileValues = { ...initialProfileValues }; state.sessions = [...initialSessions];
+}
+async function readJson(req) {
+  let body = '';
+  for await (const chunk of req) { body += chunk; if (body.length > 1024 * 1024) throw Error('Fixture request too large'); }
+  if (req.headers['content-type']?.includes('multipart/form-data')) {
+    const fields = {};
+    for (const part of body.split('--' + req.headers['content-type'].split('boundary=')[1])) { const field = part.match(/name="([^"]+)"/); if (field && !part.includes('filename=')) fields[field[1]] = part.split('\r\n\r\n')[1]?.replace(/\r\n$/, ''); }
+    return fields;
+  }
+  if (!body || !req.headers['content-type']?.includes('application/json')) return {};
+  return JSON.parse(body);
+}
+const questions = [
+  { id: 'question-1', question: 'Which normal form removes partial dependencies from a relational database?', type: 'MULTIPLE_CHOICE', options: ['A) First normal form', 'B) Second normal form', 'C) Unnormalized data', 'D) None of these'] },
+  { id: 'question-2', question: 'Transactions should satisfy the ACID properties.', type: 'TRUE_FALSE', options: ['True', 'False'] },
+];
+export async function interactionResponse(req, res, path, send, role = 'ADMIN') {
+  state.calls.push({ method: req.method, path });
+  if (state.failNext === path) { state.failNext = ''; res.statusCode = 503; send({ message: 'Synthetic temporary failure. Please retry.' }); return true; }
+  const get = req.method === 'GET';
+  if (path === '/students/registration-options' && get) { send({ departmentLocked: role !== 'SUPER_ADMIN', departments: [department], sections: [{ id: 'demo-section', name: 'A', semester: { number: 6, program: { name: 'B.Tech Computer Science', departmentId: department.id } } }] }); return true; }
+  if (path === '/students/accounts' && !get) { const body = await readJson(req); const student = { ...body, id: 'created-preview-student', photoKey: 'student-photos/synthetic.png', department, section: { id: 'demo-section', name: 'A' }, user: { id: 'created-preview-user', email: body.email, isActive: true }, isActive: true }; delete student.password; state.studentRecords.push(student); send({ success: true, data: { student, user: student.user } }); return true; }
+  const query = new URL(req.url, 'http://127.0.0.1:5187').searchParams;
+  const objection = state.objections.at(-1) || null;
+  const studentLecture = { recordId: 'preview-record', scheduleId: 'preview-schedule', sessionId: 'preview-lecture-session', date: '2026-10-30', subject: note.subject, faculty: 'Department Coordinator', room: 'CSE-301', startTime: '09:10', endTime: '10:05', attendanceStatus: state.attendanceStatus, lectureStatus: 'COMPLETED', objection, canObject: objection?.status !== 'PENDING' };
+  if (path === '/student-portal/context' && get) { send({ name: 'Aarav Sharma', rollNumber: 'BIT23DS01', section: { name: 'A', semester: 6, program: 'B.Tech Computer Science' }, department: 'CSE', subjects: [note.subject] }); return true; }
+  if (path === '/student-portal/timetable' && get) { send({ date: query.get('date'), sectionAssigned: true, lectures: [{ ...studentLecture, date: query.get('date') }], weekly: [{ id: 'preview-weekly', day: 'Monday', startTime: '09:10', endTime: '10:05', subject: note.subject, faculty: 'Department Coordinator', room: 'CSE-301' }] }); return true; }
+  if (path === '/student-portal/attendance' && get) { const matches = (!query.get('date') || query.get('date') === studentLecture.date) && (!query.get('startDate') || query.get('startDate') <= studentLecture.date) && (!query.get('endDate') || query.get('endDate') >= studentLecture.date) && (!query.get('subjectId') || query.get('subjectId') === note.subject.id); const attended = matches && state.attendanceStatus === 'PRESENT' ? 1 : 0; send({ summary: { total: matches ? 1 : 0, attended, ABSENT: matches && !attended ? 1 : 0, percentage: matches ? attended * 100 : null }, items: matches ? [studentLecture] : [], pagination: { page: 1, limit: 25, total: matches ? 1 : 0, totalPages: 1 } }); return true; }
+  if (path === '/student-portal/objections' && get) { send(state.objections); return true; }
+  if (path === '/student-portal/objections' && !get) { const body = await readJson(req); const request = { id: `preview-objection-${state.objections.length + 1}`, reason: body.reason, requestedStatus: body.requestedStatus || null, originalStatus: state.attendanceStatus, status: 'PENDING', createdAt: date, reviewRemark: null, student: { firstName: 'Aarav', lastName: 'Sharma', rollNumber: 'BIT23DS01', department: { name: 'Computer Science' }, user: { email: 'student.preview@bit.ac.in' } }, attendanceSession: { attendanceDate: studentLecture.date, schedule: { template: { subject: note.subject } } } }; state.objections.push(request); send(request); return true; }
+  if (path === '/attendance/objections' && get) { send(state.objections); return true; }
+  if (/^\/attendance\/objections\/preview-objection-\d+\/review$/.test(path)) { const body = await readJson(req); const request = state.objections.find(item => item.id === path.split('/')[3]); request.status = body.decision; request.reviewRemark = body.remark || null; request.reviewedAt = date; if (body.decision === 'APPROVED' && request.requestedStatus) state.attendanceStatus = request.requestedStatus; send(request); return true; }
+  const wrapped = data => send({ success: true, data });
+  const profile = { id: 'layout-demo', email: 'layout.preview@bit.ac.in', role, roleName: role, values: { ...state.profileValues, photoKey: 'synthetic-avatar' }, revision: 'layout-revision', editableFields: Object.keys(initialProfileValues), department, academic: { program: 'B.Tech Computer Science and Engineering', semester: '6' }, joinedAt: date };
+  if (path === '/profile' && get) { send(profile); return true; }
+  if (path === '/auth/sessions' && get) { send(state.sessions); return true; }
+  if (path.startsWith('/auth/sessions/') && req.method === 'DELETE') { state.sessions = state.sessions.filter(session => session.id !== path.split('/').at(-1)); send({ success: true }); return true; }
+  if (path === '/profile/requests' && get) { send(state.requests); return true; }
+  if (path === '/profile/review-queue' && get) { send(state.requests.filter(request => request.status === 'PENDING')); return true; }
+  if (path === '/profile/requests' && !get) { const body = await readJson(req); const request = { id: 'preview-request', changes: JSON.parse(body.changes || '{}'), previous: { ...state.profileValues }, photoKey: null, status: 'PENDING', reason: null, createdAt: date, reviewedAt: null, profile: { ...profile, role: 'STUDENT' } }; state.requests.push(request); send(request); return true; }
+  if (/^\/profile\/requests\/preview-request\/(approve|reject|cancel)$/.test(path)) { const body = await readJson(req); const request = state.requests[0]; const action = path.split('/').at(-1); request.status = action === 'approve' ? 'APPROVED' : action === 'reject' ? 'REJECTED' : 'CANCELLED'; request.reason = body.reason; request.reviewedAt = date; if (action === 'approve') Object.assign(state.profileValues, request.changes); send(request); return true; }
+  const program = { id: 'demo-program', code: 'BTECH-CSE', name: 'B.Tech Computer Science and Engineering', shortName: 'B.Tech CSE', durationYears: 4, departmentId: department.id, department, isActive: true };
+  const semester = { id: 'demo-semester', number: 6, name: 'Semester 6', programId: program.id, program, isActive: true };
+  if (get && path === '/academic/departments/programs') { wrapped([program]); return true; }
+  if (get && path === '/academic/departments/semesters') { wrapped([semester]); return true; }
+  if (get && path === '/academic/departments/sections') { wrapped([{ id: 'demo-section', name: 'A', semesterId: semester.id, semester, isActive: true }]); return true; }
+  if (get && path === '/academic/departments/subjects') { wrapped([{ ...note.subject, departmentId: department.id, department, semesterId: semester.id, semester, isActive: true, type: 'THEORY', credits: 3 }]); return true; }
+  if (get && path === '/academic/departments/rooms') { wrapped([{ id: 'demo-room', code: 'CSE-301', name: 'Computer Science lecture hall', capacity: 60, type: 'CLASSROOM', building: 'Block C', isActive: true }]); return true; }
+  if (get && path === '/faculty') { wrapped([{ id: 'demo-faculty', firstName: 'Department', lastName: 'Coordinator', employeeCode: 'FAC-2026-001', departmentId: department.id, department, isActive: true, user: { email: 'faculty.preview@bit.ac.in', isActive: true } }]); return true; }
+  if (get && path === '/admin/timetable-imports/check-section/demo-section') { wrapped({ exists: true, versionId: 'demo-version', slotsCount: 1 }); return true; }
+  if (get && path === '/admin/timetable-imports/active-section/demo-section') { const lecture = { id: 'demo-slot', lectureNumber: 1, subjectCode: 'CS-302', subjectName: note.subject.name, facultyName: 'Department Academic Coordinator', roomNumber: 'CSE-301', startTime: '09:10 AM', endTime: '10:05 AM', dayOfWeek: 'Monday', category: 'THEORY', matchedFacultyId: 'demo-faculty', matchedSubjectId: note.subject.id }; wrapped({ weeklySchedule: { Monday: [lecture], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] } }); return true; }
+  if (get && path === '/students') { wrapped([...students.map(student => ({ ...student, gender: 'MALE', departmentId: department.id, department, isActive: true, enrollments: [], user: { email: 'student.preview@bit.ac.in', isActive: true } })), ...state.studentRecords]); return true; }
+  if (/^\/notes\/demo-note\/(preview|download)$/.test(path) || path === '/notices/attachments/demo-attachment/stream') { res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Content-Disposition', 'inline; filename="synthetic-course-notes.pdf"'); res.end(previewPdf); return true; }
+  if (path === '/__test/state') { send(state); return true; }
+  if (path === '/attendance/sessions/demo-session' && get) { wrapped(state.session); return true; }
+  if (path === '/attendance/sessions/demo-session/sync' && !get) { const body = await readJson(req); state.session.records = body.records.map((record, i) => ({ ...record, id: `demo-record-${i + 1}` })); state.session.status = 'SUBMITTED'; wrapped(state.session); return true; }
+  if (path === '/schedules/today') { wrapped([schedule]); return true; }
+  if (path === '/attendance/sessions' && !get) { await readJson(req); wrapped(state.session); return true; }
+  if (path === '/attendance/sessions/demo-session/roster') { wrapped(students); return true; }
+  if (path === '/admin/timetable-imports/test-lecture-session') { await readJson(req); send({ session: state.session, students: students.map(student => ({ ...student, currentStatus: state.session.records.find(record => record.studentId === student.id)?.status || 'PRESENT' })), schedule }); return true; }
+  if (path === '/attendance/sessions/demo-session/records' && !get) { const body = await readJson(req); state.session.records = body.records.map((record, i) => ({ ...record, id: `demo-record-${i + 1}` })); wrapped(state.session.records); return true; }
+  if (path === '/attendance/sessions/demo-session/submit' && !get) { state.session.status = 'SUBMITTED'; wrapped(state.session); return true; }
+  if (/^\/attendance\/records\/.+\/edit$/.test(path) && !get) { const body = await readJson(req); const id = path.split('/')[3]; const record = state.session.records.find(record => record.id === id); if (!record) { res.statusCode = 404; send({ message: 'Record not found in local fixture' }); } else { record.status = body.newStatus; wrapped({ record, audit: { id: "demo-audit" } }); } return true; }
+  if (path.endsWith('/tutor/conversations') && get) { send(state.tutorMessages.length ? [{ id: 'demo-chat', title: 'Database normalization', updatedAt: date }] : []); return true; }
+  if (path.includes('/tutor/conversations/') && get) { send({ id: 'demo-chat', messages: state.tutorMessages }); return true; }
+  if (path.endsWith('/tutor/ask')) { const body = await readJson(req); const answer = 'Second normal form removes partial dependencies.\n\n**Example:** store the student name separately from a composite enrollment key. [Source 1]'; const sources = [{ chunkId: 'demo-chunk', chunkIndex: 0, pageNumber: 2, snippet: 'A relation is in second normal form if every non-key attribute depends on the entire candidate key.' }]; state.tutorMessages.push({ id: 'question', role: 'user', content: body.question, createdAt: date }, { id: 'answer', role: 'assistant', content: answer, sources, createdAt: date }); send({ conversationId: 'demo-chat', messageId: 'answer', answer, sources, createdAt: date }); return true; }
+  if (path.endsWith('/quiz/history') && get) { send(state.history); return true; }
+  if (path.endsWith('/quiz/generate')) { await readJson(req); send({ id: 'demo-quiz', questions }); return true; }
+  if (path.endsWith('/quiz/demo-quiz/submit')) { const body = await readJson(req); const reviews = questions.map((question, i) => ({ ...question, selectedAnswer: body.answers[question.id] || null, correctAnswer: i === 0 ? question.options[1] : 'True', isCorrect: body.answers[question.id] === (i === 0 ? question.options[1] : 'True'), explanation: 'Synthetic explanation grounded in the course document.', sourceSnippet: 'Second normal form removes partial dependencies.' })); const correctCount = reviews.filter(review => review.isCorrect).length; const result = { attemptId: 'demo-attempt', quizId: 'demo-quiz', score: correctCount * 50, totalQuestions: 2, correctCount, passed: correctCount >= 1, completedAt: date, review: reviews }; state.history.push({ id: 'demo-attempt', ...result, quiz: { title: note.title, difficulty: 'MEDIUM' } }); send(result); return true; }
+  if (path.includes('/quiz/history/') && get) { send(state.history[0] || {}); return true; }
+  if (path === '/polls/demo-poll/vote') { await readJson(req); send({ ...poll, hasVoted: true }); return true; }
+  if (path === '/notices/demo-notice/acknowledge' || path === '/notices/demo-notice/read') { send({ success: true, acknowledgedAt: date, readAt: date }); return true; }
+  if (path === '/marketplace/conversations/demo-conversation' && get) { send({ conversation: { id: 'demo-conversation', listingId: listing.id, listing, buyerId: 'layout-demo', sellerId: person.id, otherParty: person, seller: person }, messages: state.messages, activeOffer: state.offer, activeTransaction: state.transaction }); return true; }
+  if (path === '/marketplace/conversations/demo-conversation/messages' && !get) { const body = await readJson(req); const message = { id: `message-${state.messages.length}`, conversationId: 'demo-conversation', senderId: 'layout-demo', content: body.content, createdAt: date, isRead: false }; state.messages.push(message); send(message); return true; }
+  if (path === '/marketplace/offers' && !get) { const body = await readJson(req); state.offer = { id: 'demo-offer', listingId: listing.id, sellerId: person.id, buyerId: 'layout-demo', amount: body.amount, status: 'PENDING', createdAt: date, updatedAt: date }; send(state.offer); return true; }
+  if (path === '/marketplace/offers/demo-offer/respond') { const body = await readJson(req); state.offer = { ...state.offer, status: body.action === 'CANCEL' ? 'CANCELLED' : body.action === 'ACCEPT' ? 'ACCEPTED' : body.action === 'REJECT' ? 'REJECTED' : 'PENDING', counterAmount: body.counterAmount }; send(state.offer); return true; }
+  if (path === '/marketplace/transactions' && !get) { const body = await readJson(req); state.transaction = { id: 'demo-transaction', listingId: listing.id, listing, sellerId: person.id, buyerId: 'layout-demo', agreedPrice: state.offer?.amount || listing.price, status: 'INITIATED', buyerConfirmed: false, sellerConfirmed: false, handoverLocation: body.location || listing.preferredLocation, handoverDate: body.date, handoverTime: body.time, createdAt: date }; send(state.transaction); return true; }
+  if (path === '/marketplace/transactions/demo-transaction/schedule') { const body = await readJson(req); state.transaction = { ...state.transaction, status: 'HANDOVER_PENDING', buyerConfirmed: true, sellerConfirmed: true, handoverLocation: body.location, handoverDate: body.date, handoverTime: body.time, handoverOtp: '123456' }; send(state.transaction); return true; }
+  if (path === '/marketplace/transactions/demo-transaction/cancel') { await readJson(req); state.transaction = { ...state.transaction, status: 'CANCELLED' }; send(state.transaction); return true; }
+  if (path === '/marketplace/transactions/demo-transaction/verify-handover') { await readJson(req); state.transaction = { ...state.transaction, status: 'COMPLETED' }; send({ success: true, message: 'Synthetic handover complete', transaction: state.transaction }); return true; }
+  if (path === '/lost-found/reports/demo-report/claims' && !get) { const body = await readJson(req); send({ ...claim, claimDetails: body.claimDetails, status: 'PENDING' }); return true; }
+  if (path === '/lost-found/claims/demo-claim/verify-handover') { await readJson(req); send({ ...claim, status: 'VERIFIED_HANDOVER' }); return true; }
+  if (path === '/notes/faculty/context') { send({ subjects: [note.subject], programs: [{ id: 'demo-program', code: 'BTECH-CSE', name: 'B.Tech Computer Science and Engineering' }] }); return true; }
+  return false;
+}

@@ -1,7 +1,10 @@
-import { Injectable, Logger, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'stream';
+import { assertPublicImageKey, isPublicImageContentType } from './public-image-policy';
+import type { PublicImageScope } from './public-image-policy';
 
 const DEFAULT_PLACEHOLDER_KEY = 'defaults/student-placeholder.png';
 
@@ -49,6 +52,21 @@ export class StrictR2StorageService {
 
   getDefaultPlaceholderKey(): string {
     return DEFAULT_PLACEHOLDER_KEY;
+  }
+
+  async uploadPendingProfilePhoto(buffer:Buffer, type:string, extension:string):Promise<string> {
+    const {client,bucket}=this.assertR2Client();
+    const key=`profile-requests/${randomUUID()}.${extension}`;
+    await client.send(new PutObjectCommand({Bucket:bucket,Key:key,Body:buffer,ContentType:type}));
+    return key;
+  }
+
+  async promoteProfilePhoto(key:string):Promise<string> {
+    if(!/^profile-requests\/[a-f0-9-]+\.(png|jpg|webp)$/.test(key)) throw new ForbiddenException('Invalid profile photo.');
+    const {client,bucket}=this.assertR2Client();
+    const destination=`student-photos/${randomUUID()}.${key.split('.').pop()}`;
+    await client.send(new CopyObjectCommand({Bucket:bucket,Key:destination,CopySource:`${bucket}/${key}`}));
+    return destination;
   }
 
   async uploadStudentPhoto(
@@ -273,6 +291,17 @@ export class StrictR2StorageService {
     return DEFAULT_PLACEHOLDER_KEY;
   }
 
+  async getPublicImageStream(key: string, scope: PublicImageScope): Promise<{ stream: Readable; contentType: string }> {
+    assertPublicImageKey(key, scope);
+    const result = await this.getObjectStream(key);
+    if (!isPublicImageContentType(result.contentType)) {
+      result.stream.destroy();
+      throw new ForbiddenException('Only supported raster images can be delivered publicly.');
+    }
+    return result;
+  }
+
+  // Internal reads for resource-authorized document routes and image delivery.
   async getObjectStream(key: string): Promise<{ stream: Readable; contentType: string }> {
     const safeKey = key || DEFAULT_PLACEHOLDER_KEY;
     

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, Matches, IsString, MaxLength } from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({
@@ -8,6 +8,7 @@ export class LoginDto {
   })
   @IsNotEmpty()
   @IsEmail()
+  @MaxLength(254)
   @Matches(/^[a-zA-Z0-9._%+-]+@bit\.ac\.in$/, {
     message: 'Only official BIT email addresses are allowed.',
   })
@@ -18,5 +19,7 @@ export class LoginDto {
     description: 'User Password',
   })
   @IsNotEmpty()
+  @IsString()
+  @MaxLength(256)
   password!: string;
 }

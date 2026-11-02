@@ -40,7 +40,9 @@ export class RolesGuard implements CanActivate {
       );
     }
 
-    if (!requiredRoles.includes(user.role)) {
+    // JWT sessions can carry either a role code or the serialized role object.
+    const roleCode = typeof user.role === 'string' ? user.role : user.role?.code;
+    if (!roleCode || !requiredRoles.includes(roleCode)) {
       throw new ForbiddenException(
         'You do not have permission to perform this action.',
       );

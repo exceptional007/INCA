@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Download, FileText, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import type { LearningNote } from '@/types';
 import api from '@/api/axios';
+import { DocxPreview } from './DocxPreview';
 
 interface DocumentPreviewModalProps {
   note: LearningNote | null;
@@ -27,7 +28,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const docxContainerRef = useRef<HTMLDivElement>(null);
+  const [docxBlob, setDocxBlob] = useState<Blob | null>(null);
 
   const isDocx =
     note?.originalFilename?.toLowerCase().endsWith('.docx') ||
@@ -48,54 +49,37 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     }
 
     let active = true;
+    let objectUrl: string | null = null;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
-
+    setBlobUrl(null);
+    setDocxBlob(null);
     const loadDocument = async () => {
       try {
         const response = await api.get(`/notes/${note.id}/preview`, {
-          responseType: 'blob',
+          responseType: 'blob', signal: controller.signal,
         });
-
         if (!active) return;
-
-        const blob = response.data;
-        const url = URL.createObjectURL(blob);
-        setBlobUrl(url);
-
-        if (isDocx && docxContainerRef.current) {
-          try {
-            const docxPreview = await import('docx-preview');
-            const arrayBuffer = await blob.arrayBuffer();
-            if (docxContainerRef.current && active) {
-              docxContainerRef.current.innerHTML = '';
-              await docxPreview.renderAsync(arrayBuffer, docxContainerRef.current, undefined, {
-                className: 'docx-viewer-content',
-                inWrapper: false,
-                ignoreWidth: false,
-                ignoreHeight: false,
-              });
-            }
-          } catch (renderErr: any) {
-            console.warn('DOCX direct rendering error:', renderErr);
-            setError('DOCX preview rendering is limited in browser. Please use the Download button below.');
-          }
+        if (isDocx) {
+          setDocxBlob(response.data);
+        } else {
+          objectUrl = URL.createObjectURL(response.data);
+          setBlobUrl(objectUrl);
         }
       } catch (err: any) {
-        if (!active) return;
-        setError(err.response?.data?.message || 'Failed to load document preview.');
+        if (active) setError(err.response?.data?.message || 'Failed to load document preview.');
       } finally {
         if (active) setLoading(false);
       }
     };
-
-    loadDocument();
-
+    void loadDocument();
     return () => {
       active = false;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [isOpen, note?.id]);
+  }, [isOpen, note?.id, note?.storageKey, note?.updatedAt, isDocx, isDrive]);
 
   if (!note) return null;
 
@@ -103,8 +87,8 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-5xl h-[88vh] flex flex-col p-0 overflow-hidden bg-background border-border">
         {/* Header */}
-        <DialogHeader className="p-4 border-b border-border flex flex-row items-center justify-between shrink-0 bg-card">
-          <div className="flex items-center gap-3 min-w-0 pr-4">
+        <DialogHeader className="p-4 pr-12 border-b border-border flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between shrink-0 bg-card text-left">
+          <div className="flex w-full min-w-0 max-w-full items-center gap-3 sm:flex-1">
             <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <FileText className="size-5" />
             </div>
@@ -153,7 +137,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
         </DialogHeader>
 
         {/* Content area */}
-        <div className="flex-1 relative overflow-auto bg-muted/20">
+        <div className="flex-1 min-h-0 relative overflow-auto bg-muted/20">
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 z-20">
               <Loader2 className="size-8 animate-spin text-primary" />
@@ -200,8 +184,8 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
           {!isDrive && !loading && !error && (
             <>
               {isDocx ? (
-                <div className="p-8 max-w-4xl mx-auto bg-card my-6 shadow-sm border border-border rounded-xl min-h-[500px]">
-                  <div ref={docxContainerRef} className="prose prose-sm dark:prose-invert max-w-none" />
+                <div className="p-2 sm:p-6 min-h-full">
+                  {docxBlob && <DocxPreview key={`${note.id}:${note.updatedAt}`} blob={docxBlob} />}
                 </div>
               ) : (
                 blobUrl && (

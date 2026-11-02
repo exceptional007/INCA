@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleGenAI } from '@google/genai';
@@ -310,7 +310,24 @@ Respond ONLY with a valid JSON object in this exact format (no markdown formatti
   /**
    * User or Staff updates match status (e.g. VERIFIED_MATCH or REJECTED).
    */
-  async reviewMatch(matchId: string, userId: string, status: MatchStatus) {
+  async reviewMatch(matchId: string, userId: string, status: MatchStatus, userRoles: string[]) {
+    if (!userId) throw new ForbiddenException('Authenticated reviewer required.');
+
+    const match = await this.prisma.lostFoundMatch.findUnique({
+      where: { id: matchId },
+      select: {
+        lostReport: { select: { reporterId: true } },
+        foundReport: { select: { reporterId: true } },
+      },
+    });
+    if (!match) throw new NotFoundException('Match not found.');
+
+    const isOwner = match.lostReport.reporterId === userId || match.foundReport.reporterId === userId;
+    const isStaff = userRoles?.some(role => ['ADMIN', 'SUPER_ADMIN', 'FACULTY'].includes(role));
+    if (!isOwner && !isStaff) {
+      throw new ForbiddenException('Only the lost or found report owner or campus staff can review this match.');
+    }
+
     return this.prisma.lostFoundMatch.update({
       where: { id: matchId },
       data: {

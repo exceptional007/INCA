@@ -11,7 +11,7 @@ describe('StorageController', () => {
 
   beforeEach(async () => {
     mockR2Storage = {
-      getObjectStream: jest.fn().mockImplementation(async (key: string) => {
+      getPublicImageStream: jest.fn().mockImplementation(async (key: string) => {
         const stream = new Readable({
           read() {
             this.push(Buffer.from('mock-data'));
@@ -49,14 +49,14 @@ describe('StorageController', () => {
       } as unknown as Response;
 
       const pipeSpy = jest.fn();
-      (mockR2Storage.getObjectStream as jest.Mock).mockResolvedValueOnce({
+      (mockR2Storage.getPublicImageStream as jest.Mock).mockResolvedValueOnce({
         stream: { pipe: pipeSpy },
         contentType: 'image/png',
       });
 
-      await controller.streamByQuery('sample/nested/image.png', res);
+      await controller.streamByQuery('lost-found/nested/image.png', res);
 
-      expect(mockR2Storage.getObjectStream).toHaveBeenCalledWith('sample/nested/image.png');
+      expect(mockR2Storage.getPublicImageStream).toHaveBeenCalledWith('lost-found/nested/image.png', 'campus');
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png');
       expect(res.setHeader).toHaveBeenCalledWith(
         'Cache-Control',
@@ -80,14 +80,14 @@ describe('StorageController', () => {
       } as unknown as Response;
 
       const pipeSpy = jest.fn();
-      (mockR2Storage.getObjectStream as jest.Mock).mockResolvedValueOnce({
+      (mockR2Storage.getPublicImageStream as jest.Mock).mockResolvedValueOnce({
         stream: { pipe: pipeSpy },
         contentType: 'image/jpeg',
       });
 
-      await controller.streamPhoto('photo123.jpg', res);
+      await controller.streamPhoto('student-photos/photo123.jpg', res);
 
-      expect(mockR2Storage.getObjectStream).toHaveBeenCalledWith('photo123.jpg');
+      expect(mockR2Storage.getPublicImageStream).toHaveBeenCalledWith('student-photos/photo123.jpg', 'campus');
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
       expect(pipeSpy).toHaveBeenCalledWith(res);
     });
@@ -98,15 +98,15 @@ describe('StorageController', () => {
       } as unknown as Response;
 
       const pipeSpy = jest.fn();
-      (mockR2Storage.getObjectStream as jest.Mock).mockResolvedValueOnce({
+      (mockR2Storage.getPublicImageStream as jest.Mock).mockResolvedValueOnce({
         stream: { pipe: pipeSpy },
         contentType: 'image/webp',
       });
 
       await controller.streamPhoto(['lost-found', 'items', 'wallet.webp'], res);
 
-      expect(mockR2Storage.getObjectStream).toHaveBeenCalledWith(
-        'lost-found/items/wallet.webp',
+      expect(mockR2Storage.getPublicImageStream).toHaveBeenCalledWith(
+        'lost-found/items/wallet.webp', 'campus',
       );
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/webp');
       expect(pipeSpy).toHaveBeenCalledWith(res);

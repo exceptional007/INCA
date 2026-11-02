@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local attendance storage checks</title></head><body>
+<h1>Synthetic attendance storage checks</h1><button id="run">Run storage checks</button><pre id="results"></pre>
+<script type="module">
+import { readPacks, writePack, campusDay } from '/src/offline/attendance-store.ts';
+document.querySelector('#run').onclick = async () => {
+  const output = document.querySelector('#results'); output.textContent = '';
+  const check = (condition, message) => { if (!condition) throw Error(message); output.textContent += 'PASS: ' + message + '\n'; };
+  try {
+    const owner = 'synthetic-storage-' + crypto.randomUUID();
+    const pack = await writePack({ key: owner + ':class', owner, day: campusDay(), schedule: { id: 'test' }, session: { id: 'test', status: 'OPEN' }, students: [{ id: 'one' }], marks: { one: 'ABSENT' }, baseline: '[]', revision: '', state: 'draft', savedAt: '' });
+    check((await readPacks(owner))[0].marks.one === 'ABSENT', 'Committed marks can be read back');
+    check((await readPacks(owner + '-other')).length === 0, 'Another account cannot read the roster through the account-scoped store');
+    const next = await writePack({ ...pack, state: 'pending' }, pack.revision);
+    let rejected = false;
+    try { await writePack({ ...pack, marks: { one: 'PRESENT' } }, pack.revision); } catch { rejected = true; }
+    check(rejected, 'A stale tab cannot overwrite a newer local submission');
+    check((await readPacks(owner))[0].revision === next.revision, 'Rejected writes preserve pending attendance');
+    let duplicate = false;
+    try { await writePack(pack); } catch { duplicate = true; }
+    check(duplicate, 'Concurrent preparation cannot replace an existing roster');
+  } catch (error) { output.textContent += 'FAIL: ' + error.message; }
+};
+</script></body></html>

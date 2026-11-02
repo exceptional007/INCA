@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -86,9 +86,12 @@ interface CardSwipeAttendanceProps {
   attendanceMap: Record<string, 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'>;
   onMarkStatus: (studentId: string, status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED') => void;
   isLocked?: boolean;
+  lockedMessage?: string;
   onSubmit: () => void;
   isSubmitting?: boolean;
   onReloadStudents?: () => void;
+  keyboardEnabled?: boolean;
+  demonstrationStep?: { id: number; status: 'PRESENT' | 'ABSENT' };
 }
 
 export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
@@ -96,11 +99,17 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
   attendanceMap,
   onMarkStatus,
   isLocked = false,
+  lockedMessage = 'Attendance Locked & Submitted',
   onSubmit,
   isSubmitting = false,
   onReloadStudents,
+  keyboardEnabled = true,
+  demonstrationStep,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const editingDisabled = isLocked || isSubmitting;
+  const lastDemonstrationStep = useRef<number | undefined>(undefined);
 
   // Drag physics motion values with improved spring and rotation response
   const x = useMotionValue(0);
@@ -140,7 +149,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
   }, [currentIndex, x]);
 
   const handleMark = useCallback((status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED', triggerAnim = true) => {
-    if (!currentStudent || isLocked) return;
+    if (!currentStudent || editingDisabled) return;
 
     onMarkStatus(currentStudent.id, status);
 
@@ -162,13 +171,23 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
     } else {
       handleNext();
     }
-  }, [currentStudent, isLocked, onMarkStatus, x, handleNext]);
+  }, [currentStudent, editingDisabled, onMarkStatus, x, handleNext]);
+
+  useEffect(() => {
+    if (!demonstrationStep || demonstrationStep.id === lastDemonstrationStep.current) return;
+    lastDemonstrationStep.current = demonstrationStep.id;
+    handleMark(demonstrationStep.status);
+  }, [demonstrationStep, handleMark]);
 
   // Keyboard shortcut listener for rapid grading
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!keyboardEnabled) return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const activeDialog = Array.from(document.querySelectorAll('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')).at(-1);
+      if (activeDialog && !activeDialog.contains(rootRef.current)) return;
       // Don't intercept if an input or modal is focused
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable) {
         return;
       }
 
@@ -199,11 +218,11 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleMark, handlePrev, handleNext, isAtSummary]);
+  }, [handleMark, handlePrev, handleNext, isAtSummary, keyboardEnabled]);
 
   // Handle Drag End physics with responsive threshold and smooth spring release
   const onDragEnd = (_: any, info: any) => {
-    if (isLocked) {
+    if (editingDisabled) {
       animate(x, 0, { type: 'spring', stiffness: 350, damping: 25 });
       return;
     }
@@ -250,11 +269,11 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
   const currentStatus = currentStudent ? attendanceMap[currentStudent.id] : undefined;
 
   return (
-    <div className="space-y-4 max-w-xl mx-auto w-full">
+    <div ref={rootRef} className="space-y-4 max-w-xl mx-auto w-full min-w-0">
       {/* Top Controls Bar */}
-      <div className="flex items-center justify-between gap-3 text-xs bg-card p-3 rounded-xl border border-border shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-card p-3 rounded-xl border border-border shadow-xs">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-foreground">
               {isAtSummary ? 'Attendance Summary' : `Student ${currentIndex + 1} of ${total}`}
             </span>
@@ -278,7 +297,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
         </div>
 
         {/* Live Counters */}
-        <div className="flex items-center gap-1.5 text-[11px] font-medium">
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
           <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 px-2">
             {presentCount} P
           </Badge>
@@ -363,22 +382,24 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
             </div>
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 divide-y divide-border/30 border border-border rounded-xl p-2 bg-muted/20">
               {studentList.map((st, idx) => {
-                const stStatus = attendanceMap[st.id] || 'PRESENT';
+                const stStatus = attendanceMap[st.id];
                 return (
-                  <div key={st.id} className="flex items-center justify-between py-1.5 px-2 hover:bg-muted/40 rounded-lg transition-colors text-xs">
-                    <div className="flex items-center gap-2">
+                  <div key={st.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-1.5 px-2 hover:bg-muted/40 rounded-lg transition-colors text-xs">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className="text-muted-foreground font-mono text-[11px] w-4">{idx + 1}.</span>
                       <span className="font-semibold text-foreground">{st.firstName} {st.lastName || ''}</span>
                       <span className="text-muted-foreground font-mono text-[10px]">({st.rollNumber})</span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1">
                       {(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'] as const).map((s) => (
                         <button
                           key={s}
                           type="button"
-                          disabled={isLocked}
+                          disabled={editingDisabled}
+                          aria-label={`Mark ${st.firstName} ${st.lastName || ''} ${s.toLowerCase()}`}
+                          aria-pressed={stStatus === s}
                           onClick={() => onMarkStatus(st.id, s)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          className={`min-h-9 min-w-9 px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                             stStatus === s
                               ? s === 'PRESENT'
                                 ? 'bg-emerald-600 text-white shadow-xs'
@@ -416,13 +437,13 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
             {isLocked ? (
               <Badge variant="destructive" className="py-2 px-4 text-xs font-bold gap-1.5">
                 <Lock className="w-3.5 h-3.5" />
-                Attendance Locked & Submitted
+                {lockedMessage}
               </Badge>
             ) : (
               <Button
                 type="button"
                 size="default"
-                disabled={isSubmitting}
+                disabled={isSubmitting || markedCount < total || total === 0}
                 onClick={onSubmit}
                 className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shadow-md h-9 px-4"
               >
@@ -455,8 +476,8 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
           {/* Active Card */}
           <motion.div
             key={currentStudent?.id || currentIndex}
-            style={{ x, rotate, scale: cardScale }}
-            drag={isLocked ? false : 'x'}
+            style={{ x, rotate, scale: cardScale, touchAction: 'pan-y' }}
+            drag={editingDisabled ? false : 'x'}
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.65}
             onDragEnd={onDragEnd}
@@ -490,10 +511,10 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
               <XCircle className="w-6 h-6" /> ABSENT
             </motion.div>
 
-            <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
+            <CardContent className="p-3 sm:p-6 flex flex-col items-center text-center space-y-4">
               {/* Student Photo Container */}
-              <div className="relative group">
-                <div className="w-52 h-52 sm:w-56 sm:h-56 rounded-2xl overflow-hidden bg-secondary/50 border-2 border-border shadow-inner flex items-center justify-center relative">
+              <div className="relative group w-44 max-w-full sm:w-56">
+                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-secondary/50 border-2 border-border shadow-inner flex items-center justify-center relative">
                   {currentStudent && <StudentCardPhoto student={currentStudent} />}
                 </div>
 
@@ -534,7 +555,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
               <div className="grid grid-cols-2 gap-3 w-full pt-2">
                 <Button
                   type="button"
-                  disabled={isLocked}
+                  disabled={editingDisabled}
                   onClick={() => handleMark('ABSENT')}
                   variant="outline"
                   className="h-14 border-2 border-rose-500/40 hover:bg-rose-500/10 text-rose-600 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 shadow-sm font-bold text-sm"
@@ -548,7 +569,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
 
                 <Button
                   type="button"
-                  disabled={isLocked}
+                  disabled={editingDisabled}
                   onClick={() => handleMark('PRESENT')}
                   className="h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 shadow-sm font-bold text-sm"
                 >
@@ -561,14 +582,14 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
               </div>
 
               {/* Secondary Parity Actions: Late & Excused */}
-              <div className="w-full flex items-center justify-between gap-2 pt-1 border-t border-border/60">
+              <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-1 border-t border-border/60">
                 <span className="text-[11px] text-muted-foreground font-medium">Other Statuses:</span>
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={isLocked}
+                    disabled={editingDisabled}
                     onClick={() => handleMark('LATE')}
                     className={`h-7 px-2.5 text-xs font-medium border-amber-500/40 transition-colors ${
                       currentStatus === 'LATE' ? 'bg-amber-500 text-white' : 'text-amber-600 hover:bg-amber-500/10'
@@ -582,7 +603,7 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={isLocked}
+                    disabled={editingDisabled}
                     onClick={() => handleMark('EXCUSED')}
                     className={`h-7 px-2.5 text-xs font-medium border-blue-500/40 transition-colors ${
                       currentStatus === 'EXCUSED' ? 'bg-blue-500 text-white' : 'text-blue-600 hover:bg-blue-500/10'
@@ -677,14 +698,14 @@ export const CardSwipeAttendance: React.FC<CardSwipeAttendanceProps> = ({
         <div className="w-full sm:w-auto flex justify-end">
           {isLocked ? (
             <Badge variant="destructive" className="py-1 px-3 text-xs flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Session Locked
+              <Lock className="w-3 h-3" /> {lockedMessage}
             </Badge>
           ) : (
             <Button
               type="button"
               size="sm"
               onClick={onSubmit}
-              disabled={isSubmitting || markedCount === 0}
+              disabled={isSubmitting || markedCount < total || total === 0}
               className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 w-full sm:w-auto"
             >
               {isSubmitting ? (

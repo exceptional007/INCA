@@ -1,0 +1,11 @@
+[build]
+  base = "frontend"
+  command = "npm run build:netlify"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+  VITE_AUTH_API_URL = "/api/v1"
+
+# The build generates auth-proxy and SPA routes in dist/_redirects using VITE_API_URL.
+# Never add backend credentials to Netlify's VITE_* variables.

@@ -16,10 +16,13 @@ import { CreateAdminDto } from '../auth/dto/create-admin.dto';
 import { UpdateAdminDto } from '../auth/dto/update-admin.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @ApiTags('Super Admin')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SUPER_ADMIN')
 @Controller('super-admin')
 export class SuperAdminController {
   constructor(private readonly superAdminService: SuperAdminService) {}

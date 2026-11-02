@@ -1,0 +1,47 @@
+# Backend only. The frontend is deployed separately on Netlify.
+services:
+  - type: web
+    name: inca-api
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run prisma:generate && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_COOKIE_SAME_SITE
+        value: lax
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: PASSWORD_MAIL_PROVIDER
+        value: google-apps-script
+      - key: PASSWORD_MAIL_API_URL
+        sync: false
+      - key: PASSWORD_MAIL_API_KEY
+        sync: false

@@ -203,6 +203,36 @@ export class QuizService {
     });
   }
 
+  async getStudentQuizAttempt(studentId: string, noteId: string, attemptId: string) {
+    const attempt = await this.prisma.quizAttempt.findFirst({
+      where: { id: attemptId, studentId, quiz: { noteId } },
+      include: { quiz: true },
+    });
+    if (!attempt) throw new NotFoundException('Quiz result not found.');
+
+    const questions = attempt.quiz.questions as unknown as QuizQuestion[];
+    const answers = attempt.answers as Record<string, string>;
+    const review = questions.map((question) => {
+      const selected = (answers[question.id] || '').trim();
+      return {
+        ...question,
+        selectedAnswer: selected || null,
+        isCorrect: this.isAnswerCorrect(selected, question.correctAnswer.trim()),
+      };
+    });
+    return {
+      attemptId: attempt.id,
+      quizId: attempt.quizId,
+      noteId,
+      score: attempt.score,
+      totalQuestions: attempt.totalQuestions,
+      correctCount: review.filter((item) => item.isCorrect).length,
+      passed: attempt.passed,
+      completedAt: attempt.completedAt,
+      review,
+    };
+  }
+
   private isAnswerCorrect(selected: string, expected: string): boolean {
     if (!selected || !expected) return false;
     const s = selected.toLowerCase().trim();

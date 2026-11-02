@@ -1,3 +1,5 @@
+import { CreateStudentDialog } from './CreateStudentDialog';
+import { generateInitialPassword, useInitialCredentials } from '@/components/useInitialCredentials';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -193,6 +195,7 @@ const StudentAvatar: React.FC<StudentAvatarProps> = ({ photoKey, alt, className 
 // --- Page component -------------------------------------------------------
 
 export const AcademicPage: React.FC = () => {
+  const { showCredentials, credentialsDialog } = useInitialCredentials();
   const { user } = useAuth();
   const isSuperAdmin = user?.role?.code === 'SUPER_ADMIN';
   const isAdmin = user?.role?.code === 'ADMIN';
@@ -710,7 +713,7 @@ export const AcademicPage: React.FC = () => {
     try {
       const payload: any = {
         email: values.email.trim(),
-        password: values.password?.trim() || 'Password123!',
+        password: values.password?.trim() || generateInitialPassword(),
         employeeCode: values.employeeCode.trim().toUpperCase(),
         firstName: values.firstName.trim(),
         gender: values.gender || 'MALE',
@@ -726,6 +729,7 @@ export const AcademicPage: React.FC = () => {
         payload.phone = values.phone.trim();
       }
       await api.post('/faculty/accounts', payload);
+      showCredentials(payload.email, payload.password);
       toast.success('Faculty account created successfully.');
       setCreateFacultyDialogOpen(false);
       fetchData();
@@ -800,36 +804,6 @@ export const AcademicPage: React.FC = () => {
   };
 
   // Student CRUD Handlers
-  const handleCreateStudent = async (values: StudentValues) => {
-    try {
-      const payload: any = {
-        email: values.email.trim(),
-        password: values.password?.trim() || 'Password123!',
-        rollNumber: values.rollNumber.trim().toUpperCase(),
-        collegeId: values.collegeId.trim().toUpperCase(),
-        enrollmentNumber: 'ENR-' + values.rollNumber.trim().toUpperCase() + '-' + Date.now().toString().slice(-4),
-        firstName: values.firstName.trim(),
-        gender: values.gender || 'MALE',
-      };
-      if (values.lastName && values.lastName.trim()) payload.lastName = values.lastName.trim();
-      if (values.photoKey) payload.photoKey = values.photoKey;
-      if (values.bloodGroup) payload.bloodGroup = mapBloodGroupToEnum(values.bloodGroup);
-      if (values.emergencyContactName?.trim()) payload.emergencyContactName = values.emergencyContactName.trim();
-      if (values.emergencyContactPhone?.trim()) payload.emergencyContactPhone = values.emergencyContactPhone.trim();
-      if (values.address?.trim()) payload.address = values.address.trim();
-      if (values.departmentId) payload.departmentId = values.departmentId;
-
-      await api.post('/students/accounts', payload);
-      toast.success('Student account created successfully.');
-      setCreateStudentDialogOpen(false);
-      fetchData();
-    } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to create student account.';
-      toast.error(msg);
-      throw err;
-    }
-  };
-
   const handleUpdateStudent = async (values: StudentValues) => {
     if (!editingStudent) return;
     try {
@@ -1516,6 +1490,7 @@ export const AcademicPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {credentialsDialog}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Academic Master Data</h1>
@@ -1523,7 +1498,7 @@ export const AcademicPage: React.FC = () => {
             Manage institutional departments, programs, subjects, rooms, faculty, and students
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           {['departments', 'programs', 'subjects', 'faculty', 'students'].includes(activeTab) && (
             <Button
               variant={showInactive ? 'secondary' : 'outline'}
@@ -1569,7 +1544,7 @@ export const AcademicPage: React.FC = () => {
               Add Faculty
             </Button>
           )}
-          {activeTab === 'students' && (isSuperAdmin || isAdmin) && (
+          {activeTab === 'students' && (isSuperAdmin || isAdmin || user?.role?.code === 'HOD') && (
             <Button onClick={() => setCreateStudentDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Student
@@ -1726,7 +1701,7 @@ export const AcademicPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-muted/40 rounded-lg border border-border">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
             {/* Search Input */}
-            <div className="relative min-w-[200px] max-w-xs flex-1">
+            <div className="relative min-w-0 w-full sm:min-w-[200px] max-w-xs flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search name, employee code..."
@@ -1755,7 +1730,7 @@ export const AcademicPage: React.FC = () => {
                 </select>
               </div>
             ) : (
-              <div className="flex items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
+              <div className="flex max-w-full flex-wrap items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
                 <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="text-xs font-medium text-foreground whitespace-nowrap">Assigned Department:</span>
                 <Badge variant="secondary" className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-0.5">
@@ -1772,7 +1747,7 @@ export const AcademicPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-muted/40 rounded-lg border border-border">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
             {/* Search Input */}
-            <div className="relative min-w-[200px] max-w-xs flex-1">
+            <div className="relative min-w-0 w-full sm:min-w-[200px] max-w-xs flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search name, roll no, college ID..."
@@ -1801,7 +1776,7 @@ export const AcademicPage: React.FC = () => {
                 </select>
               </div>
             ) : (
-              <div className="flex items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
+              <div className="flex max-w-full flex-wrap items-center gap-2 px-2.5 py-1 bg-background rounded-md border border-input">
                 <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="text-xs font-medium text-foreground whitespace-nowrap">Assigned Department:</span>
                 <Badge variant="secondary" className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-0.5">
@@ -2326,7 +2301,7 @@ export const AcademicPage: React.FC = () => {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="year"
@@ -2463,7 +2438,7 @@ export const AcademicPage: React.FC = () => {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="year"
@@ -2617,7 +2592,7 @@ export const AcademicPage: React.FC = () => {
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="capacity"
@@ -2716,7 +2691,7 @@ export const AcademicPage: React.FC = () => {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="capacity"
@@ -2812,14 +2787,14 @@ export const AcademicPage: React.FC = () => {
           designation: 'Assistant Professor',
           departmentId: isAdmin ? ((user as any)?.adminProfile?.departmentId || (user as any)?.departmentId || '') : '',
           gender: 'MALE',
-          password: 'Password123!',
+          password: '',
         }}
         onSubmit={handleCreateFaculty}
         submitLabel="Create Faculty"
       >
         {(form) => (
           <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="firstName"
@@ -2847,7 +2822,7 @@ export const AcademicPage: React.FC = () => {
                 )}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="employeeCode"
@@ -2923,7 +2898,7 @@ export const AcademicPage: React.FC = () => {
                 )}
               />
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="gender"
@@ -2951,7 +2926,7 @@ export const AcademicPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Initial Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Password123!" {...field} />
+                      <Input type="password" placeholder="Leave blank to generate a unique password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -2985,7 +2960,7 @@ export const AcademicPage: React.FC = () => {
         >
           {(form) => (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="firstName"
@@ -3013,7 +2988,7 @@ export const AcademicPage: React.FC = () => {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="employeeCode"
@@ -3128,319 +3103,15 @@ export const AcademicPage: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Create Student Dialog */}
-      <FormDialog<typeof studentSchema>
+      <CreateStudentDialog
         open={createStudentDialogOpen}
-        onOpenChange={(open) => {
-          setCreateStudentDialogOpen(open);
-          if (!open) {
-            if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-            setPhotoPreviewUrl(null);
-            setPhotoUploading(false);
-          }
+        onOpenChange={setCreateStudentDialogOpen}
+        onCreated={(email, password) => {
+          showCredentials(email, password);
+          toast.success('Student profile and account saved successfully.');
+          fetchData();
         }}
-        title="Add New Student"
-        description="Register a new student profile and login account."
-        schema={studentSchema}
-        className="sm:max-w-2xl"
-        defaultValues={{
-          firstName: '',
-          lastName: '',
-          email: '',
-          rollNumber: '',
-          collegeId: '',
-          departmentId: isAdmin ? ((user as any)?.adminProfile?.departmentId || (user as any)?.departmentId || '') : '',
-          gender: 'MALE',
-          password: 'Password123!',
-        }}
-        onSubmit={handleCreateStudent}
-        submitLabel="Create Student"
-      >
-        {(form) => (
-          <>
-            {/* Photo Upload (Optional) */}
-            <div className="border border-dashed border-border rounded-lg p-4 space-y-2 bg-muted/20">
-              <div className="flex items-start gap-4">
-                <div className="shrink-0">
-                  {photoPreviewUrl ? (
-                    <img
-                      src={photoPreviewUrl}
-                      alt="Student Photo Preview"
-                      className="w-24 h-24 rounded-lg object-cover border-2 border-border bg-background"
-                    />
-                  ) : (
-                    <div className="w-24 h-24 rounded-lg border-2 border-dashed border-border bg-muted/40 flex flex-col items-center justify-center text-muted-foreground">
-                      <GraduationCap className="w-8 h-8 mb-1 opacity-60" />
-                      <span className="text-[10px]">No photo</span>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2 flex-1 min-w-0">
-                  <span className="text-sm font-semibold block">Profile Photo (Cloudflare R2 - Optional)</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    disabled={photoUploading}
-                    className="text-xs w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > 5 * 1024 * 1024) {
-                        toast.error('Photo size must be ≤ 5MB.');
-                        return;
-                      }
-                      // Instant local preview
-                      const localUrl = URL.createObjectURL(file);
-                      setPhotoPreviewUrl(localUrl);
-
-                      const formData = new FormData();
-                      formData.append('file', file);
-                      setPhotoUploading(true);
-                      try {
-                        const res = await api.post('/students/upload-photo', formData, {
-                          headers: { 'Content-Type': 'multipart/form-data' },
-                        });
-                        if (res.data?.success) {
-                          form.setValue('photoKey', res.data.data.photoKey);
-                          toast.success('Photo uploaded to R2!');
-                        }
-                      } catch (err: any) {
-                        toast.error(err.response?.data?.message || 'Photo upload failed.');
-                      } finally {
-                        setPhotoUploading(false);
-                      }
-                    }}
-                  />
-                  {photoUploading && (
-                    <span className="text-xs text-muted-foreground animate-pulse">Uploading…</span>
-                  )}
-                  <p className="text-[10px] text-muted-foreground">JPG, PNG, or WebP · Max 5 MB</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Form Fields Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>First Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Priya" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Last Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Singh" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="rollNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Roll Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. 10123" {...field} className="uppercase" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="collegeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>College ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. BIT/2026/001" {...field} className="uppercase" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Official Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="student@bit.ac.in" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {isAdmin ? (
-                <div className="space-y-2">
-                  <Label>Department</Label>
-                  <Input
-                    value={(user as any)?.adminProfile?.department?.name || (user as any)?.departmentName || 'Assigned Department'}
-                    disabled
-                    className="bg-muted text-muted-foreground font-medium cursor-not-allowed"
-                  />
-                </div>
-              ) : (
-                <FormField
-                  control={form.control}
-                  name="departmentId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Department</FormLabel>
-                      <FormControl>
-                        <select
-                          {...field}
-                          className="w-full text-xs bg-background border border-input rounded-md px-3 py-2 font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                        >
-                          <option value="">Select Department</option>
-                          {departments.map((dept) => (
-                            <option key={dept.id} value={dept.id}>
-                              {dept.name} ({dept.code})
-                            </option>
-                          ))}
-                        </select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="gender"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Gender</FormLabel>
-                    <FormControl>
-                      <select
-                        {...field}
-                        className="w-full text-xs bg-background border border-input rounded-md px-3 py-2 font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                      >
-                        <option value="MALE">Male</option>
-                        <option value="FEMALE">Female</option>
-                        <option value="OTHER">Other</option>
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Initial Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Password123!" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="bloodGroup"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Blood Group</FormLabel>
-                    <FormControl>
-                      <select
-                        {...field}
-                        className="w-full text-xs bg-background border border-input rounded-md px-3 py-2 font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                      >
-                        <option value="">Select Blood Group</option>
-                        <option value="A+">A+</option>
-                        <option value="A-">A-</option>
-                        <option value="B+">B+</option>
-                        <option value="B-">B-</option>
-                        <option value="AB+">AB+</option>
-                        <option value="AB-">AB-</option>
-                        <option value="O+">O+</option>
-                        <option value="O-">O-</option>
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="emergencyContactPhone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Emergency Contact Phone</FormLabel>
-                    <FormControl>
-                      <Input placeholder="10-digit phone" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="emergencyContactName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Emergency Contact Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Parent / Guardian Name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Residential Address</FormLabel>
-                  <FormControl>
-                    <textarea
-                      {...field}
-                      rows={2}
-                      placeholder="Full residential address (street, city, state, pin code)"
-                      className="w-full text-xs bg-background border border-input rounded-md px-3 py-2 font-medium focus:outline-none focus:ring-1 focus:ring-primary min-h-[60px] resize-y"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </>
-        )}
-      </FormDialog>
+      />
 
       {/* Edit Student Dialog */}
       {editingStudent && (
@@ -3797,7 +3468,7 @@ export const AcademicPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <span className="font-semibold text-muted-foreground">Enrollment No</span>
                       <p className="font-mono text-foreground">{detailItem.item.enrollmentNumber || '—'}</p>
@@ -3847,7 +3518,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'faculty' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Full Name</span>
                     <p className="font-medium text-foreground">{`${detailItem.item.firstName || ''} ${detailItem.item.lastName || ''}`.trim() || '—'}</p>
@@ -3886,7 +3557,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'programs' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Program Name</span>
                     <p className="font-medium text-foreground">{detailItem.item.name || '—'}</p>
@@ -3915,7 +3586,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'subjects' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Subject Name</span>
                     <p className="font-medium text-foreground">{detailItem.item.name || '—'}</p>
@@ -3955,7 +3626,7 @@ export const AcademicPage: React.FC = () => {
               )}
 
               {detailItem.type === 'rooms' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="font-semibold text-muted-foreground">Room Code</span>
                     <p className="font-mono font-medium text-foreground">{detailItem.item.code || '—'}</p>

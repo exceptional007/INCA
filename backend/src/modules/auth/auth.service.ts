@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { LoginDto } from './dto/login.dto';
 import { ApiResponse } from 'src/common/interfaces/api-response.interface';
 import { AuthRepository } from './repositories/auth.repository';
@@ -12,53 +13,45 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
+import { SessionService } from './session.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
+    private readonly sessions: SessionService,
   ) {}
 
   async login(loginDto: LoginDto): Promise<ApiResponse<any>> {
     const user = await this.authRepository.findUserByEmail(loginDto.email);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid email.');
+      await bcrypt.compare(
+        loginDto.password,
+        '$2b$12$C6UzMDM.H6dfI/f/IKcEe.1XI.xR5AiJFBVBZ8oXoVwS5sE.SD8Hy',
+      );
+      throw new UnauthorizedException('Invalid email or password.');
     }
+    if (!user.isActive || !user.role?.isActive)
+      throw new UnauthorizedException('Account or role is inactive.');
     const isPasswordValid = await bcrypt.compare(
       loginDto.password,
       user.password,
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid password.');
+      throw new UnauthorizedException('Invalid email or password.');
     }
-
-    const { password, ...userWithoutPassword } = user;
-
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role.code,
-    };
-
-    const accessToken = await this.jwtService.signAsync(payload);
 
     return {
       success: true,
       message: 'User authenticated successfully.',
-      data: {
-        accessToken,
-        user: userWithoutPassword,
-      },
+      data: await this.sessions.issue(user),
     };
   }
 
-  canManageRole(
-    actorRoleCode: string,
-    targetRoleCode: string,
-  ): boolean {
+  canManageRole(actorRoleCode: string, targetRoleCode: string): boolean {
     const permissions: Record<string, string[]> = {
       SUPER_ADMIN: ['ADMIN'],
       ADMIN: ['FACULTY', 'STUDENT', 'COORDINATOR'],
@@ -100,11 +93,17 @@ export class AuthService {
     // If target role is ADMIN, department is required and validated
     if (targetRole.code === 'ADMIN') {
       if (!dto.departmentId) {
-        throw new BadRequestException('departmentId is required for Admin accounts.');
+        throw new BadRequestException(
+          'departmentId is required for Admin accounts.',
+        );
       }
-      const dept = await this.authRepository.findDepartmentById(dto.departmentId);
+      const dept = await this.authRepository.findDepartmentById(
+        dto.departmentId,
+      );
       if (!dept || !dept.isActive) {
-        throw new BadRequestException('A valid, active department is required.');
+        throw new BadRequestException(
+          'A valid, active department is required.',
+        );
       }
       const hashedPassword = await bcrypt.hash(dto.password, 12);
       const user = await this.authRepository.createAdminUser({
@@ -165,12 +164,19 @@ export class AuthService {
 
   async createAdmin(
     creatorRoleCode: string,
-    dto: { name: string; email: string; departmentId: string; password?: string },
+    dto: {
+      name: string;
+      email: string;
+      departmentId: string;
+      password?: string;
+    },
   ) {
     this.assertCanManageRole(creatorRoleCode, 'ADMIN', 'create');
 
     if (!dto.departmentId) {
-      throw new BadRequestException('departmentId is required for Admin creation.');
+      throw new BadRequestException(
+        'departmentId is required for Admin creation.',
+      );
     }
 
     const dept = await this.authRepository.findDepartmentById(dto.departmentId);
@@ -188,7 +194,7 @@ export class AuthService {
       throw new NotFoundException('ADMIN role not found.');
     }
 
-    const password = dto.password || 'Admin@123';
+    const password = dto.password || randomBytes(24).toString('base64url');
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await this.authRepository.createAdminUser({
@@ -205,6 +211,7 @@ export class AuthService {
     });
 
     return {
+      ...(!dto.password ? { initialPassword: password } : {}),
       id: user.id,
       name: user.adminProfile?.name,
       email: user.email,
@@ -218,7 +225,12 @@ export class AuthService {
   async updateAdmin(
     actorRoleCode: string,
     id: string,
-    dto: { name?: string; email?: string; departmentId?: string; isActive?: boolean },
+    dto: {
+      name?: string;
+      email?: string;
+      departmentId?: string;
+      isActive?: boolean;
+    },
   ) {
     const targetUser = await this.authRepository.findAdminById(id);
     if (!targetUser) {
@@ -227,7 +239,9 @@ export class AuthService {
 
     // Strictly enforce that target user has role ADMIN
     if (targetUser.role.code !== 'ADMIN') {
-      throw new ForbiddenException('You are only authorized to manage ADMIN users.');
+      throw new ForbiddenException(
+        'You are only authorized to manage ADMIN users.',
+      );
     }
 
     this.assertCanManageRole(actorRoleCode, targetUser.role.code, 'edit');
@@ -241,9 +255,13 @@ export class AuthService {
 
     let deptName = targetUser.adminProfile?.department?.name;
     if (dto.departmentId) {
-      const dept = await this.authRepository.findDepartmentById(dto.departmentId);
+      const dept = await this.authRepository.findDepartmentById(
+        dto.departmentId,
+      );
       if (!dept || !dept.isActive) {
-        throw new BadRequestException('Department must be a valid, active department.');
+        throw new BadRequestException(
+          'Department must be a valid, active department.',
+        );
       }
       deptName = dept.name;
     }
@@ -288,7 +306,9 @@ export class AuthService {
     }
 
     if (targetUser.role.code !== 'ADMIN') {
-      throw new ForbiddenException('You are only authorized to manage ADMIN users.');
+      throw new ForbiddenException(
+        'You are only authorized to manage ADMIN users.',
+      );
     }
 
     this.assertCanManageRole(actorRoleCode, targetUser.role.code, 'edit');
@@ -314,7 +334,9 @@ export class AuthService {
     }
 
     if (targetUser.role.code !== 'ADMIN') {
-      throw new ForbiddenException('You are only authorized to delete ADMIN users.');
+      throw new ForbiddenException(
+        'You are only authorized to delete ADMIN users.',
+      );
     }
 
     this.assertCanManageRole(actorRoleCode, targetUser.role.code, 'delete');
@@ -332,16 +354,18 @@ export class AuthService {
     return { id };
   }
 
-  async getAllCoordinators() {
+  async getAllCoordinators(actorRoleCode: string) {
+    this.assertCanManageRole(actorRoleCode, 'COORDINATOR', 'view');
     const users = await this.authRepository.findCoordinators();
-    
+
     // Map coordinators to CoordinatorRecord interface
     return users.map((user) => {
       const emailPrefix = user.email.split('@')[0];
-      const name = emailPrefix
-        .split(/[._-]/)
-        .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
-        .join(' ') || 'Coordinator';
+      const name =
+        emailPrefix
+          .split(/[._-]/)
+          .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+          .join(' ') || 'Coordinator';
 
       return {
         id: user.id,
@@ -353,19 +377,24 @@ export class AuthService {
     });
   }
 
-  async createCoordinator(dto: { email: string; password?: string }) {
+  async createCoordinator(
+    actorRoleCode: string,
+    dto: { email: string; password?: string },
+  ) {
+    this.assertCanManageRole(actorRoleCode, 'COORDINATOR', 'create');
     const existingUser = await this.authRepository.findUserByEmail(dto.email);
     if (existingUser) {
       throw new ForbiddenException('A user with this email already exists.');
     }
 
-    const coordinatorRole = await this.authRepository.findRoleByCode('COORDINATOR');
+    const coordinatorRole =
+      await this.authRepository.findRoleByCode('COORDINATOR');
 
     if (!coordinatorRole) {
       throw new NotFoundException('COORDINATOR role not found.');
     }
 
-    const password = dto.password || 'Temp@12345';
+    const password = dto.password || randomBytes(24).toString('base64url');
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await this.authRepository.createUser({
@@ -375,25 +404,48 @@ export class AuthService {
     });
 
     const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return {
+      ...userWithoutPassword,
+      ...(!dto.password ? { initialPassword: password } : {}),
+    };
   }
 
-  async updateCoordinator(id: string, dto: { email?: string; password?: string }) {
-    const data: any = {};
+  private async assertCoordinatorTarget(
+    actorRoleCode: string,
+    id: string,
+    action: string,
+  ): Promise<void> {
+    this.assertCanManageRole(actorRoleCode, 'COORDINATOR', action);
+    const target = await this.authRepository.findUserById(id);
+    if (!target) {
+      throw new NotFoundException('Coordinator account not found.');
+    }
+    if (target.role.code !== 'COORDINATOR') {
+      throw new ForbiddenException(
+        'You are only authorized to manage COORDINATOR users.',
+      );
+    }
+  }
+
+  async updateCoordinator(
+    actorRoleCode: string,
+    id: string,
+    dto: { email?: string; password?: string },
+  ) {
+    await this.assertCoordinatorTarget(actorRoleCode, id, 'edit');
+    const data: { email?: string; password?: string } = {};
     if (dto.email) data.email = dto.email;
     if (dto.password) {
       data.password = await bcrypt.hash(dto.password, 12);
     }
-    
+
     const user = await this.authRepository.updateUser(id, data);
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
-  async deleteCoordinator(id: string) {
-    // We can either delete or deactivate. Let's do delete since the UI says "Record terminated"
-    // and terminates it.
+  async deleteCoordinator(actorRoleCode: string, id: string) {
+    await this.assertCoordinatorTarget(actorRoleCode, id, 'delete');
     return this.authRepository.deleteUser(id);
   }
 }
-

@@ -28,6 +28,7 @@ import { UpdateStudentDto } from './dto/update-student.dto';
 import { CreateStudentAccountDto } from './dto/create-student-account.dto';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { StudentRegistrationService } from './student-registration.service';
 
 @ApiTags('Students')
 @ApiBearerAuth('JWT-auth')
@@ -36,6 +37,7 @@ export class StudentController {
   constructor(
     private readonly studentService: StudentService,
     private readonly prisma: PrismaService,
+    private readonly registration: StudentRegistrationService,
   ) {}
 
   @Post()
@@ -148,6 +150,7 @@ export class StudentController {
     @Res() res: any,
   ) {
     const { stream, contentType } = await this.studentService.getPhotoStream(key);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     stream.pipe(res);
@@ -248,19 +251,28 @@ export class StudentController {
 
   @Post('accounts')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'HOD')
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 25 } }))
+  @ApiConsumes('application/json', 'multipart/form-data')
   @ApiOperation({
     summary: 'Create a student account',
   })
   async createStudentAccount(
     @Body() dto: CreateStudentAccountDto,
+    @Req() req: any,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
     return {
       success: true,
       message: 'Student account created successfully.',
-      data: await this.studentService.createStudentAccount(dto),
+      data: await this.registration.create(req.user.id, dto, file),
     };
   }
+
+  @Get('registration-options')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'HOD')
+  registrationOptions(@Req() req: any) { return this.registration.options(req.user.id); }
 
   @Get('my/attendance-summary')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -282,11 +294,10 @@ export class StudentController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'STUDENT')
   @ApiOperation({
-    summary: 'Get academic notices',
+    summary: 'Get the first 10 active notice-board announcements for the current account',
   })
   async getAcademicNotices(@Req() req: any) {
-    const userRole = req.user?.role?.code || req.user?.role;
-    const notices = await this.studentService.getAcademicNotices(req.user?.id, userRole);
+    const notices = await this.studentService.getAcademicNotices(req.user?.id);
     return {
       success: true,
       message: 'Academic notices retrieved successfully.',

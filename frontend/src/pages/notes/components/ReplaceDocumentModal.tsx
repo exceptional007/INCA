@@ -138,7 +138,7 @@ export const ReplaceDocumentModal: React.FC<ReplaceDocumentModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+          <div className="flex flex-col-reverse gap-2 pt-2 border-t border-border sm:flex-row sm:flex-wrap sm:justify-end">
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
               Cancel
             </Button>

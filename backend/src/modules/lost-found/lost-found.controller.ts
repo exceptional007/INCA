@@ -104,7 +104,7 @@ export class LostFoundController {
     @Param('id') matchId: string,
     @Body() dto: ReviewMatchDto,
   ) {
-    return this.matchingService.reviewMatch(matchId, req.user.id, dto.status);
+    return this.matchingService.reviewMatch(matchId, req.user.id, dto.status, this.extractUserRoles(req));
   }
 
   // ==========================================
@@ -149,6 +149,11 @@ export class LostFoundController {
   ) {
     const roles = this.extractUserRoles(req);
     return this.claimService.verifyClaimHandover(req.user.id, roles, claimId, dto);
+  }
+
+  @Post('claims/:id/regenerate-code')
+  async regenerateHandoverCode(@Req() req: any, @Param('id') claimId: string) {
+    return this.claimService.regenerateHandoverCode(req.user.id, claimId);
   }
 
   // ==========================================

@@ -22,7 +22,13 @@ export const USER_SAFE_SELECT = {
       firstName: true,
       lastName: true,
       rollNumber: true,
-      program: { select: { code: true, name: true } },
+      section: {
+        select: {
+          semester: {
+            select: { program: { select: { code: true, name: true } } },
+          },
+        },
+      },
     },
   },
   faculty: {
@@ -38,7 +44,7 @@ export const USER_SAFE_SELECT = {
       name: true,
     },
   },
-};
+} satisfies Prisma.UserSelect;
 
 export function formatUserName(user: any): string {
   if (!user) return 'Campus Member';
@@ -296,7 +302,7 @@ export class LostFoundService {
     const isOwner = report.reporterId === userId;
     const isStaff =
       userRoles.includes('ADMIN') ||
-      userRoles.includes('SUPERADMIN') ||
+      userRoles.includes('SUPER_ADMIN') ||
       userRoles.includes('FACULTY');
 
     if (!isOwner && !isStaff) {
@@ -354,7 +360,7 @@ export class LostFoundService {
     const isOwner = report.reporterId === userId;
     const isStaff =
       userRoles.includes('ADMIN') ||
-      userRoles.includes('SUPERADMIN') ||
+      userRoles.includes('SUPER_ADMIN') ||
       userRoles.includes('FACULTY');
 
     if (!isOwner && !isStaff) {
@@ -405,6 +411,7 @@ export class LostFoundService {
       ...r,
       claims: r.claims.map((c) => ({
         ...c,
+        verificationCode: c.claimantId === userId ? c.verificationCode : undefined,
         claimantName: formatUserName(c.claimant),
       })),
     }));

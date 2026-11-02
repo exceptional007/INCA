@@ -14,7 +14,8 @@ export class StorageController {
     if (!key) {
       throw new BadRequestException('Storage key is required');
     }
-    const { stream, contentType } = await this.r2Storage.getObjectStream(key);
+    const { stream, contentType } = await this.r2Storage.getPublicImageStream(key, 'campus');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     stream.pipe(res);
@@ -29,7 +30,8 @@ export class StorageController {
     if (!resolvedKey) {
       throw new BadRequestException('Storage key is required');
     }
-    const { stream, contentType } = await this.r2Storage.getObjectStream(resolvedKey);
+    const { stream, contentType } = await this.r2Storage.getPublicImageStream(resolvedKey, 'campus');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     stream.pipe(res);

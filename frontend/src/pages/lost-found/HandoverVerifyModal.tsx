@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React, { useState } from 'react';
 import type { LostFoundClaim } from '@/types/lost-found';
 import { lostFoundApi } from '@/services/lost-found';
@@ -49,10 +50,11 @@ export const HandoverVerifyModal: React.FC<HandoverVerifyModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-border shadow-xl overflow-hidden flex flex-col">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 bg-white rounded-2xl max-w-md w-full border border-border shadow-xl overflow-hidden flex flex-col">
+        <DialogTitle className="sr-only">Handover Verify</DialogTitle>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-slate-50/50">
+        <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-action-blue/10 text-action-blue flex items-center justify-center">
               <KeyRound className="w-5 h-5" />
@@ -66,7 +68,7 @@ export const HandoverVerifyModal: React.FC<HandoverVerifyModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label="Close dialog" className="p-2 shrink-0 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -112,6 +114,7 @@ export const HandoverVerifyModal: React.FC<HandoverVerifyModalProps> = ({
                 <p className="text-[11px] leading-relaxed">
                   Ask the person receiving the item for the 6-digit OTP displayed on their screen.
                   Entering this code confirms you have handed over the item safely on campus.
+                  {' '}Codes expire after 15 minutes and lock after five failed attempts. If expired or locked, ask the claimant to generate a new code in My Items & Claims.
                 </p>
               </div>
 
@@ -154,8 +157,8 @@ export const HandoverVerifyModal: React.FC<HandoverVerifyModalProps> = ({
             </form>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

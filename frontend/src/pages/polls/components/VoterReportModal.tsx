@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -97,8 +98,9 @@ export const VoterReportModal: React.FC<VoterReportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col max-h-[90vh]">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
+        <DialogTitle className="sr-only">Voter Report</DialogTitle>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800">
           <div>
@@ -112,6 +114,7 @@ export const VoterReportModal: React.FC<VoterReportModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close dialog"
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <X className="h-5 w-5" />
@@ -152,7 +155,7 @@ export const VoterReportModal: React.FC<VoterReportModalProps> = ({
         </div>
 
         {/* Content Table / List */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-400">
               <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
@@ -251,7 +254,7 @@ export const VoterReportModal: React.FC<VoterReportModalProps> = ({
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

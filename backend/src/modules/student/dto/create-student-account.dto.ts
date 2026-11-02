@@ -32,6 +32,7 @@ export class CreateStudentAccountDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(8)
+  @MaxLength(72)
   password!: string;
 
   @ApiProperty({
@@ -88,7 +89,8 @@ export class CreateStudentAccountDto {
     example: '2005-08-15',
   })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   dateOfBirth?: string;
 
   @ApiPropertyOptional({

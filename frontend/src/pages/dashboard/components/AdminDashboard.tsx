@@ -1,3 +1,4 @@
+import { generateInitialPassword, useInitialCredentials } from '@/components/useInitialCredentials';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -94,6 +95,7 @@ interface CourseRule {
 }
 
 export const AdminDashboard: React.FC = () => {
+  const { showCredentials, credentialsDialog } = useInitialCredentials();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'faculty' | 'students' | 'coordinators' | 'policies'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -452,12 +454,13 @@ export const AdminDashboard: React.FC = () => {
     }
 
     try {
+      const initialPassword = generateInitialPassword();
       if (activeTab === 'faculty') {
         const employeeCode = 'FAC-' + Date.now().toString().slice(-6);
 
         await api.post('/faculty/accounts', {
           email: fieldB,
-          password: 'Temp@12345',
+          password: initialPassword,
           employeeCode,
           firstName: facFirstName,
           lastName: facLastName,
@@ -466,6 +469,7 @@ export const AdminDashboard: React.FC = () => {
           phone: formattedPhone,
           designation: fieldD || 'Lecturer',
         });
+        showCredentials(fieldB, initialPassword);
         toast.success('Faculty member account created successfully.');
       } else if (activeTab === 'students') {
         const nameParts = fieldA.trim().split(' ');
@@ -476,7 +480,7 @@ export const AdminDashboard: React.FC = () => {
 
         await api.post('/students/accounts', {
           email: fieldC,
-          password: 'Temp@12345',
+          password: initialPassword,
           collegeId,
           rollNumber: fieldB,
           enrollmentNumber,
@@ -484,12 +488,14 @@ export const AdminDashboard: React.FC = () => {
           lastName,
           gender: 'MALE',
         });
+        showCredentials(fieldC, initialPassword);
         toast.success('Student account registered successfully.');
       } else if (activeTab === 'coordinators') {
         await api.post('/auth/coordinators', {
           email: fieldB,
-          password: 'Temp@12345',
+          password: initialPassword,
         });
+        showCredentials(fieldB, initialPassword);
         toast.success('Coordinator registered.');
       } else if (activeTab === 'policies') {
         if (!defaultSemesterId) {
@@ -655,6 +661,7 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans select-none">
+      {credentialsDialog}
 
       {/* Brand Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -665,11 +672,11 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Navigation Tabs & Department Badge */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:w-auto sm:max-w-full">
           {/* Department Green Tag */}
           <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-semibold px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 shadow-2xs hover:bg-emerald-50">
             <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>{departmentDisplayName || 'Unassigned'}</span>
+            <span className="whitespace-normal break-words">{departmentDisplayName || 'Unassigned'}</span>
           </Badge>
 
           {/* Navigation Tabs */}
@@ -984,7 +991,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex flex-col gap-3 pb-4 border-b mb-6">
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
               {/* Search Bar */}
-              <div className="relative flex-1 min-w-[240px]">
+              <div className="relative flex-1 min-w-0 sm:min-w-[240px]">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-ink-muted-48" />
                 <Input
                   type="search"
@@ -1250,7 +1257,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="space-y-4">
               {activeTab === 'faculty' ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">First Name</label>
                       <Input
@@ -1272,7 +1279,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">Gender</label>
                       <select
@@ -1391,7 +1398,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="space-y-4">
               {activeTab === 'faculty' ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">First Name</label>
                       <Input
@@ -1411,7 +1418,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-ink">Gender</label>
                       <select

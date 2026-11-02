@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React, { useState } from 'react';
 import type { LostFoundReport, LostFoundClaim } from '@/types/lost-found';
 import { lostFoundApi } from '@/services/lost-found';
@@ -56,10 +57,11 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-border shadow-xl overflow-hidden flex flex-col">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 bg-white rounded-2xl max-w-lg w-full border border-border shadow-xl overflow-hidden flex flex-col">
+        <DialogTitle className="sr-only">Claim</DialogTitle>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-slate-50/50">
+        <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5" />
@@ -75,14 +77,14 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label="Close dialog" className="p-2 shrink-0 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {submittedClaim ? (
             /* Success & 6-digit OTP Display */
             <div className="space-y-4 text-center py-2">
@@ -93,8 +95,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Claim Filed Successfully!</h3>
                 <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto">
-                  The finder has been notified. When meeting on campus, show them your 6-digit
-                  handover verification code below:
+                  The finder has been notified. Your handover code becomes available after the claim is approved.
                 </p>
               </div>
 
@@ -123,7 +124,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
               )}
 
               <p className="text-[11px] text-slate-400">
-                You can also access this code at any time under your "My Items & Claims" tab.
+                After approval, open "My Items & Claims" to view or regenerate your 15-minute handover code.
               </p>
 
               <div className="pt-2">
@@ -185,14 +186,14 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
                   disabled={isSubmitting}
                   className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                 >
-                  {isSubmitting ? 'Submitting Claim...' : 'Submit Claim & Get OTP'}
+                  {isSubmitting ? 'Submitting Claim...' : 'Submit Ownership Claim'}
                 </Button>
               </div>
             </form>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

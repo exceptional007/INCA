@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React from 'react';
 import type { LostFoundMatch } from '@/types/lost-found';
 import { lostFoundApi } from '@/services/lost-found';
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/context/AuthContext';
 
 interface AiMatchesModalProps {
   isOpen: boolean;
@@ -25,6 +27,8 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
   matches,
   onMatchUpdated,
 }) => {
+  const { user } = useAuth();
+  const isStaff = ['ADMIN', 'SUPER_ADMIN', 'FACULTY'].includes(user?.role?.code || '');
   if (!isOpen) return null;
 
   const handleReviewMatch = async (matchId: string, status: 'VERIFIED_MATCH' | 'REJECTED') => {
@@ -44,10 +48,11 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-3xl w-full border border-border shadow-xl my-8 overflow-hidden flex flex-col max-h-[85vh]">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 bg-white rounded-2xl max-w-3xl w-full border border-border shadow-xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
+        <DialogTitle className="sr-only">Ai Matches</DialogTitle>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-slate-50/50">
+        <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
               <Sparkles className="w-5 h-5" />
@@ -63,14 +68,14 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label="Close dialog" className="p-2 shrink-0 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Matches List */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
           {matches.length === 0 ? (
             <div className="text-center py-12 text-slate-500">
               <Sparkles className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -85,6 +90,8 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
               const isHigh = score >= 75;
               const lostImg = match.lostReport?.images?.[0]?.url || match.lostReport?.images?.[0]?.storageKey;
               const foundImg = match.foundReport?.images?.[0]?.url || match.foundReport?.images?.[0]?.storageKey;
+              const canReview = !!user?.id && (isStaff ||
+                match.lostReport?.reporterId === user.id || match.foundReport?.reporterId === user.id);
 
               return (
                 <div
@@ -214,7 +221,7 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
                   )}
 
                   {/* Match Review Actions */}
-                  {match.status === 'PENDING_REVIEW' && (
+                  {match.status === 'PENDING_REVIEW' && canReview && (
                     <div className="flex items-center justify-end gap-2 pt-1">
                       <Button
                         variant="outline"
@@ -241,8 +248,8 @@ export const AiMatchesModal: React.FC<AiMatchesModalProps> = ({
             })
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

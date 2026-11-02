@@ -1,31 +1,58 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ExceptionRepository } from './repositories/exception.repository';
-import { ScheduleRepository } from '../schedules/repositories/schedule.repository';
 import { CreateExceptionDto } from './dto/create-exception.dto';
 import { UpdateExceptionDto } from './dto/update-exception.dto';
 import { ApiResponse } from '../../../common/interfaces/api-response.interface';
-import { ScheduleStatus } from '@prisma/client';
+
+export interface ScheduleExceptionActor {
+  id: string;
+  role: string;
+}
 
 @Injectable()
 export class ExceptionsService {
-  constructor(
-    private readonly exceptionRepository: ExceptionRepository,
-    private readonly scheduleRepository: ScheduleRepository,
-  ) {}
+  constructor(private readonly exceptionRepository: ExceptionRepository) {}
 
-  async create(createExceptionDto: CreateExceptionDto): Promise<ApiResponse<any>> {
-    const schedule = await this.scheduleRepository.findById(createExceptionDto.scheduleId);
-    if (!schedule) {
-      throw new NotFoundException(`Schedule with ID ${createExceptionDto.scheduleId} not found.`);
-    }
-
+  private async adminDepartment(
+    actor: ScheduleExceptionActor,
+  ): Promise<string> {
+    if (!actor?.id || actor.role !== 'ADMIN')
+      throw new ForbiddenException(
+        'Only ADMIN accounts can modify schedule exceptions.',
+      );
+    const departmentId = await this.exceptionRepository.getAdminDepartmentId(
+      actor.id,
+    );
+    if (!departmentId)
+      throw new ForbiddenException('An assigned department is required.');
+    return departmentId;
+  }
+  private async assertScheduleDepartment(
+    scheduleId: string,
+    departmentId: string,
+  ) {
+    const actual =
+      await this.exceptionRepository.getScheduleDepartmentId(scheduleId);
+    if (!actual) throw new NotFoundException('Schedule not found.');
+    if (actual !== departmentId)
+      throw new ForbiddenException(
+        'You can only modify schedule exceptions within your assigned department.',
+      );
+  }
+  async create(
+    createExceptionDto: CreateExceptionDto,
+    actor: ScheduleExceptionActor,
+  ): Promise<ApiResponse<any>> {
+    const departmentId = await this.adminDepartment(actor);
+    await this.assertScheduleDepartment(
+      createExceptionDto.scheduleId,
+      departmentId,
+    );
     const exception = await this.exceptionRepository.create(createExceptionDto);
-
-    if (createExceptionDto.exceptionType === 'CANCELLATION') {
-      await this.scheduleRepository.update(schedule.id, { status: ScheduleStatus.CANCELLED });
-    } else if (createExceptionDto.exceptionType === 'RESCHEDULE' || createExceptionDto.newStartTime || createExceptionDto.newEndTime || createExceptionDto.newRoomId || createExceptionDto.newFacultyId) {
-      await this.scheduleRepository.update(schedule.id, { status: ScheduleStatus.RESCHEDULED });
-    }
 
     return {
       success: true,
@@ -46,7 +73,9 @@ export class ExceptionsService {
   async findOne(id: string): Promise<ApiResponse<any>> {
     const exception = await this.exceptionRepository.findById(id);
     if (!exception) {
-      throw new NotFoundException(`Schedule exception with ID ${id} not found.`);
+      throw new NotFoundException(
+        `Schedule exception with ID ${id} not found.`,
+      );
     }
     return {
       success: true,
@@ -55,13 +84,33 @@ export class ExceptionsService {
     };
   }
 
-  async update(id: string, updateExceptionDto: UpdateExceptionDto): Promise<ApiResponse<any>> {
+  async update(
+    id: string,
+    updateExceptionDto: UpdateExceptionDto,
+    actor: ScheduleExceptionActor,
+  ): Promise<ApiResponse<any>> {
+    const departmentId = await this.adminDepartment(actor);
     const exception = await this.exceptionRepository.findById(id);
     if (!exception) {
-      throw new NotFoundException(`Schedule exception with ID ${id} not found.`);
+      throw new NotFoundException(
+        `Schedule exception with ID ${id} not found.`,
+      );
     }
 
-    const updated = await this.exceptionRepository.update(id, updateExceptionDto);
+    await this.assertScheduleDepartment(exception.scheduleId, departmentId);
+    if (
+      updateExceptionDto.scheduleId &&
+      updateExceptionDto.scheduleId !== exception.scheduleId
+    )
+      await this.assertScheduleDepartment(
+        updateExceptionDto.scheduleId,
+        departmentId,
+      );
+    const updated = await this.exceptionRepository.update(
+      id,
+      updateExceptionDto,
+      exception.scheduleId,
+    );
     return {
       success: true,
       message: 'Schedule exception updated successfully.',
@@ -69,13 +118,20 @@ export class ExceptionsService {
     };
   }
 
-  async remove(id: string): Promise<ApiResponse<any>> {
+  async remove(
+    id: string,
+    actor: ScheduleExceptionActor,
+  ): Promise<ApiResponse<any>> {
+    const departmentId = await this.adminDepartment(actor);
     const exception = await this.exceptionRepository.findById(id);
     if (!exception) {
-      throw new NotFoundException(`Schedule exception with ID ${id} not found.`);
+      throw new NotFoundException(
+        `Schedule exception with ID ${id} not found.`,
+      );
     }
 
-    await this.exceptionRepository.remove(id);
+    await this.assertScheduleDepartment(exception.scheduleId, departmentId);
+    await this.exceptionRepository.remove(id, exception.scheduleId);
     return {
       success: true,
       message: 'Schedule exception deleted successfully.',

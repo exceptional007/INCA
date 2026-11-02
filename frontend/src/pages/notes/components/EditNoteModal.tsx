@@ -230,7 +230,7 @@ export const EditNoteModal: React.FC<EditNoteModalProps> = ({
                 {tags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="text-[11px] gap-1 px-2 py-0.5 bg-muted text-foreground">
                     #{tag}
-                    <button type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
+                    <button type="button" onClick={() => handleRemoveTag(tag)} aria-label={`Remove tag ${tag}`} className="hover:text-destructive">
                       <X className="size-3" />
                     </button>
                   </Badge>

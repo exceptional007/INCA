@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,18 +6,19 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import type {
+  Notice,
   NoticeCategory,
   NoticePriority,
   NoticeTargetScope,
   AcademicScopeData,
-} from '@/types/notice';
-import { noticeApi } from '@/services/notice';
+} from "@/types/notice";
+import { noticeApi } from "@/services/notice";
 import {
   FileText,
   Upload,
@@ -29,58 +30,81 @@ import {
   AlertTriangle,
   Loader2,
   Users,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface CreateNoticeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: () => void;
   userRole?: string;
+  noticeToEdit?: Notice | null;
 }
 
 const CATEGORIES: { label: string; value: NoticeCategory }[] = [
-  { label: 'General Announcement', value: 'GENERAL' },
-  { label: 'Academic & Courses', value: 'ACADEMIC' },
-  { label: 'Examinations & Grades', value: 'EXAMINATION' },
-  { label: 'Placements & Careers', value: 'PLACEMENT' },
-  { label: 'Events & Seminars', value: 'EVENT' },
-  { label: 'Official Circulars', value: 'CIRCULAR' },
-  { label: 'Administrative Orders', value: 'ADMINISTRATIVE' },
-  { label: 'Holidays & Closures', value: 'HOLIDAY' },
-  { label: 'Urgent Campus Notice', value: 'URGENT' },
+  { label: "General Announcement", value: "GENERAL" },
+  { label: "Academic & Courses", value: "ACADEMIC" },
+  { label: "Examinations & Grades", value: "EXAMINATION" },
+  { label: "Placements & Careers", value: "PLACEMENT" },
+  { label: "Events & Seminars", value: "EVENT" },
+  { label: "Official Circulars", value: "CIRCULAR" },
+  { label: "Administrative Orders", value: "ADMINISTRATIVE" },
+  { label: "Holidays & Closures", value: "HOLIDAY" },
+  { label: "Urgent Campus Notice", value: "URGENT" },
 ];
 
 const PRIORITIES: { label: string; value: NoticePriority; color: string }[] = [
-  { label: 'Normal Priority', value: 'NORMAL', color: 'border-blue-500/40 text-blue-600' },
-  { label: 'Low (Routine)', value: 'LOW', color: 'border-muted text-muted-foreground' },
-  { label: 'High Priority', value: 'HIGH', color: 'border-amber-500/50 text-amber-600' },
-  { label: 'Critical (Urgent Alert)', value: 'CRITICAL', color: 'border-red-500 text-red-600' },
+  {
+    label: "Normal Priority",
+    value: "NORMAL",
+    color: "border-blue-500/40 text-blue-600",
+  },
+  {
+    label: "Low (Routine)",
+    value: "LOW",
+    color: "border-muted text-muted-foreground",
+  },
+  {
+    label: "High Priority",
+    value: "HIGH",
+    color: "border-amber-500/50 text-amber-600",
+  },
+  {
+    label: "Critical (Urgent Alert)",
+    value: "CRITICAL",
+    color: "border-red-500 text-red-600",
+  },
 ];
 
 export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
   isOpen,
   onClose,
   onCreated,
+  userRole = "FACULTY",
+  noticeToEdit = null,
 }) => {
+  const requiresApproval =
+    noticeToEdit?.approvalRequired ??
+    !["ADMIN", "SUPER_ADMIN"].includes(userRole);
+  const [savedDraft, setSavedDraft] = useState<Notice | null>(null);
   // Form state
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [category, setCategory] = useState<NoticeCategory>('GENERAL');
-  const [priority, setPriority] = useState<NoticePriority>('NORMAL');
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [category, setCategory] = useState<NoticeCategory>("GENERAL");
+  const [priority, setPriority] = useState<NoticePriority>("NORMAL");
 
   // Targeting state
-  const [targetScope, setTargetScope] = useState<NoticeTargetScope>('ALL');
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
-  const [selectedProgramId, setSelectedProgramId] = useState('');
-  const [selectedSemester, setSelectedSemester] = useState<number | ''>('');
+  const [targetScope, setTargetScope] = useState<NoticeTargetScope>("ALL");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
+  const [selectedProgramId, setSelectedProgramId] = useState("");
+  const [selectedSemester, setSelectedSemester] = useState<number | "">("");
 
   // Scheduling & Expiry
   const [isScheduled, setIsScheduled] = useState(false);
-  const [publishAtDate, setPublishAtDate] = useState('');
-  const [publishAtTime, setPublishAtTime] = useState('09:00');
+  const [publishAtDate, setPublishAtDate] = useState("");
+  const [publishAtTime, setPublishAtTime] = useState("09:00");
   const [hasExpiry, setHasExpiry] = useState(true);
-  const [expiresAtDate, setExpiresAtDate] = useState('');
-  const [expiresAtTime, setExpiresAtTime] = useState('18:00');
+  const [expiresAtDate, setExpiresAtDate] = useState("");
+  const [expiresAtTime, setExpiresAtTime] = useState("18:00");
 
   // Flags
   const [isPinned, setIsPinned] = useState(false);
@@ -90,31 +114,70 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Data pickers
-  const [academicScopes, setAcademicScopes] = useState<AcademicScopeData | null>(null);
+  const [academicScopes, setAcademicScopes] =
+    useState<AcademicScopeData | null>(null);
 
   // Status
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      loadScopes();
-      // Set default expiry date to 14 days from now
-      const defaultExp = new Date(Date.now() + 14 * 86400000);
-      setExpiresAtDate(defaultExp.toISOString().split('T')[0]);
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
+    setSavedDraft(null);
+    setError(null);
+    setSelectedFile(null);
+    setActiveTab("edit");
+    const localParts = (value: string) => {
+      const date = new Date(value);
+      return [
+        date.getFullYear() +
+          "-" +
+          String(date.getMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(date.getDate()).padStart(2, "0"),
+        String(date.getHours()).padStart(2, "0") +
+          ":" +
+          String(date.getMinutes()).padStart(2, "0"),
+      ];
+    };
+    setTitle(noticeToEdit?.title || "");
+    setContent(noticeToEdit?.content || "");
+    setCategory((noticeToEdit?.category || "GENERAL") as NoticeCategory);
+    setPriority((noticeToEdit?.priority || "NORMAL") as NoticePriority);
+    setTargetScope((noticeToEdit?.targetScope || "ALL") as NoticeTargetScope);
+    setSelectedDepartmentId(noticeToEdit?.department?.id || "");
+    setSelectedProgramId(noticeToEdit?.program?.id || "");
+    setSelectedSemester(noticeToEdit?.targetSemester || "");
+    setIsPinned(!!noticeToEdit?.isPinned);
+    setRequiresAcknowledgement(!!noticeToEdit?.requiresAcknowledgement);
+    const publish = localParts(
+      noticeToEdit?.publishAt || new Date().toISOString(),
+    );
+    setIsScheduled(
+      !!noticeToEdit && new Date(noticeToEdit.publishAt) > new Date(),
+    );
+    setPublishAtDate(publish[0]);
+    setPublishAtTime(publish[1]);
+    const expiry = localParts(
+      noticeToEdit?.expiresAt ||
+        new Date(Date.now() + 14 * 86400000).toISOString(),
+    );
+    setHasExpiry(noticeToEdit ? !!noticeToEdit.expiresAt : true);
+    setExpiresAtDate(expiry[0]);
+    setExpiresAtTime(expiry[1]);
+    loadScopes();
+  }, [isOpen, noticeToEdit?.id]);
 
   const loadScopes = async () => {
     try {
       const data = await noticeApi.getAcademicScopes();
       setAcademicScopes(data);
       if (data.departments.length > 0 && !selectedDepartmentId) {
-        setSelectedDepartmentId(data.departments[0].id);
+        setSelectedDepartmentId((current) => current || data.departments[0].id);
       }
     } catch (e) {
-      console.error('Failed to load academic scopes', e);
+      console.error("Failed to load academic scopes", e);
     }
   };
 
@@ -123,14 +186,17 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
     const file = e.target.files[0];
 
     // Validate PDF
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      setError('Only official PDF documents are accepted for attachments');
+    if (
+      file.type !== "application/pdf" &&
+      !file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      setError("Only official PDF documents are accepted for attachments");
       return;
     }
 
     // Validate size (max 25MB)
     if (file.size > 25 * 1024 * 1024) {
-      setError('PDF file size must not exceed 25MB');
+      setError("PDF file size must not exceed 25MB");
       return;
     }
 
@@ -144,11 +210,25 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
 
   const handleSubmit = async (isDraft: boolean = false) => {
     if (!title.trim()) {
-      setError('Please provide an announcement title');
+      setError("Please provide an announcement title");
       return;
     }
     if (!content.trim()) {
-      setError('Please provide announcement body text');
+      setError("Please provide announcement body text");
+      return;
+    }
+    const publicationTime = isScheduled && publishAtDate
+      ? new Date(`${publishAtDate}T${publishAtTime}:00`).getTime()
+      : Date.now();
+    if (!isDraft && isScheduled && (!publishAtDate || !Number.isFinite(publicationTime) || publicationTime <= Date.now())) {
+      setError("Choose a future publication date and time.");
+      return;
+    }
+    const expiryTime = hasExpiry && expiresAtDate
+      ? new Date(`${expiresAtDate}T${expiresAtTime}:00`).getTime()
+      : null;
+    if (hasExpiry && ((!isDraft && !expiresAtDate) || (expiresAtDate && (expiryTime === null || !Number.isFinite(expiryTime) || expiryTime <= publicationTime)))) {
+      setError("Choose an expiry date and time after publication.");
       return;
     }
 
@@ -158,43 +238,80 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
 
       let publishAt: string | undefined = undefined;
       if (isScheduled && publishAtDate) {
-        publishAt = new Date(`${publishAtDate}T${publishAtTime}:00`).toISOString();
+        publishAt = new Date(
+          `${publishAtDate}T${publishAtTime}:00`,
+        ).toISOString();
       }
 
       let expiresAt: string | undefined = undefined;
       if (hasExpiry && expiresAtDate) {
-        expiresAt = new Date(`${expiresAtDate}T${expiresAtTime}:00`).toISOString();
+        expiresAt = new Date(
+          `${expiresAtDate}T${expiresAtTime}:00`,
+        ).toISOString();
       }
 
-      const notice = await noticeApi.createNotice({
+      const payload = {
         title: title.trim(),
         content: content.trim(),
         category,
         priority,
         targetScope,
-        departmentId: targetScope === 'DEPARTMENT' ? selectedDepartmentId : undefined,
-        programId: targetScope === 'PROGRAM' ? selectedProgramId : undefined,
-        targetSemester: selectedSemester !== '' ? Number(selectedSemester) : undefined,
+        departmentId:
+          targetScope === "DEPARTMENT" ? selectedDepartmentId : undefined,
+        programId: targetScope === "PROGRAM" ? selectedProgramId : undefined,
+        targetSemester:
+          selectedSemester !== "" ? Number(selectedSemester) : undefined,
         requiresAcknowledgement,
         isPinned,
-        publishAt,
-        expiresAt,
-        status: isDraft ? 'DRAFT' : isScheduled ? 'SCHEDULED' : 'PUBLISHED',
-      });
+        publishAt: publishAt || new Date().toISOString(),
+        expiresAt: expiresAt || null,
+        status: "DRAFT" as const,
+      };
+      // Save and attach documents before the revision enters a review/publication queue.
+      const target = savedDraft || noticeToEdit;
+      let notice = target
+        ? await noticeApi.updateNotice(target.id, {
+            ...payload,
+            expectedUpdatedAt: target.updatedAt,
+          })
+        : await noticeApi.createNotice(payload);
+      setSavedDraft(notice);
 
       // Upload PDF attachment if selected
       if (selectedFile) {
         await noticeApi.uploadAttachment(notice.id, selectedFile);
+        notice = await noticeApi.getNoticeById(notice.id);
+        setSavedDraft(notice);
+        setSelectedFile(null);
       }
 
+      if (!isDraft) {
+        if (requiresApproval) {
+          if (!notice.updatedAt)
+            throw new Error(
+              "Reload the saved draft before submitting for review.",
+            );
+          notice = await noticeApi.submitForReview(notice.id, notice.updatedAt);
+        } else {
+          notice = await noticeApi.updateNotice(notice.id, {
+            status: isScheduled ? "SCHEDULED" : "PUBLISHED",
+            expectedUpdatedAt: notice.updatedAt,
+          });
+        }
+      }
+      setSavedDraft(null);
       // Reset form
-      setTitle('');
-      setContent('');
+      setTitle("");
+      setContent("");
       setSelectedFile(null);
       onCreated();
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Failed to publish announcement');
+      setError(
+        err?.response?.data?.message ||
+          err.message ||
+          "Failed to publish announcement",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -207,28 +324,32 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
           <div className="flex items-center justify-between">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <FileText className="size-5 text-primary" />
-              <span>Create Official Notice</span>
+              <span>
+                {noticeToEdit
+                  ? "Edit Official Notice"
+                  : "Create Official Notice"}
+              </span>
             </DialogTitle>
 
             <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border text-xs">
               <button
                 type="button"
-                onClick={() => setActiveTab('edit')}
+                onClick={() => setActiveTab("edit")}
                 className={`px-3 py-1 rounded-md font-medium transition ${
-                  activeTab === 'edit'
-                    ? 'bg-background text-foreground shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
+                  activeTab === "edit"
+                    ? "bg-background text-foreground shadow-2xs"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Compose
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('preview')}
+                onClick={() => setActiveTab("preview")}
                 className={`px-3 py-1 rounded-md font-medium transition ${
-                  activeTab === 'preview'
-                    ? 'bg-background text-foreground shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
+                  activeTab === "preview"
+                    ? "bg-background text-foreground shadow-2xs"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Live Preview
@@ -236,7 +357,8 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
             </div>
           </div>
           <DialogDescription className="text-xs">
-            Publish targeted, prioritized official communications to students and faculty across campus.
+            Publish targeted, prioritized official communications to students
+            and faculty across campus.
           </DialogDescription>
         </DialogHeader>
 
@@ -247,44 +369,67 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
           </div>
         )}
 
-        {activeTab === 'preview' ? (
+        {activeTab === "preview" ? (
           <div className="p-6 space-y-4">
             <div className="border rounded-2xl p-6 bg-card space-y-4 shadow-xs">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs font-bold uppercase">
+                <Badge
+                  variant="outline"
+                  className="text-xs font-bold uppercase"
+                >
                   {priority}
                 </Badge>
-                <Badge variant="secondary" className="text-xs font-semibold uppercase">
+                <Badge
+                  variant="secondary"
+                  className="text-xs font-semibold uppercase"
+                >
                   {category}
                 </Badge>
-                {isPinned && <Badge className="bg-primary/10 text-primary text-xs">Pinned</Badge>}
+                {isPinned && (
+                  <Badge className="bg-primary/10 text-primary text-xs">
+                    Pinned
+                  </Badge>
+                )}
                 {requiresAcknowledgement && (
-                  <Badge className="bg-amber-100 text-amber-800 text-xs">Acknowledgement Required</Badge>
+                  <Badge className="bg-amber-100 text-amber-800 text-xs">
+                    Acknowledgement Required
+                  </Badge>
                 )}
               </div>
 
               <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                {title || 'Announcement Title'}
+                {title || "Announcement Title"}
               </h2>
 
               <div className="prose prose-sm dark:prose-invert max-w-none text-foreground whitespace-pre-wrap leading-relaxed">
-                {content || 'Announcement content will appear here...'}
+                {content || "Announcement content will appear here..."}
               </div>
 
               {selectedFile && (
                 <div className="p-3 bg-muted/40 border rounded-xl flex items-center gap-2 text-xs text-foreground">
                   <FileText className="size-4 text-red-600" />
                   <span className="font-medium">{selectedFile.name}</span>
-                  <span className="text-muted-foreground">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
+                  <span className="text-muted-foreground">
+                    ({(selectedFile.size / 1024).toFixed(0)} KB)
+                  </span>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <form className="p-6 space-y-5" onSubmit={(e) => { e.preventDefault(); handleSubmit(false); }}>
+          <form
+            className="p-6 space-y-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit(false);
+            }}
+          >
             {/* Title */}
             <div className="space-y-1.5">
-              <Label htmlFor="notice-title" className="text-xs font-bold uppercase text-muted-foreground">
+              <Label
+                htmlFor="notice-title"
+                className="text-xs font-bold uppercase text-muted-foreground"
+              >
                 Announcement Title *
               </Label>
               <Input
@@ -305,7 +450,9 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 </Label>
                 <select
                   value={category}
-                  onChange={(e) => setCategory(e.target.value as NoticeCategory)}
+                  onChange={(e) =>
+                    setCategory(e.target.value as NoticeCategory)
+                  }
                   className="w-full text-xs h-9 rounded-md border border-input bg-background px-3 py-1 font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   {CATEGORIES.map((c) => (
@@ -322,7 +469,9 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 </Label>
                 <select
                   value={priority}
-                  onChange={(e) => setPriority(e.target.value as NoticePriority)}
+                  onChange={(e) =>
+                    setPriority(e.target.value as NoticePriority)
+                  }
                   className="w-full text-xs h-9 rounded-md border border-input bg-background px-3 py-1 font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   {PRIORITIES.map((p) => (
@@ -337,7 +486,10 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
             {/* Content Area */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="notice-content" className="text-xs font-bold uppercase text-muted-foreground">
+                <Label
+                  htmlFor="notice-content"
+                  className="text-xs font-bold uppercase text-muted-foreground"
+                >
                   Notice Body & Circular Content *
                 </Label>
                 <span className="text-[11px] text-muted-foreground">
@@ -353,6 +505,11 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 className="w-full text-sm rounded-lg border border-input bg-background p-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-sans leading-relaxed"
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                AI highlights are generated from the notice text when available.
+                The original announcement remains authoritative, and you can
+                still save if AI is unavailable.
+              </p>
             </div>
 
             {/* Audience Targeting Box */}
@@ -369,13 +526,19 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[11px] text-muted-foreground font-semibold">Scope</Label>
+                  <Label className="text-[11px] text-muted-foreground font-semibold">
+                    Scope
+                  </Label>
                   <select
                     value={targetScope}
-                    onChange={(e) => setTargetScope(e.target.value as NoticeTargetScope)}
+                    onChange={(e) =>
+                      setTargetScope(e.target.value as NoticeTargetScope)
+                    }
                     className="w-full text-xs h-8 mt-1 rounded-md border border-input bg-background px-2 font-medium"
                   >
-                    <option value="ALL">Entire Campus (Students & Faculty)</option>
+                    <option value="ALL">
+                      Entire Campus (Students & Faculty)
+                    </option>
                     <option value="STUDENTS">All Students Only</option>
                     <option value="FACULTY">All Faculty & Staff Only</option>
                     <option value="DEPARTMENT">Specific Department</option>
@@ -383,9 +546,11 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                   </select>
                 </div>
 
-                {targetScope === 'DEPARTMENT' && (
+                {targetScope === "DEPARTMENT" && (
                   <div>
-                    <Label className="text-[11px] text-muted-foreground font-semibold">Department</Label>
+                    <Label className="text-[11px] text-muted-foreground font-semibold">
+                      Department
+                    </Label>
                     <select
                       value={selectedDepartmentId}
                       onChange={(e) => setSelectedDepartmentId(e.target.value)}
@@ -400,9 +565,11 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                   </div>
                 )}
 
-                {targetScope === 'PROGRAM' && (
+                {targetScope === "PROGRAM" && (
                   <div>
-                    <Label className="text-[11px] text-muted-foreground font-semibold">Program</Label>
+                    <Label className="text-[11px] text-muted-foreground font-semibold">
+                      Program
+                    </Label>
                     <select
                       value={selectedProgramId}
                       onChange={(e) => setSelectedProgramId(e.target.value)}
@@ -419,13 +586,19 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 )}
               </div>
 
-              {targetScope === 'PROGRAM' && (
-                <div className="pt-2 border-t grid grid-cols-2 gap-3">
+              {targetScope === "PROGRAM" && (
+                <div className="pt-2 border-t grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-[11px] text-muted-foreground font-semibold">Semester (Optional)</Label>
+                    <Label className="text-[11px] text-muted-foreground font-semibold">
+                      Semester (Optional)
+                    </Label>
                     <select
                       value={selectedSemester}
-                      onChange={(e) => setSelectedSemester(e.target.value === '' ? '' : Number(e.target.value))}
+                      onChange={(e) =>
+                        setSelectedSemester(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
                       className="w-full text-xs h-8 mt-1 rounded-md border border-input bg-background px-2 font-medium"
                     >
                       <option value="">All Semesters</option>
@@ -458,9 +631,10 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 </div>
 
                 {isScheduled && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     <Input
                       type="date"
+                      aria-label="Publication date"
                       value={publishAtDate}
                       onChange={(e) => setPublishAtDate(e.target.value)}
                       className="h-8 text-xs"
@@ -468,6 +642,7 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                     />
                     <Input
                       type="time"
+                      aria-label="Publication time"
                       value={publishAtTime}
                       onChange={(e) => setPublishAtTime(e.target.value)}
                       className="h-8 text-xs"
@@ -493,9 +668,10 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                 </div>
 
                 {hasExpiry && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     <Input
                       type="date"
+                      aria-label="Expiry date"
                       value={expiresAtDate}
                       onChange={(e) => setExpiresAtDate(e.target.value)}
                       className="h-8 text-xs"
@@ -503,6 +679,7 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                     />
                     <Input
                       type="time"
+                      aria-label="Expiry time"
                       value={expiresAtTime}
                       onChange={(e) => setExpiresAtTime(e.target.value)}
                       className="h-8 text-xs"
@@ -551,9 +728,12 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
                       <FileText className="size-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">{selectedFile.name}</p>
+                      <p className="text-xs font-semibold text-foreground truncate">
+                        {selectedFile.name}
+                      </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for Cloudflare R2
+                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB •
+                        Ready for Cloudflare R2
                       </p>
                     </div>
                   </div>
@@ -571,7 +751,9 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
               ) : (
                 <label className="border border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-muted/30 transition text-center group">
                   <Upload className="size-6 text-muted-foreground group-hover:text-primary transition mb-1" />
-                  <span className="text-xs font-semibold text-foreground">Click to upload official PDF</span>
+                  <span className="text-xs font-semibold text-foreground">
+                    Click to upload official PDF
+                  </span>
                   <span className="text-[11px] text-muted-foreground mt-0.5">
                     Signed circulars, timetables, or exam schedules up to 25MB
                   </span>
@@ -587,13 +769,25 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
           </form>
         )}
 
+        {requiresApproval && (
+          <p className="px-6 pb-3 text-xs text-muted-foreground">
+            Your department ADMIN or a SUPER_ADMIN must approve this revision
+            before it appears to recipients. Changes after approval require
+            another review.
+          </p>
+        )}
         {/* Footer Actions */}
         <DialogFooter className="p-4 border-t bg-muted/20 flex flex-wrap items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            disabled={submitting}
+          >
             Cancel
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Button
               type="button"
               variant="outline"
@@ -612,7 +806,11 @@ export const CreateNoticeModal: React.FC<CreateNoticeModalProps> = ({
               className="gap-1.5 shadow-xs"
             >
               {submitting && <Loader2 className="size-3.5 animate-spin" />}
-              {isScheduled ? 'Schedule Notice' : 'Publish Announcement'}
+              {requiresApproval
+                ? "Submit for Approval"
+                : isScheduled
+                  ? "Schedule Notice"
+                  : "Publish Announcement"}
             </Button>
           </div>
         </DialogFooter>

@@ -7,6 +7,8 @@ import { R2StorageService } from './r2-storage.service';
 import { GeminiExtractionService } from './gemini-extraction.service';
 import { PdfTextParserService } from './pdf-text-parser.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { AttendanceAccessService } from '../../attendance/sessions/attendance-access.service';
+import { SessionsService } from '../../attendance/sessions/sessions.service';
 
 describe('TimetableImport Testing Suite', () => {
   let matchingService: MatchingService;
@@ -66,6 +68,7 @@ describe('TimetableImport Testing Suite', () => {
         updateMany: jest.fn(),
       },
       schedule: {
+        deleteMany: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
         create: jest.fn(),
@@ -111,6 +114,8 @@ describe('TimetableImport Testing Suite', () => {
         MatchingService,
         ConflictService,
         TimetableImportService,
+        { provide: AttendanceAccessService, useValue: {} },
+        { provide: SessionsService, useValue: {} },
         { provide: PrismaService, useValue: prismaMock },
         {
           provide: R2StorageService,

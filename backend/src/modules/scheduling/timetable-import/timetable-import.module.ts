@@ -6,8 +6,10 @@ import { GeminiExtractionService } from './gemini-extraction.service';
 import { PdfTextParserService } from './pdf-text-parser.service';
 import { MatchingService } from './matching.service';
 import { ConflictService } from './conflict.service';
+import { SessionsModule } from '../../attendance/sessions/sessions.module';
 
 @Module({
+  imports: [SessionsModule],
   controllers: [TimetableImportController],
   providers: [
     TimetableImportService,

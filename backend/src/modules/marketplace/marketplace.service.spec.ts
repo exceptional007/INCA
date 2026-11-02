@@ -6,11 +6,23 @@ import { MarketplaceReviewService } from './marketplace-review.service';
 import { MarketplaceModerationService } from './marketplace-moderation.service';
 import { MarketplaceChatService } from './marketplace-chat.service';
 import { MarketplaceGateway } from './marketplace.gateway';
+import { JwtStrategy } from '../auth/strategies/jwt.strategy';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StrictR2StorageService } from '../storage/strict-r2-storage.service';
-import { ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
-import { ListingStatus, ListingVisibility, OfferStatus, TransactionStatus, ReportStatus, ReportReason } from '@prisma/client';
+import {
+  ForbiddenException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
+import {
+  ListingStatus,
+  ListingVisibility,
+  OfferStatus,
+  TransactionStatus,
+  ReportStatus,
+  ReportReason,
+} from '@prisma/client';
 
 describe('Marketplace Services Unit Tests', () => {
   let marketplaceService: MarketplaceService;
@@ -87,14 +99,19 @@ describe('Marketplace Services Unit Tests', () => {
   };
 
   const mockR2Storage = {
-    uploadMarketplaceImage: jest.fn().mockResolvedValue('marketplace-images/test.jpg'),
+    uploadMarketplaceImage: jest
+      .fn()
+      .mockResolvedValue('marketplace-images/test.jpg'),
     deleteObject: jest.fn().mockResolvedValue(undefined),
     getObject: jest.fn(),
     getObjectStream: jest.fn(),
+    getPublicImageStream: jest.fn(),
   };
 
   const mockJwtService = {
-    verify: jest.fn().mockReturnValue({ sub: 'user-1' }),
+    verify: jest
+      .fn()
+      .mockImplementation((token) => ({ sub: token || 'user-1' })),
   };
 
   beforeEach(async () => {
@@ -110,14 +127,32 @@ describe('Marketplace Services Unit Tests', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: StrictR2StorageService, useValue: mockR2Storage },
         { provide: JwtService, useValue: mockJwtService },
+        {
+          provide: JwtStrategy,
+          useValue: {
+            validate: jest
+              .fn()
+              .mockImplementation(async (_req, payload) => ({
+                id: payload.sub,
+              })),
+          },
+        },
       ],
     }).compile();
 
     marketplaceService = module.get<MarketplaceService>(MarketplaceService);
-    negotiationService = module.get<MarketplaceNegotiationService>(MarketplaceNegotiationService);
-    transactionService = module.get<MarketplaceTransactionService>(MarketplaceTransactionService);
-    reviewService = module.get<MarketplaceReviewService>(MarketplaceReviewService);
-    moderationService = module.get<MarketplaceModerationService>(MarketplaceModerationService);
+    negotiationService = module.get<MarketplaceNegotiationService>(
+      MarketplaceNegotiationService,
+    );
+    transactionService = module.get<MarketplaceTransactionService>(
+      MarketplaceTransactionService,
+    );
+    reviewService = module.get<MarketplaceReviewService>(
+      MarketplaceReviewService,
+    );
+    moderationService = module.get<MarketplaceModerationService>(
+      MarketplaceModerationService,
+    );
     chatService = module.get<MarketplaceChatService>(MarketplaceChatService);
     gateway = module.get<MarketplaceGateway>(MarketplaceGateway);
     jest.clearAllMocks();
@@ -184,7 +219,11 @@ describe('Marketplace Services Unit Tests', () => {
       });
 
       await expect(
-        marketplaceService.getListingById('student-1', 'STUDENT', 'list-faculty'),
+        marketplaceService.getListingById(
+          'student-1',
+          'STUDENT',
+          'list-faculty',
+        ),
       ).rejects.toThrow(ForbiddenException);
     });
   });
@@ -222,13 +261,21 @@ describe('Marketplace Services Unit Tests', () => {
         status: OfferStatus.PENDING,
       });
 
-      const offer = await negotiationService.createOffer('user-buyer', 'STUDENT', {
-        listingId: 'list-1',
-        amount: 450,
-      });
+      const offer = await negotiationService.createOffer(
+        'user-buyer',
+        'STUDENT',
+        {
+          listingId: 'list-1',
+          amount: 450,
+        },
+      );
 
       expect(mockPrisma.marketplaceOffer.updateMany).toHaveBeenCalledWith({
-        where: { listingId: 'list-1', buyerId: 'user-buyer', status: OfferStatus.PENDING },
+        where: {
+          listingId: 'list-1',
+          buyerId: 'user-buyer',
+          status: OfferStatus.PENDING,
+        },
         data: { status: OfferStatus.CANCELLED },
       });
       expect(offer.amount).toBe(450);
@@ -245,19 +292,25 @@ describe('Marketplace Services Unit Tests', () => {
         visibility: ListingVisibility.ALL,
       });
       mockPrisma.marketplaceTransaction.findFirst.mockResolvedValue(null);
-      mockPrisma.marketplaceTransaction.create.mockImplementation((args) => Promise.resolve({
-        id: 'tx-1',
-        buyerId: 'buyer-1',
-        ...args.data,
-      }));
+      mockPrisma.marketplaceTransaction.create.mockImplementation((args) =>
+        Promise.resolve({
+          id: 'tx-1',
+          buyerId: 'buyer-1',
+          ...args.data,
+        }),
+      );
       mockPrisma.marketplaceListing.update.mockResolvedValue({});
 
-      const tx = await transactionService.initiateTransaction('buyer-1', 'STUDENT', {
-        listingId: 'list-1',
-        location: 'Campus Center',
-        date: '2026-10-30',
-        time: '14:00',
-      });
+      const tx = await transactionService.initiateTransaction(
+        'buyer-1',
+        'STUDENT',
+        {
+          listingId: 'list-1',
+          location: 'Campus Center',
+          date: '2026-10-30',
+          time: '14:00',
+        },
+      );
 
       expect(tx.handoverOtp).toMatch(/^\d{6}$/);
       expect(tx.status).toBe(TransactionStatus.HANDOVER_PENDING);
@@ -272,16 +325,22 @@ describe('Marketplace Services Unit Tests', () => {
         visibility: ListingVisibility.ALL,
       });
       mockPrisma.marketplaceTransaction.findFirst.mockResolvedValue(null);
-      mockPrisma.marketplaceTransaction.create.mockImplementation((args) => Promise.resolve({
-        id: 'tx-1',
-        buyerId: 'buyer-1',
-        ...args.data,
-      }));
+      mockPrisma.marketplaceTransaction.create.mockImplementation((args) =>
+        Promise.resolve({
+          id: 'tx-1',
+          buyerId: 'buyer-1',
+          ...args.data,
+        }),
+      );
       mockPrisma.marketplaceListing.update.mockResolvedValue({});
 
-      const tx = await transactionService.initiateTransaction('buyer-1', 'STUDENT', {
-        listingId: 'list-1',
-      });
+      const tx = await transactionService.initiateTransaction(
+        'buyer-1',
+        'STUDENT',
+        {
+          listingId: 'list-1',
+        },
+      );
 
       expect(tx.handoverOtp).toBeNull();
       expect(tx.status).toBe(TransactionStatus.PRICE_AGREED);
@@ -301,7 +360,9 @@ describe('Marketplace Services Unit Tests', () => {
       });
 
       await expect(
-        transactionService.verifyHandover('seller-1', 'tx-1', { otp: '000000' }),
+        transactionService.verifyHandover('seller-1', 'tx-1', {
+          otp: '000000',
+        }),
       ).rejects.toThrow(BadRequestException);
 
       expect(mockPrisma.marketplaceTransaction.update).toHaveBeenCalledWith(
@@ -335,7 +396,9 @@ describe('Marketplace Services Unit Tests', () => {
         status: ListingStatus.SOLD,
       });
 
-      const res = await transactionService.verifyHandover('seller-1', 'tx-1', { otp: '123456' });
+      const res = await transactionService.verifyHandover('seller-1', 'tx-1', {
+        otp: '123456',
+      });
 
       expect(res.success).toBe(true);
       expect(res.transaction.status).toBe(TransactionStatus.COMPLETED);
@@ -409,11 +472,16 @@ describe('Marketplace Services Unit Tests', () => {
         status: ListingStatus.REMOVED,
       });
 
-      const res = await moderationService.resolveReport('user-hod', 'HOD', 'rep-1', {
-        status: ReportStatus.ACTION_TAKEN,
-        resolutionNote: 'Prohibited item removed.',
-        removeListing: true,
-      });
+      const res = await moderationService.resolveReport(
+        'user-hod',
+        'HOD',
+        'rep-1',
+        {
+          status: ReportStatus.ACTION_TAKEN,
+          resolutionNote: 'Prohibited item removed.',
+          removeListing: true,
+        },
+      );
 
       expect(mockPrisma.marketplaceListing.update).toHaveBeenCalledWith({
         where: { id: 'list-bad' },
@@ -432,7 +500,9 @@ describe('Marketplace Services Unit Tests', () => {
           title: 'Item 1',
           price: 100,
           status: ListingStatus.ACTIVE,
-          images: [{ id: 'img-1', storageKey: 'marketplace/test1.png', url: null }],
+          images: [
+            { id: 'img-1', storageKey: 'marketplace/test1.png', url: null },
+          ],
         },
         {
           id: 'list-2',
@@ -440,7 +510,9 @@ describe('Marketplace Services Unit Tests', () => {
           title: 'Item 2',
           price: 200,
           status: ListingStatus.ACTIVE,
-          images: [{ id: 'img-2', storageKey: 'marketplace/test2.png', url: null }],
+          images: [
+            { id: 'img-2', storageKey: 'marketplace/test2.png', url: null },
+          ],
         },
       ]);
       mockPrisma.marketplaceListing.count.mockResolvedValue(2);
@@ -455,10 +527,14 @@ describe('Marketplace Services Unit Tests', () => {
         { sellerId: 'seller-b', _count: { id: 4 } },
       ]);
 
-      const result = await marketplaceService.getListings('user-guest', 'STUDENT', {
-        page: 1,
-        limit: 10,
-      });
+      const result = await marketplaceService.getListings(
+        'user-guest',
+        'STUDENT',
+        {
+          page: 1,
+          limit: 10,
+        },
+      );
 
       expect(mockPrisma.marketplaceReview.groupBy).toHaveBeenCalledWith({
         by: ['sellerId'],
@@ -468,7 +544,10 @@ describe('Marketplace Services Unit Tests', () => {
       });
       expect(mockPrisma.marketplaceTransaction.groupBy).toHaveBeenCalledWith({
         by: ['sellerId'],
-        where: { sellerId: { in: ['seller-a', 'seller-b'] }, status: TransactionStatus.COMPLETED },
+        where: {
+          sellerId: { in: ['seller-a', 'seller-b'] },
+          status: TransactionStatus.COMPLETED,
+        },
         _count: { id: true },
       });
 
@@ -478,7 +557,9 @@ describe('Marketplace Services Unit Tests', () => {
         totalReviews: 12,
         completedSales: 10,
       });
-      expect(result.items[0].images[0].url).toContain('/api/v1/marketplace/images/stream?key=marketplace%2Ftest1.png');
+      expect(result.items[0].images[0].url).toContain(
+        '/api/v1/marketplace/images/stream?key=marketplace%2Ftest1.png',
+      );
     });
 
     it('should use batch groupBy query for unread messages in getUserConversations', async () => {
@@ -525,7 +606,12 @@ describe('Marketplace Services Unit Tests', () => {
       } as Express.Multer.File;
 
       await expect(
-        marketplaceService.uploadListingImages('user-seller', 'STUDENT', 'list-1', [badFile]),
+        marketplaceService.uploadListingImages(
+          'user-seller',
+          'STUDENT',
+          'list-1',
+          [badFile],
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -544,7 +630,12 @@ describe('Marketplace Services Unit Tests', () => {
       } as Express.Multer.File;
 
       await expect(
-        marketplaceService.uploadListingImages('user-seller', 'STUDENT', 'list-1', [hugeFile]),
+        marketplaceService.uploadListingImages(
+          'user-seller',
+          'STUDENT',
+          'list-1',
+          [hugeFile],
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -575,22 +666,34 @@ describe('Marketplace Services Unit Tests', () => {
       } as Express.Multer.File;
 
       await expect(
-        marketplaceService.uploadListingImages('user-seller', 'STUDENT', 'list-1', [file1, file2]),
+        marketplaceService.uploadListingImages(
+          'user-seller',
+          'STUDENT',
+          'list-1',
+          [file1, file2],
+        ),
       ).rejects.toThrow('R2 write error');
 
       // Verifies cleanup occurred for file1
-      expect(mockR2Storage.deleteObject).toHaveBeenCalledWith('marketplace/img1.png');
+      expect(mockR2Storage.deleteObject).toHaveBeenCalledWith(
+        'marketplace/img1.png',
+      );
     });
 
     it('should stream image from R2 with correct content type', async () => {
       const mockStream = { pipe: jest.fn() } as any;
-      mockR2Storage.getObjectStream.mockResolvedValue({
+      mockR2Storage.getPublicImageStream.mockResolvedValue({
         body: mockStream,
         contentType: 'image/webp',
       });
 
-      const result = await marketplaceService.streamImage('marketplace/photo.webp');
-      expect(mockR2Storage.getObjectStream).toHaveBeenCalledWith('marketplace/photo.webp');
+      const result = await marketplaceService.streamImage(
+        'marketplace-images/photo.webp',
+      );
+      expect(mockR2Storage.getPublicImageStream).toHaveBeenCalledWith(
+        'marketplace-images/photo.webp',
+        'marketplace',
+      );
       expect(result.contentType).toBe('image/webp');
     });
   });
@@ -603,9 +706,18 @@ describe('Marketplace Services Unit Tests', () => {
         sellerId: 'user-seller',
       });
 
-      const isBuyer = await chatService.isUserConversationParticipant('user-buyer', 'conv-100');
-      const isSeller = await chatService.isUserConversationParticipant('user-seller', 'conv-100');
-      const isOutsider = await chatService.isUserConversationParticipant('user-hacker', 'conv-100');
+      const isBuyer = await chatService.isUserConversationParticipant(
+        'user-buyer',
+        'conv-100',
+      );
+      const isSeller = await chatService.isUserConversationParticipant(
+        'user-seller',
+        'conv-100',
+      );
+      const isOutsider = await chatService.isUserConversationParticipant(
+        'user-hacker',
+        'conv-100',
+      );
 
       expect(isBuyer).toBe(true);
       expect(isSeller).toBe(true);
@@ -621,12 +733,14 @@ describe('Marketplace Services Unit Tests', () => {
 
       const mockSocket = {
         id: 'socket-eve',
-        data: { userId: 'user-eve' },
+        data: { userId: 'user-eve', accessToken: 'user-eve' },
         join: jest.fn(),
         emit: jest.fn(),
       } as any;
 
-      const res = await gateway.handleJoinConversation(mockSocket, { conversationId: 'conv-secret' });
+      const res = await gateway.handleJoinConversation(mockSocket, {
+        conversationId: 'conv-secret',
+      });
 
       expect(mockSocket.join).not.toHaveBeenCalled();
       expect(res).toEqual(
@@ -646,15 +760,16 @@ describe('Marketplace Services Unit Tests', () => {
 
       const mockSocket = {
         id: 'socket-alice',
-        data: { userId: 'user-alice' },
+        data: { userId: 'user-alice', accessToken: 'user-alice' },
         join: jest.fn(),
         emit: jest.fn(),
       } as any;
 
-      await gateway.handleJoinConversation(mockSocket, { conversationId: 'conv-secret' });
+      await gateway.handleJoinConversation(mockSocket, {
+        conversationId: 'conv-secret',
+      });
 
       expect(mockSocket.join).toHaveBeenCalledWith('conv_conv-secret');
     });
   });
 });
-

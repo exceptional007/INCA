@@ -1,4 +1,4 @@
-import { IsEnum, IsString, IsNotEmpty, IsUUID, IsOptional } from 'class-validator';
+import { IsEnum, IsString, IsUUID, IsOptional } from 'class-validator';
 import { AttendanceStatus } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -10,12 +10,12 @@ export class EditRecordDto {
   @IsEnum(AttendanceStatus)
   newStatus: AttendanceStatus;
 
-  @ApiProperty({
-    description: 'UUID of the user making this edit (required for audit trail).',
+  @ApiPropertyOptional({
+    description: 'Deprecated compatibility field. Editor is derived from the authenticated user.',
   })
   @IsUUID()
-  @IsNotEmpty()
-  editedById: string;
+  @IsOptional()
+  editedById?: string;
 
   @ApiPropertyOptional({
     description: 'Reason for the correction (recommended for accountability).',

@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsEnum,
+  IsIn,
   IsBoolean,
   IsDateString,
   IsInt,
@@ -43,6 +44,8 @@ export enum NoticeTargetScope {
 
 export enum NoticeStatus {
   DRAFT = 'DRAFT',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  REJECTED = 'REJECTED',
   SCHEDULED = 'SCHEDULED',
   PUBLISHED = 'PUBLISHED',
   EXPIRED = 'EXPIRED',
@@ -65,15 +68,15 @@ export class CreateNoticeDto {
 
   @IsOptional()
   @IsEnum(NoticeCategory)
-  category?: NoticeCategory = NoticeCategory.GENERAL;
+  category?: NoticeCategory;
 
   @IsOptional()
   @IsEnum(NoticePriority)
-  priority?: NoticePriority = NoticePriority.NORMAL;
+  priority?: NoticePriority;
 
   @IsOptional()
   @IsEnum(NoticeTargetScope)
-  targetScope?: NoticeTargetScope = NoticeTargetScope.ALL;
+  targetScope?: NoticeTargetScope;
 
   @IsOptional()
   @IsString()
@@ -102,11 +105,11 @@ export class CreateNoticeDto {
 
   @IsOptional()
   @IsBoolean()
-  requiresAcknowledgement?: boolean = false;
+  requiresAcknowledgement?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  isPinned?: boolean = false;
+  isPinned?: boolean;
 
   @IsOptional()
   @IsDateString()
@@ -118,6 +121,11 @@ export class CreateNoticeDto {
 
   @IsOptional()
   @IsEnum(NoticeStatus)
-  status?: NoticeStatus = NoticeStatus.PUBLISHED;
+  @IsIn([
+    NoticeStatus.DRAFT,
+    NoticeStatus.PENDING_REVIEW,
+    NoticeStatus.SCHEDULED,
+    NoticeStatus.PUBLISHED,
+  ])
+  status?: NoticeStatus;
 }
-

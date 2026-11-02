@@ -20,6 +20,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import api from '@/api/axios';
+import { CardSwipeAttendance } from '@/components/attendance/CardSwipeAttendance';
 import { useNavigate } from 'react-router-dom';
 
 interface StudentRow {
@@ -60,6 +61,13 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
   onSuccess,
 }) => {
   const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState<'card' | 'list'>(() =>
+    localStorage.getItem('inca_attendance_view_mode') === 'list' ? 'list' : 'card',
+  );
+  const handleViewModeChange = (mode: 'card' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem('inca_attendance_view_mode', mode);
+  };
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sessionData, setSessionData] = useState<any>(null);
@@ -79,6 +87,9 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
 
   const initSession = async () => {
     setLoading(true);
+    setSessionData(null);
+    setStudents([]);
+    setAttendanceMap({});
     setErrorMessage(null);
     setSubmitted(false);
     try {
@@ -109,19 +120,19 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
   };
 
   const handleStatusChange = (studentId: string, status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED') => {
-    if (submitted) return;
+    if (submitted || submitting || loading) return;
     setAttendanceMap((prev) => ({ ...prev, [studentId]: status }));
   };
 
   const handleBulk = (status: 'PRESENT' | 'ABSENT') => {
-    if (submitted) return;
+    if (submitted || submitting || loading) return;
     const updated: Record<string, any> = {};
     students.forEach((s) => (updated[s.id] = status));
     setAttendanceMap(updated);
   };
 
   const handleSubmitAttendance = async () => {
-    if (!sessionData?.session?.id) return;
+    if (!sessionData?.session?.id || submitted || submitting || loading || students.length === 0) return;
     setSubmitting(true);
     setErrorMessage(null);
     try {
@@ -184,7 +195,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-5 pb-3 border-b border-border bg-card">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -199,7 +210,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                   </Badge>
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  Simulate real-time student attendance marking for this scheduled lecture session.
+                  Take attendance using INCA’s swipe cards or list view for this lecture session.
                 </DialogDescription>
               </div>
             </div>
@@ -238,13 +249,13 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
 
           {/* Live Attendance Stats Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-3 rounded-lg border border-border">
-            <div className="flex items-center gap-4 text-xs">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
               <div>
                 <span className="text-muted-foreground text-[11px] block">Present Rate</span>
                 <span className="text-base font-bold text-emerald-500">{presentRate}%</span>
               </div>
               <div className="h-7 w-[1px] bg-border" />
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
                   {presentCount} Present
                 </Badge>
@@ -264,13 +275,14 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
               </div>
             </div>
 
-            {!submitted && (
+            {viewMode === 'list' && !submitted && (
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => handleBulk('PRESENT')}
+                  disabled={loading || submitting}
                   className="text-xs h-7 px-2.5 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/30"
                 >
                   All Present
@@ -280,6 +292,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                   variant="outline"
                   size="sm"
                   onClick={() => handleBulk('ABSENT')}
+                  disabled={loading || submitting}
                   className="text-xs h-7 px-2.5 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border-rose-500/30"
                 >
                   All Absent
@@ -301,13 +314,24 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
             </div>
           )}
 
-          {/* Enrolled Students Roster */}
+          <div className="flex items-center gap-2" role="group" aria-label="Attendance view">
+            <Button type="button" size="sm" variant={viewMode === 'card' ? 'default' : 'outline'}
+              aria-pressed={viewMode === 'card'} onClick={() => handleViewModeChange('card')}>
+              Card Swipe
+            </Button>
+            <Button type="button" size="sm" variant={viewMode === 'list' ? 'default' : 'outline'}
+              aria-pressed={viewMode === 'list'} onClick={() => handleViewModeChange('list')}>
+              List View
+            </Button>
+          </div>
+
+          {/* Both views share the same session and attendance map. */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
               <span className="font-semibold uppercase tracking-wider text-[10px]">
                 Enrolled Students ({students.length})
               </span>
-              <span className="text-[11px]">Click status button to toggle</span>
+              <span className="text-[11px]">{viewMode === 'card' ? 'Swipe right for present, left for absent' : 'Click status button to toggle'}</span>
             </div>
 
             {loading ? (
@@ -319,6 +343,16 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
               <div className="p-6 text-center text-xs text-muted-foreground bg-muted/20 rounded-md border border-dashed">
                 No students found for this section.
               </div>
+            ) : viewMode === 'card' ? (
+              <CardSwipeAttendance
+                key={sessionData?.session?.id}
+                studentList={students}
+                attendanceMap={attendanceMap}
+                onMarkStatus={handleStatusChange}
+                isLocked={submitted || submitting}
+                onSubmit={handleSubmitAttendance}
+                isSubmitting={submitting}
+              />
             ) : (
               <div className="divide-y divide-border border border-border rounded-lg bg-card overflow-hidden">
                 {students.map((student) => {
@@ -326,7 +360,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                   return (
                     <div
                       key={student.id}
-                      className="p-3 flex items-center justify-between gap-3 hover:bg-secondary/30 transition-colors"
+                      className="p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-secondary/30 transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0 border border-primary/20">
@@ -337,7 +371,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                           <div className="font-semibold text-xs text-foreground">
                             {student.firstName} {student.lastName || ''}
                           </div>
-                          <div className="text-[10px] text-muted-foreground font-mono flex items-center gap-2">
+                          <div className="text-[10px] text-muted-foreground font-mono flex flex-wrap items-center gap-2">
                             <span>Roll: {student.rollNumber}</span>
                             <span>•</span>
                             <span>ID: {student.collegeId}</span>
@@ -349,8 +383,10 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          disabled={submitted}
+                          disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'PRESENT')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} present`}
+                          aria-pressed={status === 'PRESENT'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'PRESENT'
                               ? 'bg-emerald-500 text-white shadow-xs'
@@ -362,8 +398,10 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                         </button>
                         <button
                           type="button"
-                          disabled={submitted}
+                          disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'ABSENT')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} absent`}
+                          aria-pressed={status === 'ABSENT'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'ABSENT'
                               ? 'bg-rose-500 text-white shadow-xs'
@@ -375,8 +413,10 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                         </button>
                         <button
                           type="button"
-                          disabled={submitted}
+                          disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'LATE')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} late`}
+                          aria-pressed={status === 'LATE'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'LATE'
                               ? 'bg-amber-500 text-white shadow-xs'
@@ -388,8 +428,10 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                         </button>
                         <button
                           type="button"
-                          disabled={submitted}
+                          disabled={submitted || submitting || loading}
                           onClick={() => handleStatusChange(student.id, 'EXCUSED')}
+                          aria-label={`Mark ${student.firstName} ${student.lastName || ''} excused`}
+                          aria-pressed={status === 'EXCUSED'}
                           className={`w-7 h-7 rounded text-[11px] font-bold transition-all ${
                             status === 'EXCUSED'
                               ? 'bg-blue-500 text-white shadow-xs'
@@ -426,14 +468,14 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                 size="sm"
                 onClick={() => {
                   onOpenChange(false);
-                  navigate('/attendance/mark');
+                  navigate(`/attendance/mark?scheduleId=${encodeURIComponent(sessionData.schedule.id)}`);
                 }}
                 className="text-xs bg-primary text-primary-foreground flex items-center gap-1"
               >
                 <span>Open Full Attendance Portal</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Button>
-            ) : (
+            ) : viewMode === 'list' ? (
               <Button
                 type="button"
                 size="sm"
@@ -453,7 +495,7 @@ export const DemoAttendanceModal: React.FC<DemoAttendanceModalProps> = ({
                   </>
                 )}
               </Button>
-            )}
+            ) : null}
           </div>
         </DialogFooter>
       </DialogContent>

@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React, { useState } from 'react';
 import type { LostFoundReport, LostFoundClaim } from '@/types/lost-found';
 import { getCategoryIcon, formatCategoryLabel } from './ItemCard';
@@ -56,10 +57,11 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full border border-border shadow-xl my-8 overflow-hidden flex flex-col max-h-[90vh]">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="p-0 gap-0 bg-white rounded-2xl max-w-2xl w-full border border-border shadow-xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]">
+        <DialogTitle className="sr-only">Item Detail</DialogTitle>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-slate-50/50">
+        <div className="px-4 sm:px-6 py-4 shrink-0 border-b border-border flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
             <span
               className={`px-2.5 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 ${
@@ -75,20 +77,20 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               />
               {isLost ? 'Lost Item Report' : 'Found Item Report'}
             </span>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="shrink-0 text-xs">
               {item.status}
             </Badge>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label="Close dialog" className="p-2 shrink-0 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
           {/* Image Gallery */}
           {images.length > 0 ? (
             <div className="space-y-2">
@@ -285,7 +287,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
 
         {/* Modal Actions Footer */}
-        <div className="px-6 py-3.5 border-t border-border bg-slate-50/50 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3.5 shrink-0 border-t border-border bg-slate-50/50 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div>
             {matchesCount > 0 && (
               <Button
@@ -300,7 +302,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -322,8 +324,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

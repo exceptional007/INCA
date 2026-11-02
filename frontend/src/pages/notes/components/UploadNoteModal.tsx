@@ -439,6 +439,7 @@ export const UploadNoteModal: React.FC<UploadNoteModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleRemoveTag(tag)}
+                        aria-label={`Remove tag ${tag}`}
                         className="hover:text-destructive"
                       >
                         <X className="size-3" />
@@ -475,6 +476,9 @@ export const UploadNoteModal: React.FC<UploadNoteModalProps> = ({
             <button
               type="button"
               onClick={() => setIsDraft(!isDraft)}
+              role="switch"
+              aria-label="Publish immediately"
+              aria-checked={!isDraft}
               className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
                 !isDraft ? 'bg-primary' : 'bg-muted-foreground/30'
               }`}

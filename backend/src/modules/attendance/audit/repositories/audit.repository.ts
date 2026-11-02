@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { AttendanceStatus } from '@prisma/client';
+import { AttendanceStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuditRepository {
@@ -79,8 +79,9 @@ export class AuditRepository {
     });
   }
 
-  async findAll() {
+  async findAll(scope: Prisma.AttendanceSessionWhereInput) {
     return this.prisma.attendanceAudit.findMany({
+      where: { attendanceRecord: { attendanceSession: scope } },
       include: {
         editedBy: {
           select: { id: true, email: true, isActive: true },

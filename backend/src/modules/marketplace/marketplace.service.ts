@@ -59,7 +59,7 @@ export class MarketplaceService {
   }
 
   async streamImage(key: string) {
-    return this.r2Storage.getObjectStream(key);
+    return this.r2Storage.getPublicImageStream(key, 'marketplace');
   }
 
   async createListing(userId: string, userRole: string, dto: CreateListingDto) {

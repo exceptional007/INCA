@@ -164,6 +164,40 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  :where(.grid) > * {
+    min-width: 0;
+  }
+  input, select, textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* Keep every dialog reachable on short screens and when the phone keyboard opens.
+   Individual dialogs retain their own desktop widths and scroll containers. */
+[data-responsive-dialog] {
+  max-height: calc(100dvh - 1.5rem);
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+[data-has-close-button] > [data-dialog-header] {
+  padding-inline-end: max(2.75rem, env(safe-area-inset-right, 0px));
+}
+@media (min-width: 640px) {
+  [data-responsive-dialog] {
+    max-height: min(90dvh, calc(100dvh - 2rem));
+  }
+}
+@media (max-width: 639px) {
+  [data-responsive-dialog] {
+    max-width: calc(100vw - 1.5rem);
+    border-radius: 1rem;
+  }
+  /* iOS zooms focused fields smaller than 16px and disrupts the layout. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select, textarea {
+    font-size: 16px;
+  }
 }
 
 /* Apple Typography Utility Classes (defined in Inter) */
@@ -277,4 +311,31 @@
   font-weight: 400;
   line-height: 1.0;
   letter-spacing: -0.01em;
+}
+
+.landing-page .landing-eyebrow {
+  font-size: .68rem;
+  font-weight: 650;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.landing-page .landing-heading {
+  font-size: clamp(1.9rem, 4vw, 3.2rem);
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -.035em;
+  overflow-wrap: break-word;
+}
+.landing-page a, .landing-page button { -webkit-tap-highlight-color: transparent; }
+.landing-page a:focus-visible, .landing-page button:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.landing-page) { scroll-behavior: smooth; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-page *, .landing-page *::before, .landing-page *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

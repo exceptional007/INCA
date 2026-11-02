@@ -374,7 +374,7 @@ export const SubjectReportView: React.FC<SubjectReportViewProps> = ({
             </CardDescription>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Button
               type="button"
               variant={filterShortfallOnly ? 'destructive' : 'outline'}
@@ -386,7 +386,7 @@ export const SubjectReportView: React.FC<SubjectReportViewProps> = ({
               <span>{filterShortfallOnly ? 'Show All Students' : 'Shortfall Only (<75%)'}</span>
             </Button>
 
-            <div className="relative w-48">
+            <div className="relative w-full sm:w-48">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search roster..."

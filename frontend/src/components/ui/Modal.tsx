@@ -58,7 +58,7 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.2 }}
-            className={`relative w-full ${maxWidthClasses[maxWidth]} glass-card rounded-2xl p-6 shadow-2xl border border-white/10 z-10`}
+            className={`relative w-full min-w-0 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain ${maxWidthClasses[maxWidth]} glass-card rounded-2xl p-4 sm:p-6 shadow-2xl border border-white/10 z-10`}
           >
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
               {title && (
@@ -66,7 +66,8 @@ export const Modal: React.FC<ModalProps> = ({
               )}
               <button
                 onClick={onClose}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Close dialog"
+                className="text-slate-400 hover:text-white p-2 shrink-0 rounded-lg hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>

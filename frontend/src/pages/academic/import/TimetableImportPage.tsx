@@ -380,7 +380,7 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
               <p className="text-xs text-muted-foreground">Historical batch list, AI vision verification, and timetable scheduling.</p>
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="flex max-w-full flex-wrap gap-2">
             <Button variant="outline" size="sm" className="flex items-center gap-1.5 text-xs h-8" onClick={() => setView('history')}>
               <History className="w-3.5 h-3.5" /> Rollback / History
             </Button>
@@ -400,7 +400,7 @@ export const TimetableImportPage: React.FC<TimetableImportPageProps> = ({ embedd
       {/* Main Views */}
       {view === 'list' && (
         <Card>
-          <CardHeader className="pb-3 flex flex-row items-center justify-between border-b">
+          <CardHeader className="pb-3 flex flex-col gap-3 sm:flex-row sm:items-center justify-between border-b">
             <div>
               <CardTitle>Historical Import Batches</CardTitle>
               <CardDescription>View, verify, and approve uploaded timetable sheets.</CardDescription>

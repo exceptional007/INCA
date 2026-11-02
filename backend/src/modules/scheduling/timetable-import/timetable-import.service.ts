@@ -12,6 +12,9 @@ import { ensureCanvasPolyfills } from '../../../common/utils/canvas-polyfill';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { ImportBatchStatus } from '@prisma/client';
+import { AttendanceAccessService } from '../../attendance/sessions/attendance-access.service';
+import type { AttendanceActor } from '../../attendance/sessions/attendance-access.service';
+import { SessionsService } from '../../attendance/sessions/sessions.service';
 
 /** Maximum allowed PDF file size: 20MB */
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -30,6 +33,8 @@ export class TimetableImportService {
     private readonly textParserService: PdfTextParserService,
     private readonly matchingService: MatchingService,
     private readonly conflictService: ConflictService,
+    private readonly attendanceAccess: AttendanceAccessService,
+    private readonly attendanceSessions: SessionsService,
   ) {}
 
   /**
@@ -1446,9 +1451,17 @@ export class TimetableImportService {
     startDateStr?: string,
     endDateStr?: string,
     txClient?: any,
+    departmentId?: string,
   ) {
-    const db = txClient || this.prisma;
+    if (!txClient) {
+      return this.prisma.$transaction(
+        (tx) => this.syncTimetableToSchedules(versionIdOrIds, startDateStr, endDateStr, tx, departmentId),
+        { timeout: 60000 },
+      );
+    }
+    const db = txClient;
     const whereClause: any = { isActive: true };
+    if (departmentId) whereClause.section = {semester: {program: {departmentId}}};
     if (versionIdOrIds) {
       if (Array.isArray(versionIdOrIds)) {
         whereClause.id = { in: versionIdOrIds };
@@ -1536,6 +1549,21 @@ export class TimetableImportService {
       }
     }
 
+    // Replace only untouched sessions; preserve attendance and schedule exceptions.
+    const currentIds = Array.from(currentTemplateMap.values()).map((t) => t.id);
+    if (affectedSectionIds.length > 0) {
+      await db.schedule.deleteMany({
+        where: {
+          template: { sectionId: { in: affectedSectionIds } },
+          templateId: { notIn: currentIds },
+          lectureDate: { gte: start, lte: end },
+          status: 'SCHEDULED',
+          attendanceSessions: { none: {} },
+          exceptions: { none: {} },
+        },
+      });
+    }
+
     // Pre-fetch existing schedules in date range for templates of the active versions
     const templateIds = Array.from(currentTemplateMap.values()).map((t) => t.id);
     const existingSchedules = await db.schedule.findMany({
@@ -1559,7 +1587,7 @@ export class TimetableImportService {
       const cur = new Date(start.getTime());
       while (cur <= end) {
         const currentDayOfWeek = cur.getUTCDay() === 0 ? 7 : cur.getUTCDay();
-        if (currentDayOfWeek === template.dayOfWeek) {
+        if (currentDayOfWeek === template.dayOfWeek && cur >= template.effectiveFrom && (!template.effectiveTo || cur <= template.effectiveTo)) {
           const y = cur.getUTCFullYear();
           const m = cur.getUTCMonth();
           const dayNum = cur.getUTCDate();
@@ -1591,6 +1619,7 @@ export class TimetableImportService {
       message: `Synchronized ${templatesCreated} templates and generated ${schedulesCreated} daily lecture sessions.`,
       templatesCreated,
       schedulesCreated,
+      sectionIds: affectedSectionIds as string[],
     };
   }
 
@@ -1598,11 +1627,13 @@ export class TimetableImportService {
     slotId?: string;
     scheduleId?: string;
     sectionId?: string;
-  }) {
+  }, actor: AttendanceActor) {
+    // The demo endpoint must enforce the same identity and assignment rules as normal attendance.
+    await this.attendanceAccess.facultyIdForActor(actor);
     let targetSchedule: any = null;
-    let targetFacultyId: string | null = null;
 
     if (params.scheduleId) {
+      await this.attendanceAccess.assertSourceAccess(actor, { scheduleId: params.scheduleId });
       targetSchedule = await this.prisma.schedule.findUnique({
         where: { id: params.scheduleId },
         include: {
@@ -1622,12 +1653,14 @@ export class TimetableImportService {
           },
         },
       });
-      if (targetSchedule) {
-        targetFacultyId = targetSchedule.template.facultyId;
-      }
     }
 
     if (!targetSchedule && params.slotId) {
+      const permittedSlot = await this.prisma.timetableSlot.findFirst({
+        where: { id: params.slotId, AND: [await this.attendanceAccess.demoSlotScope(actor)] },
+        select: { id: true },
+      });
+      if (!permittedSlot) throw new BadRequestException('No authorized timetable slot found.');
       const slot = await this.prisma.timetableSlot.findUnique({
         where: { id: params.slotId },
         include: {
@@ -1639,7 +1672,6 @@ export class TimetableImportService {
       });
 
       if (slot) {
-        targetFacultyId = slot.facultyId;
         const dayToInt: Record<string, number> = {
           MON: 1, MONDAY: 1, TUE: 2, TUESDAY: 2, WED: 3, WEDNESDAY: 3,
           THU: 4, THURSDAY: 4, FRI: 5, FRIDAY: 5, SAT: 6, SATURDAY: 6, SUN: 7, SUNDAY: 7,
@@ -1712,7 +1744,7 @@ export class TimetableImportService {
       }
 
       const anySlot = await this.prisma.timetableSlot.findFirst({
-        where: slotWhere,
+        where: { AND: [slotWhere, await this.attendanceAccess.demoSlotScope(actor)] },
         include: {
           version: true,
           subject: true,
@@ -1722,54 +1754,19 @@ export class TimetableImportService {
       });
 
       if (anySlot) {
-        return this.createTestLectureSession({ slotId: anySlot.id });
+        return this.createTestLectureSession({ slotId: anySlot.id }, actor);
       } else {
         throw new BadRequestException('No active timetable slot found to create test lecture session.');
       }
     }
 
-    if (!targetFacultyId) {
-      const fallbackFaculty = await this.prisma.faculty.findFirst();
-      targetFacultyId = fallbackFaculty?.id || '';
-    }
+    const { data: session } = await this.attendanceSessions.create({
+      scheduleId: targetSchedule.id,
+      attendanceDate: new Date().toISOString().slice(0, 10),
+    }, actor);
 
-    // Find or create AttendanceSession for today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let session = await this.prisma.attendanceSession.findFirst({
-      where: {
-        scheduleId: targetSchedule.id,
-        attendanceDate: today,
-      },
-      include: {
-        records: {
-          include: { student: true },
-        },
-      },
-    });
-
-    if (!session) {
-      session = await this.prisma.attendanceSession.create({
-        data: {
-          scheduleId: targetSchedule.id,
-          takenById: targetFacultyId || '',
-          attendanceDate: today,
-          status: 'OPEN',
-        },
-        include: {
-          records: {
-            include: { student: true },
-          },
-        },
-      });
-    }
-
-    // Load active students
-    const students = await this.prisma.student.findMany({
-      where: { isActive: true },
-      orderBy: { rollNumber: 'asc' },
-    });
+    // Use the same authorized roster and enrollment rules as normal attendance.
+    const { data: students } = await this.attendanceSessions.getRoster(session.id, actor);
 
     return {
       success: true,

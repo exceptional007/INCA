@@ -1,13 +1,27 @@
 import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
 import { ChevronRight, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { gsap } from 'gsap'
 
 const Breadcrumb = React.forwardRef<
   HTMLElement,
   React.ComponentPropsWithoutRef<"nav"> & {
     separator?: React.ReactNode
+    motionKey?: string
   }
->(({ ...props }, ref) => <nav ref={ref} aria-label="breadcrumb" {...props} />)
+>(({ motionKey = '', ...props }, ref) => {
+  const root = React.useRef<HTMLElement>(null)
+  React.useImperativeHandle(ref, () => root.current!)
+  React.useLayoutEffect(() => {
+    const media = gsap.matchMedia()
+    media.add('(prefers-reduced-motion: no-preference)', () => {
+      if (root.current) gsap.fromTo(root.current.querySelectorAll('li'), { opacity: 0, y: 4 }, { opacity: 1, y: 0, stagger: .025, duration: .3, ease: 'power2.out', clearProps: 'transform,opacity' })
+    })
+    return () => media.revert()
+  }, [motionKey])
+  return <nav ref={root} aria-label="breadcrumb" {...props} />
+})
 Breadcrumb.displayName = "Breadcrumb"
 
 const BreadcrumbList = React.forwardRef<
@@ -42,9 +56,10 @@ const BreadcrumbLink = React.forwardRef<
   React.ComponentPropsWithoutRef<"a"> & {
     asChild?: boolean
   }
->(({ className, ...props }, ref) => {
+>(({ asChild = false, className, ...props }, ref) => {
+  const Component = asChild ? Slot : "a"
   return (
-    <a
+    <Component
       ref={ref}
       className={cn("transition-colors hover:text-foreground font-medium", className)}
       {...props}

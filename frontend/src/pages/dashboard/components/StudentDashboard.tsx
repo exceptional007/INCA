@@ -4,6 +4,11 @@ import { Clock, AlertTriangle, CheckCircle, Loader2, CalendarX, BellOff } from '
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import api from '@/api/axios';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { noticeApi } from '@/services/notice';
+import type { Notice } from '@/types/notice';
+import { NoticeDetailModal } from '@/pages/notices/NoticeDetailModal';
 
 interface SessionItem {
   id: string;
@@ -51,6 +56,12 @@ interface AcademicNotice {
   body: string;
   date: string;
   author: string;
+  priority: string;
+  isPinned: boolean;
+  isRead: boolean;
+  requiresAcknowledgement: boolean;
+  isAcknowledged: boolean;
+  attachmentCount: number;
 }
 
 export const StudentDashboard: React.FC = () => {
@@ -75,6 +86,9 @@ export const StudentDashboard: React.FC = () => {
   // Notices state
   const [notices, setNotices] = useState<AcademicNotice[]>([]);
   const [isLoadingNotices, setIsLoadingNotices] = useState<boolean>(true);
+  const [noticesError, setNoticesError] = useState<string | null>(null);
+  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+  const [openingNoticeId, setOpeningNoticeId] = useState<string | null>(null);
 
   // Helper to determine if a class is completed based on time
   const isClassCompleted = (endTimeStr: string, lectureDate?: string): boolean => {
@@ -118,16 +132,6 @@ export const StudentDashboard: React.FC = () => {
         rawSchedules = res.data?.data || [];
       } catch (err) {
         console.error('Failed to fetch /schedules/today:', err);
-      }
-
-      // Fallback if today's exact list is empty
-      if (rawSchedules.length === 0) {
-        try {
-          const allRes = await api.get('/schedules');
-          rawSchedules = allRes.data?.data || [];
-        } catch (err) {
-          console.error('Failed to fetch /schedules fallback:', err);
-        }
       }
 
       const formattedClasses: TodayClassItem[] = rawSchedules.map((sch: any) => {
@@ -194,21 +198,48 @@ export const StudentDashboard: React.FC = () => {
   // 3. Fetch Academic Notices
   const fetchNotices = useCallback(async () => {
     setIsLoadingNotices(true);
+    setNoticesError(null);
     try {
       const res = await api.get('/students/academic/notices');
       setNotices(res.data?.data || []);
     } catch (err: any) {
+      setNotices([]);
+      setNoticesError('Could not load your notices. Please try again.');
       console.error('Failed to load academic notices:', err);
     } finally {
       setIsLoadingNotices(false);
     }
   }, []);
 
+  const openNotice = async (noticeId: string) => {
+    setOpeningNoticeId(noticeId);
+    try {
+      const notice = await noticeApi.getNoticeById(noticeId);
+      setSelectedNotice(notice);
+      setNotices((previous) => previous.map((item) => item.id === noticeId ? { ...item, isRead: true } : item));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Could not open this notice. It may no longer be available.');
+      fetchNotices();
+    } finally {
+      setOpeningNoticeId(null);
+    }
+  };
+
   useEffect(() => {
     fetchTimetable();
     fetchAttendance();
     fetchNotices();
   }, [fetchTimetable, fetchAttendance, fetchNotices]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void fetchTimetable(); };
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.clearInterval(timer);
+    };
+  }, [fetchTimetable]);
 
   const selectedCourse = subjectSummaries.find((s) => s.code === selectedSubjectCode);
 
@@ -231,7 +262,7 @@ export const StudentDashboard: React.FC = () => {
         <div>
           <span className="text-xs uppercase text-action-blue tracking-widest font-semibold">ASSAM Student Portal</span>
           <h2 className="text-2xl font-semibold tracking-tight text-ink mt-0.5">Student Academic Desk</h2>
-          <p className="text-xs text-ink-muted-80">Track course schedule, view attendance, and batch notices.</p>
+          <p className="text-xs text-ink-muted-80">Track your course schedule, attendance, and campus notices.</p>
         </div>
 
         {/* Navigation Tabs */}
@@ -506,19 +537,30 @@ export const StudentDashboard: React.FC = () => {
       {/* --- Tab Content: Academic Notices --- */}
       {activeTab === 'notices' && (
         <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
-          <h3 className="text-base font-semibold text-ink pb-4 border-b mb-6">Batch Announcements & Notices</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b mb-6">
+            <h3 className="text-base font-semibold text-ink">Your Latest Notices</h3>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={fetchNotices} disabled={isLoadingNotices}>Refresh</Button>
+              <Button variant="outline" size="sm" asChild><Link to="/notices">View all notices</Link></Button>
+            </div>
+          </div>
           
           {isLoadingNotices ? (
             <div className="flex flex-col items-center justify-center py-16 text-ink-muted-80">
               <Loader2 className="h-7 w-7 animate-spin text-action-blue mb-2" />
               <p className="text-xs">Loading announcements...</p>
             </div>
+          ) : noticesError ? (
+            <div role="alert" className="text-center py-12 space-y-3">
+              <p className="text-sm text-ink-muted-80">{noticesError}</p>
+              <Button variant="outline" onClick={fetchNotices}>Retry</Button>
+            </div>
           ) : notices.length === 0 ? (
             <div className="text-center py-16 px-4 border border-dashed border-[#e0e0e0] rounded-xl bg-canvas-parchment/20">
               <BellOff className="h-10 w-10 text-ink-muted-48 mx-auto mb-2 opacity-60" />
-              <p className="text-sm font-semibold text-ink">No Academic Notices Published</p>
+              <p className="text-sm font-semibold text-ink">No Notices Published</p>
               <p className="text-xs text-ink-muted-80 mt-1 max-w-sm mx-auto">
-                There are currently no active notices or announcements published for your batch or department. New announcements will appear here once released by the academic office.
+                There are currently no active announcements for your audience. New notices will appear here when published.
               </p>
             </div>
           ) : (
@@ -527,18 +569,35 @@ export const StudentDashboard: React.FC = () => {
                 <div key={notice.id} className="border-b pb-6 last:border-0 last:pb-0 space-y-2">
                   <div className="flex justify-between items-start">
                     <h4 className="text-sm font-semibold text-ink">{notice.title}</h4>
-                    <span className="text-[10px] text-ink-muted-48">{notice.date}</span>
+                    <time dateTime={notice.date} className="text-[10px] text-ink-muted-48">{new Date(notice.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time>
                   </div>
-                  <p className="text-xs text-ink-muted-80 leading-relaxed">
+                  <div className="flex flex-wrap gap-2">
+                    {!notice.isRead && <Badge variant="secondary">Unread</Badge>}
+                    {notice.isPinned && <Badge variant="outline">Pinned</Badge>}
+                    {['HIGH', 'CRITICAL', 'URGENT'].includes(notice.priority) && <Badge variant="destructive">{notice.priority}</Badge>}
+                    {notice.requiresAcknowledgement && !notice.isAcknowledged && <Badge variant="outline">Acknowledgement required</Badge>}
+                    {notice.attachmentCount > 0 && <Badge variant="outline">{notice.attachmentCount} attachment{notice.attachmentCount === 1 ? '' : 's'}</Badge>}
+                  </div>
+                  <p className="text-xs text-ink-muted-80 leading-relaxed whitespace-pre-line line-clamp-3">
                     {notice.body}
                   </p>
                   <p className="text-[10px] text-ink-muted-48">Published by: <strong className="text-ink">{notice.author}</strong></p>
+                  <Button variant="outline" size="sm" onClick={() => openNotice(notice.id)} disabled={openingNoticeId !== null}>
+                    {openingNoticeId === notice.id ? 'Opening…' : 'Read notice'}
+                  </Button>
                 </div>
               ))}
             </div>
           )}
         </Card>
       )}
+      {selectedNotice && <NoticeDetailModal
+        key={selectedNotice.id}
+        notice={selectedNotice}
+        isOpen
+        onClose={() => setSelectedNotice(null)}
+        onNoticeUpdated={fetchNotices}
+      />}
     </div>
   );
 };

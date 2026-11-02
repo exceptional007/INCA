@@ -1,5 +1,5 @@
-import api from '@/api/axios';
-import { io, type Socket } from 'socket.io-client';
+import api, { refreshSession, clearSession } from "@/api/axios";
+import { io, type Socket } from "socket.io-client";
 import type {
   MarketplaceListing,
   MarketplaceConversation,
@@ -12,24 +12,42 @@ import type {
   ProductCondition,
   ListingStatus,
   ReportStatus,
-} from '@/types/marketplace';
+} from "@/types/marketplace";
 
 // Socket connection singleton
 let socket: Socket | null = null;
 
 export const getMarketplaceSocket = (): Socket => {
-  const token = localStorage.getItem('inca_token');
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-  const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
+  const token = localStorage.getItem("inca_token");
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
+  const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, "");
 
   if (!socket) {
     socket = io(`${baseUrl}/marketplace`, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ["websocket", "polling"],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+    });
+    socket.on("disconnect", (reason) => {
+      const token = localStorage.getItem("inca_token");
+      let restricted = false;
+      try {
+        restricted = !!JSON.parse(localStorage.getItem("inca_user") || "null")
+          ?.mustChangePassword;
+      } catch {}
+      if (reason === "io server disconnect" && token && !restricted) {
+        void refreshSession(token)
+          .then((fresh) => {
+            if (socket) {
+              socket.auth = { token: fresh };
+              if (!socket.connected) socket.connect();
+            }
+          })
+          .catch(() => clearSession());
+      }
     });
   } else if (!socket.connected && token) {
     socket.auth = { token };
@@ -46,19 +64,37 @@ export const disconnectMarketplaceSocket = () => {
   }
 };
 
+const syncMarketplaceSession = () => {
+  if (!socket) return;
+  const token = localStorage.getItem("inca_token");
+  if (!token) {
+    disconnectMarketplaceSocket();
+    return;
+  }
+  if ((socket.auth as { token?: string }).token !== token) {
+    socket.disconnect();
+    socket.auth = { token };
+    socket.connect();
+  }
+};
+window.addEventListener("inca-auth-updated", syncMarketplaceSession);
+window.addEventListener("storage", syncMarketplaceSession);
+
 /**
  * Universal delivery URL resolver for Cloudflare R2 marketplace images.
  */
-export const getMarketplaceImageUrl = (urlOrKey: string | null | undefined): string => {
-  if (!urlOrKey) return '';
-  if (urlOrKey.startsWith('http://') || urlOrKey.startsWith('https://')) {
+export const getMarketplaceImageUrl = (
+  urlOrKey: string | null | undefined,
+): string => {
+  if (!urlOrKey) return "";
+  if (urlOrKey.startsWith("http://") || urlOrKey.startsWith("https://")) {
     return urlOrKey;
   }
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-  const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
+  const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, "");
 
-  if (urlOrKey.startsWith('/api/')) {
+  if (urlOrKey.startsWith("/api/")) {
     return `${baseUrl}${urlOrKey}`;
   }
 
@@ -72,8 +108,8 @@ export interface ListingQueryParams {
   status?: ListingStatus | string;
   minPrice?: number;
   maxPrice?: number;
-  sortBy?: 'createdAt' | 'price' | 'views';
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: "createdAt" | "price" | "views";
+  sortOrder?: "asc" | "desc";
   page?: number;
   limit?: number;
 }
@@ -87,17 +123,21 @@ export const marketplaceApi = {
       page: number;
       limit: number;
       totalPages: number;
-    }>('/marketplace/listings', { params });
+    }>("/marketplace/listings", { params });
     return res.data;
   },
 
   getListingById: async (id: string) => {
-    const res = await api.get<MarketplaceListing>(`/marketplace/listings/${id}`);
+    const res = await api.get<MarketplaceListing>(
+      `/marketplace/listings/${id}`,
+    );
     return res.data;
   },
 
   getMyListings: async () => {
-    const res = await api.get<MarketplaceListing[]>('/marketplace/listings/my-listings');
+    const res = await api.get<MarketplaceListing[]>(
+      "/marketplace/listings/my-listings",
+    );
     return res.data;
   },
 
@@ -110,23 +150,32 @@ export const marketplaceApi = {
     visibility?: string;
     pickupLocation?: string;
   }) => {
-    const res = await api.post<MarketplaceListing>('/marketplace/listings', data);
+    const res = await api.post<MarketplaceListing>(
+      "/marketplace/listings",
+      data,
+    );
     return res.data;
   },
 
   uploadListingImages: async (listingId: string, files: File[]) => {
     const formData = new FormData();
-    files.forEach((file) => formData.append('images', file));
-    const res = await api.post(`/marketplace/listings/${listingId}/images`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+    files.forEach((file) => formData.append("images", file));
+    const res = await api.post(
+      `/marketplace/listings/${listingId}/images`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       },
-    });
+    );
     return res.data;
   },
 
   deleteListingImage: async (listingId: string, imageId: string) => {
-    const res = await api.delete(`/marketplace/listings/${listingId}/images/${imageId}`);
+    const res = await api.delete(
+      `/marketplace/listings/${listingId}/images/${imageId}`,
+    );
     return res.data;
   },
 
@@ -143,7 +192,10 @@ export const marketplaceApi = {
       status: ListingStatus;
     }>,
   ) => {
-    const res = await api.patch<MarketplaceListing>(`/marketplace/listings/${id}`, data);
+    const res = await api.patch<MarketplaceListing>(
+      `/marketplace/listings/${id}`,
+      data,
+    );
     return res.data;
   },
 
@@ -159,12 +211,17 @@ export const marketplaceApi = {
 
   // CHAT & CONVERSATIONS
   getOrCreateConversation: async (listingId: string) => {
-    const res = await api.post<MarketplaceConversation>('/marketplace/conversations', { listingId });
+    const res = await api.post<MarketplaceConversation>(
+      "/marketplace/conversations",
+      { listingId },
+    );
     return res.data;
   },
 
   getUserConversations: async () => {
-    const res = await api.get<MarketplaceConversation[]>('/marketplace/conversations');
+    const res = await api.get<MarketplaceConversation[]>(
+      "/marketplace/conversations",
+    );
     return res.data;
   },
 
@@ -178,7 +235,12 @@ export const marketplaceApi = {
     return res.data;
   },
 
-  sendMessage: async (conversationId: string, content: string, messageType = 'TEXT', metadata?: any) => {
+  sendMessage: async (
+    conversationId: string,
+    content: string,
+    messageType = "TEXT",
+    metadata?: any,
+  ) => {
     const res = await api.post<MarketplaceMessage>(
       `/marketplace/conversations/${conversationId}/messages`,
       { conversationId, content, messageType, metadata },
@@ -187,30 +249,40 @@ export const marketplaceApi = {
   },
 
   getUnreadCount: async () => {
-    const res = await api.get<{ unreadCount: number }>('/marketplace/conversations/unread-count');
+    const res = await api.get<{ unreadCount: number }>(
+      "/marketplace/conversations/unread-count",
+    );
     return res.data;
   },
 
   // OFFERS & NEGOTIATION
   createOffer: async (listingId: string, amount: number) => {
-    const res = await api.post<MarketplaceOffer>('/marketplace/offers', { listingId, amount });
+    const res = await api.post<MarketplaceOffer>("/marketplace/offers", {
+      listingId,
+      amount,
+    });
     return res.data;
   },
 
   getListingOffers: async (listingId: string) => {
-    const res = await api.get<MarketplaceOffer[]>(`/marketplace/offers/listing/${listingId}`);
+    const res = await api.get<MarketplaceOffer[]>(
+      `/marketplace/offers/listing/${listingId}`,
+    );
     return res.data;
   },
 
   respondOffer: async (
     offerId: string,
-    action: 'ACCEPT' | 'REJECT' | 'COUNTER' | 'CANCEL',
+    action: "ACCEPT" | "REJECT" | "COUNTER" | "CANCEL",
     counterAmount?: number,
   ) => {
-    const res = await api.patch<MarketplaceOffer>(`/marketplace/offers/${offerId}/respond`, {
-      action,
-      counterAmount,
-    });
+    const res = await api.patch<MarketplaceOffer>(
+      `/marketplace/offers/${offerId}/respond`,
+      {
+        action,
+        counterAmount,
+      },
+    );
     return res.data;
   },
 
@@ -220,11 +292,14 @@ export const marketplaceApi = {
     offerId?: string,
     schedule?: { location?: string; date?: string; time?: string },
   ) => {
-    const res = await api.post<MarketplaceTransaction>('/marketplace/transactions', {
-      listingId,
-      offerId,
-      ...schedule,
-    });
+    const res = await api.post<MarketplaceTransaction>(
+      "/marketplace/transactions",
+      {
+        listingId,
+        offerId,
+        ...schedule,
+      },
+    );
     return res.data;
   },
 
@@ -240,14 +315,17 @@ export const marketplaceApi = {
   },
 
   getMyDeals: async () => {
-    const res = await api.get<{ purchases: MarketplaceTransaction[]; sales: MarketplaceTransaction[] }>(
-      '/marketplace/transactions/my-deals',
-    );
+    const res = await api.get<{
+      purchases: MarketplaceTransaction[];
+      sales: MarketplaceTransaction[];
+    }>("/marketplace/transactions/my-deals");
     return res.data;
   },
 
   getTransactionById: async (id: string) => {
-    const res = await api.get<MarketplaceTransaction>(`/marketplace/transactions/${id}`);
+    const res = await api.get<MarketplaceTransaction>(
+      `/marketplace/transactions/${id}`,
+    );
     return res.data;
   },
 
@@ -259,10 +337,11 @@ export const marketplaceApi = {
   },
 
   verifyHandover: async (transactionId: string, otp: string) => {
-    const res = await api.post<{ success: boolean; message: string; transaction: MarketplaceTransaction }>(
-      `/marketplace/transactions/${transactionId}/verify-handover`,
-      { otp },
-    );
+    const res = await api.post<{
+      success: boolean;
+      message: string;
+      transaction: MarketplaceTransaction;
+    }>(`/marketplace/transactions/${transactionId}/verify-handover`, { otp });
     return res.data;
   },
 
@@ -276,21 +355,29 @@ export const marketplaceApi = {
 
   // REVIEWS & RATINGS
   createReview: async (
-    dataOrTxId: { transactionId: string; rating: number; comment?: string } | string,
+    dataOrTxId:
+      { transactionId: string; rating: number; comment?: string } | string,
     rating?: number,
     comment?: string,
   ) => {
     const payload =
-      typeof dataOrTxId === 'string'
+      typeof dataOrTxId === "string"
         ? { transactionId: dataOrTxId, rating: rating || 5, comment }
         : dataOrTxId;
-    const res = await api.post<MarketplaceReview>('/marketplace/reviews', payload);
+    const res = await api.post<MarketplaceReview>(
+      "/marketplace/reviews",
+      payload,
+    );
     return res.data;
   },
 
   getSellerReviews: async (sellerId: string) => {
     const res = await api.get<{
-      summary: { averageRating: number; totalReviews: number; completedSales: number };
+      summary: {
+        averageRating: number;
+        totalReviews: number;
+        completedSales: number;
+      };
       reviews: MarketplaceReview[];
     }>(`/marketplace/sellers/${sellerId}/reviews`);
     return res.data;
@@ -304,14 +391,17 @@ export const marketplaceApi = {
     reason: string;
     description: string;
   }) => {
-    const res = await api.post<MarketplaceReport>('/marketplace/reports', data);
+    const res = await api.post<MarketplaceReport>("/marketplace/reports", data);
     return res.data;
   },
 
   getModerationReports: async (status?: ReportStatus) => {
-    const res = await api.get<MarketplaceReport[]>('/marketplace/moderation/reports', {
-      params: { status },
-    });
+    const res = await api.get<MarketplaceReport[]>(
+      "/marketplace/moderation/reports",
+      {
+        params: { status },
+      },
+    );
     return res.data;
   },
 
@@ -321,7 +411,7 @@ export const marketplaceApi = {
       status: ReportStatus;
       resolutionNote?: string;
       removeListing?: boolean;
-      action?: 'NONE' | 'REMOVE_LISTING' | 'WARN_USER' | 'SUSPEND_USER';
+      action?: "NONE" | "REMOVE_LISTING" | "WARN_USER" | "SUSPEND_USER";
     },
   ) => {
     const res = await api.patch<MarketplaceReport>(

@@ -4,18 +4,23 @@ import { TemplatesService } from './templates.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import type { ScheduleTemplateActor } from './templates.service';
 
 @ApiTags('Schedule Templates')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('schedule-templates')
 export class TemplatesController {
   constructor(private readonly templatesService: TemplatesService) {}
 
   @Post()
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Create a schedule template' })
-  create(@Body() createTemplateDto: CreateTemplateDto) {
-    return this.templatesService.create(createTemplateDto);
+  create(@Body() createTemplateDto: CreateTemplateDto, @CurrentUser() actor: ScheduleTemplateActor) {
+    return this.templatesService.create(createTemplateDto, actor);
   }
 
   @Get()
@@ -37,14 +42,16 @@ export class TemplatesController {
   }
 
   @Patch(':id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Update a schedule template' })
-  update(@Param('id') id: string, @Body() updateTemplateDto: UpdateTemplateDto) {
-    return this.templatesService.update(id, updateTemplateDto);
+  update(@Param('id') id: string, @Body() updateTemplateDto: UpdateTemplateDto, @CurrentUser() actor: ScheduleTemplateActor) {
+    return this.templatesService.update(id, updateTemplateDto, actor);
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete a schedule template' })
-  remove(@Param('id') id: string) {
-    return this.templatesService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() actor: ScheduleTemplateActor) {
+    return this.templatesService.remove(id, actor);
   }
 }

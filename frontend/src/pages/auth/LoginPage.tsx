@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import gsap from 'gsap';
+import { DemoAccounts } from './DemoAccounts';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -125,7 +126,7 @@ export const LoginPage: React.FC = () => {
       const response = await api.post('/auth/login', { email, password });
       const { accessToken, user } = response.data.data;
       login(accessToken, user);
-      navigate('/hub');
+      navigate(user.mustChangePassword ? '/change-password' : '/hub');
     } catch (err: any) {
       setError(
         err.response?.data?.message || 'Invalid institutional credentials or network error.'
@@ -291,6 +292,7 @@ export const LoginPage: React.FC = () => {
               )}
             </Button>
           </form>
+          <button type="button" onClick={() => navigate('/forgot-password')} className="mt-4 w-full text-center text-sm text-primary hover:underline">Forgot your password?</button>
 
           {/* Unified Platform Access Notice */}
           <div className="mt-6 pt-5 border-t border-border/80 text-center">
@@ -300,6 +302,14 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
         </div>
+        <DemoAccounts disabled={isLoading} onSelect={account => {
+          setEmail(account.email);
+          setPassword(account.password);
+          setShowPassword(false);
+          setError(null);
+          cardRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+          document.getElementById('email')?.focus({ preventScroll: true });
+        }} />
       </div>
 
       {/* Understated Institutional Footer */}

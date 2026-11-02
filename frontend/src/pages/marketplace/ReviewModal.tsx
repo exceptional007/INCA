@@ -77,10 +77,12 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                   <button
                     key={star}
                     type="button"
+                    aria-label={`Rate ${star} ${star === 1 ? 'star' : 'stars'}`}
+                    aria-pressed={rating === star}
                     onMouseEnter={() => setHoverRating(star)}
                     onMouseLeave={() => setHoverRating(0)}
                     onClick={() => setRating(star)}
-                    className="p-1 focus:outline-none transition-transform hover:scale-110"
+                    className="p-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-transform hover:scale-110"
                   >
                     <Star
                       className={`size-8 ${

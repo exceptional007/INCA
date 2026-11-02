@@ -11,7 +11,12 @@ import { MemoryCacheService } from '../../common/cache/memory-cache.service';
 import { CreatePollDto } from './dto/create-poll.dto';
 import { SubmitVoteDto } from './dto/submit-vote.dto';
 import { QueryPollsDto, PollTabFilter } from './dto/query-polls.dto';
-import { PollResultVisibility, PollStatus, PollVotingMode } from '@prisma/client';
+import {
+  PollResultVisibility,
+  PollStatus,
+  PollVotingMode,
+  Prisma,
+} from '@prisma/client';
 
 export const RETENTION_DAYS = 15;
 
@@ -561,37 +566,40 @@ export class PollsService {
       );
     }
 
-    // 1. Record participation for deduplication
-    await this.prisma.pollParticipation.create({
-      data: {
-        pollId,
-        userId,
-      },
-    });
-
-    // 2. Record individual answers
-    // For anonymous polls, voterId is strictly NULL to guarantee privacy
+    // Keep participation, answers and counters atomic. Anonymous answers retain no voter ID.
     const answerRecords = submittedOptionIds.map((optId) => ({
       pollId,
       optionId: optId,
       voterId: poll.isAnonymous ? null : userId,
     }));
 
-    await this.prisma.pollAnswer.createMany({
-      data: answerRecords,
-    });
+    await this.prisma.$transaction(async (tx) => {
+      try {
+        // The unique constraint also protects against simultaneous requests that
+        // both passed the earlier duplicate check.
+        await tx.pollParticipation.create({ data: { pollId, userId } });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new BadRequestException('You have already voted in this poll');
+        }
+        throw error;
+      }
 
-    // 3. Increment voteCount on options concurrently
-    await Promise.all(
-      submittedOptionIds.map((optId) =>
-        this.prisma.pollOption.update({
+      await tx.pollAnswer.createMany({ data: answerRecords });
+
+      // Lock option rows in a consistent order for concurrent multi-choice votes.
+      for (const optId of [...submittedOptionIds].sort()) {
+        await tx.pollOption.update({
           where: { id: optId },
           data: {
             voteCount: { increment: 1 },
           },
-        }),
-      ),
-    );
+        });
+      }
+    });
 
     this.logger.log(
       `User ${userId} voted in poll ${pollId} (Anonymous: ${poll.isAnonymous})`,
