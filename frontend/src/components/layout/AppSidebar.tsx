@@ -29,6 +29,7 @@ import {
   Store,
   SearchCheck,
   Bell,
+  Vote,
 } from "lucide-react"
 
 import {
@@ -100,6 +101,12 @@ export function AppSidebar() {
           title: "Digital Notice Board",
           url: "/notices",
           icon: Bell,
+          roles: ["SUPER_ADMIN", "ADMIN", "HOD", "COORDINATOR", "FACULTY", "STUDENT"],
+        },
+        {
+          title: "Community Polls",
+          url: "/polls",
+          icon: Vote,
           roles: ["SUPER_ADMIN", "ADMIN", "HOD", "COORDINATOR", "FACULTY", "STUDENT"],
         },
       ],
