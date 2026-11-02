@@ -23,7 +23,7 @@ VITE_API_URL=http://localhost:3000/api/v1
 
 `VITE_` values are bundled into browser code and are public. Never put database credentials, JWT signing secrets, R2 secrets, or Gemini keys here. Restart Vite after environment changes and rebuild for deployed changes.
 
-The landing page (`/`) and sign-in screen (`/login`) render without a backend. Signing in and using protected pages require the backend and a prepared development database. There is no public demo-account provisioning or client-side replacement for backend authorization.
+The landing page (`/`) and sign-in screen (`/login`) render without a backend. Protected local workflows require the backend and a prepared development database. The [deployed login page](https://inca-campus-portal.netlify.app/login) lists owner-approved public demo accounts; those are separate from local database provisioning. Backend authorization applies to every protected workflow.
 
 ## Commands
 
@@ -50,6 +50,7 @@ Routes are declared in [src/App.tsx](src/App.tsx). Pages load lazily inside Reac
 | `/schedules` | Timetables and dated schedules |
 | `/activities` | Campus activities |
 | `/attendance/mark` | Attendance workflow; FACULTY, HOD, COORDINATOR, ADMIN |
+| `/attendance/objections` | Attendance-objection review; ADMIN campus-wide, HOD department-scoped |
 | `/reports` | Attendance reports |
 | `/academic` | Academic master data; SUPER_ADMIN, ADMIN, HOD |
 | `/academic/timetable-imports` | Redirect to `/schedules?tab=import` |

@@ -1,15 +1,19 @@
 # INCA screenshot gallery
 
-These are real browser captures of the local frontend. Public-page captures were taken on 31 October 2026 at 1440 × 1000 CSS pixels; profile captures used synthetic accounts on 1 November 2026 at the sizes listed below. Capture used the installed Microsoft Edge in headless mode with an isolated browser profile. Images were checked after rendering and animation completion; no generated mockups are presented as application screenshots.
+These images are browser captures of implemented INCA interfaces. Authenticated product previews use synthetic data. The current landing capture comes from the public deployed application; earlier captures remain available as historical references. No generated mockups are presented as application screenshots.
 
 | Image | Route | Account / dataset |
 | --- | --- | --- |
+| [Current landing page](landing-desktop-current.jpg) | `/` | Public deployed frontend; 1280 × 720 viewport; 2 November 2026; no private campus records |
 | [Landing page](landing-page.png) | `/` | Public; no account or backend connection |
 | [Sign-in page](login.png) | `/login` | Public; fields empty, no credentials entered |
 | [Profile desktop](profile-demo.png) | `/profile` | Synthetic STUDENT, disposable local PostgreSQL; 1440 × 1100; 1 November 2026 |
 | [Profile mobile](profile-mobile-demo.png) | `/profile` | Same synthetic STUDENT; 390 × 844; 1 November 2026 |
+| [Student registration](student-registration-mobile.jpg) | `/academic` | Local synthetic Admin workflow; 390 × 844; 1 November 2026 |
+| [Mobile landing](landing-revamp-mobile.jpg) | `/` | Updated public landing; 1 November 2026 |
+| [Offline upload queue](pwa-attendance-pending.png) | `/attendance/mark` | Synthetic faculty roster and queued submission |
 
-![INCA landing page](landing-page.png)
+![Current INCA landing page](landing-desktop-current.jpg)
 
 ![INCA sign-in page](login.png)
 
@@ -22,4 +26,21 @@ These are real browser captures of the local frontend. Public-page captures were
 5. Save a descriptive PNG filename in this directory. Inspect it at readable size before adding a Markdown reference.
 6. Record route, role, dataset, viewport, and capture date in this table. Confirm every referenced file exists.
 
-Authenticated dashboard, feature-hub, timetable review, attendance, master-data, and report captures have not been added. Capture those only with an approved synthetic dataset; the root README does not reference missing images for them.
+## Product preview gallery
+
+The root README also uses the following captures from [frontend/public/product-screens](../../frontend/public/product-screens/). They were captured from the actual React components with local synthetic fixtures on 1 November 2026 and are also used in the public landing-page product tour.
+
+| Interface | Image | Capture dimensions |
+| --- | --- | --- |
+| Swipe attendance | [Attendance](../../frontend/public/product-screens/attendance-mobile.jpg) | 366 × 694 |
+| Timetable | [Scheduling](../../frontend/public/product-screens/scheduling-mobile.jpg) | 366 × 154 |
+| Notice board | [Notices](../../frontend/public/product-screens/notices-mobile.jpg) | 375 × 950 |
+| Notes and tutor | [Notes](../../frontend/public/product-screens/notes-mobile.jpg) | 375 × 1043 |
+| Marketplace | [Marketplace](../../frontend/public/product-screens/marketplace-mobile.jpg) | 390 × 1121 |
+| Lost and found | [Lost & Found](../../frontend/public/product-screens/lost-found-mobile.jpg) | 390 × 1121 |
+| Attendance reports | [Reports](../../frontend/public/product-screens/reports-mobile.jpg) | 375 × 1078 |
+| Community polls | [Polls](../../frontend/public/product-screens/polls-mobile.jpg) | 375 × 1078 |
+| Academic administration | [Academic](../../frontend/public/product-screens/academic-mobile.jpg) | 328 × 943 |
+| Profile | [Profile](../../frontend/public/product-screens/profile-mobile.jpg) | 375 × 811 |
+
+These illustrate sample UI states; they do not claim current campus totals or successful external-provider operations. See [landing experience verification](../landing-page-revamp.md) for the capture and responsive-review workflow.
