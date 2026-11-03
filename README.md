@@ -314,6 +314,7 @@ Follow the [Render + Netlify deployment guide](docs/deploy-render-netlify.md) fo
 | [Student workflows](docs/student-workflows.md) | Registration, department selection, profile approvals, personal attendance, and objections. |
 | [Accounts & profiles](docs/account-profile.md) | Password lifecycle, refresh sessions, recovery, and profile-change requests. |
 | [PWA & offline attendance](docs/pwa-offline-attendance.md) | Preparation, persistence, queue states, sync protocol, and testing. |
+| [Late attendance approvals](docs/late-attendance-approvals.md) | Faculty grace period, Admin/HOD review, expiry, auditing, and offline retry behaviour. |
 | [Deployment](docs/deploy-render-netlify.md) | Netlify, Render, proxy, secrets, and health configuration. |
 | [Recovery email](docs/gmail-recovery-setup.md) | Google Apps Script gateway setup and recovery-link configuration. |
 | [Local demo](docs/demo.md) | Walkthrough and development data prerequisites. |

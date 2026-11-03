@@ -12,7 +12,7 @@ function assertOwner(owner: string) {
 const options = { timeout: 20_000 };
 async function prepareAttendanceUnlocked(owner: string, schedule: any): Promise<AttendancePack> {
   assertOwner(owner);
-  const day = campusDay();
+  const day = schedule.lectureDate?.slice(0, 10) || campusDay();
   const key = `${owner}:${day}:${schedule.id}`;
   const previous = (await readPacks(owner)).find(p => p.key === key);
   if (previous && ['pending', 'conflict', 'draft'].includes(previous.state)) return previous;

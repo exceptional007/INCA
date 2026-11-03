@@ -566,8 +566,8 @@ describe('Attendance HTTP authorization and actor attribution', () => {
     await perform(paths[1], 'FACULTY').expect(200);
     expect(records.bulkCreate).toHaveBeenCalledWith(sessionId, [
       { studentId, status: 'PRESENT' },
-    ]);
-    expect(sessions.submit).toHaveBeenCalledWith(sessionId);
+    ], expect.any(Function));
+    expect(sessions.submit).toHaveBeenCalledWith(sessionId, expect.any(Function));
   });
   it('keeps submitted sessions locked for bulk saves', async () => {
     await perform(paths[2], 'FACULTY').expect(400);

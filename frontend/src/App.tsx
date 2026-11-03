@@ -23,6 +23,7 @@ const FeatureHub = lazy(() => import('./pages/dashboard/FeatureHub').then((m) =>
 const PasswordPage = lazy(() => import('./pages/auth/PasswordPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const AttendanceObjectionsPage = lazy(() => import('./pages/attendance/AttendanceObjectionsPage'));
+const LateAttendancePage = lazy(() => import('./pages/attendance/LateAttendancePage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -63,6 +64,9 @@ export const App: React.FC = () => {
                 <Route element={<AppLayout />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['FACULTY', 'ADMIN', 'HOD']} />}>
+                    <Route path="/attendance/late-approvals" element={<LateAttendancePage />} />
+                  </Route>
                   <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'HOD']} />}>
                     <Route path="/attendance/objections" element={<AttendanceObjectionsPage />} />
                   </Route>

@@ -39,6 +39,8 @@ export class OfflineAttendanceService {
           throw new ConflictException('The cloud contains records outside the prepared roster. Review the retained local copy.');
         if (existing !== dto.baseline && existing !== desired)
           throw new ConflictException('Attendance changed on another device. Your local copy is retained for review.');
+        // Validate late permission in the same transaction as the upload. Consume it after saving marks.
+        await this.access.authorizeMarking(sessionId, actor, tx);
         await tx.attendanceRecord.createMany({
           data: dto.records.filter(record => !current.records.some(saved => saved.studentId === record.studentId)).map(record => ({ attendanceSessionId: sessionId, studentId: record.studentId, status: record.status, remarks: record.remarks ?? null })),
         });
@@ -47,6 +49,7 @@ export class OfflineAttendanceService {
           const previous = current.records.find(saved => saved.studentId === record.studentId);
           if (previous && previous.status !== record.status) await tx.attendanceRecord.update({ where: { id: previous.id }, data: { status: record.status, remarks: record.remarks ?? previous.remarks } });
         }
+        await this.access.authorizeMarking(sessionId, actor, tx, true);
         return tx.attendanceSession.update({ where: { id: sessionId }, data: { status: 'SUBMITTED', submittedAt: new Date() }, include: { records: true } });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
       return { success: true, message: 'Attendance uploaded and locked.', data: session };

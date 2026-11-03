@@ -49,6 +49,11 @@ export class RecordsService {
     const records = await this.recordRepository.bulkCreate(
       sessionId,
       dto.records,
+      async tx => {
+        const current = await this.access.authorizeMarking(sessionId, actor, tx);
+        const valid = await tx.student.count({ where: { id: { in: submittedIds }, isActive: true, ...(current.schedule ? { sectionId: current.schedule.template.sectionId } : {}) } });
+        if (valid !== submittedIds.length) throw new BadRequestException('The roster changed. Refresh before saving attendance.');
+      },
     );
 
     return {

@@ -14,7 +14,7 @@ describe('offline attendance upload', () => {
       attendanceRecord: { createMany: jest.fn(), update: jest.fn() },
     };
     prisma = { $transaction: jest.fn(async callback => callback(tx)) };
-    access = { sessionScope: jest.fn(async () => ({ takenBy: { userId: actor.id } })) };
+    access = { sessionScope: jest.fn(async () => ({ takenBy: { userId: actor.id } })), authorizeMarking: jest.fn() };
     service = new OfflineAttendanceService(prisma, access);
   });
   it('checks write scope inside a serializable transaction and locks only after records', async () => {

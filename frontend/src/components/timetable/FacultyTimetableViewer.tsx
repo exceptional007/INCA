@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import { Card } from '@/components/ui/card';
 import {
   Calendar as CalendarIcon,
@@ -41,7 +42,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
 import api from '@/api/axios';
 
 interface FacultyScheduleItem {
@@ -59,9 +59,11 @@ interface FacultyScheduleItem {
 
 export const FacultyTimetableViewer: React.FC = () => {
   const { user } = useAuth();
+  const requiresLateApproval = user?.role.code === 'FACULTY';
+
   const navigate = useNavigate();
 
-  const getTodayDateStr = () => new Date().toISOString().split('T')[0];
+  const getTodayDateStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateStr());
   const [schedules, setSchedules] = useState<FacultyScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -72,6 +74,7 @@ export const FacultyTimetableViewer: React.FC = () => {
   const [approvalReason, setApprovalReason] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [approvedScheduleIds, setApprovedScheduleIds] = useState<Set<string>>(new Set());
+  const [pendingScheduleIds, setPendingScheduleIds] = useState<Set<string>>(new Set());
 
   // Attendance Summary Modal
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
@@ -99,14 +102,15 @@ export const FacultyTimetableViewer: React.FC = () => {
     if (lectureDateStr > todayStr) return 'FUTURE';
 
     const rawTemplate = sess.scheduleRaw?.template;
-    const startTimeStr = rawTemplate?.startTime || '09:00 AM';
-    const endTimeStr = rawTemplate?.endTime || '10:00 AM';
+    const exception = sess.scheduleRaw?.exceptions?.slice().sort((a: any, b: any) => +new Date(b.updatedAt) - +new Date(a.updatedAt))[0];
+    const startTimeStr = exception?.newStartTime || rawTemplate?.startTime || '09:00 AM';
+    const endTimeStr = exception?.newEndTime || rawTemplate?.endTime || '10:00 AM';
 
     const startMin = parseTimeMinutes(startTimeStr);
     const endMin = parseTimeMinutes(endTimeStr);
 
     const now = new Date();
-    const currentMin = now.getHours() * 60 + now.getMinutes();
+    const currentMin = (now.getTime() - new Date(todayStr + 'T00:00:00+05:30').getTime()) / 60000;
 
     if (currentMin > endMin + 15) return 'PAST';
     if (currentMin < startMin - 10) return 'FUTURE';
@@ -114,20 +118,20 @@ export const FacultyTimetableViewer: React.FC = () => {
   };
 
   const fetchApprovedRequests = useCallback(async () => {
+    if (!requiresLateApproval) { setApprovedScheduleIds(new Set()); return; }
     try {
-      const res = await api.get('/requests?status=APPROVED');
-      const approvedList: any[] = res.data?.data || [];
-      const set = new Set<string>();
-      approvedList.forEach((r) => {
-        if (r.details) {
-          const match = r.details.match(/Schedule ID:\s*([a-zA-Z0-9-]+)/i);
-          if (match && match[1]) set.add(match[1].trim());
-        }
-      });
-      setApprovedScheduleIds(set);
-    } catch {}
-  }, []);
+      const res = await api.get('/attendance/late-requests/mine');
+      setApprovedScheduleIds(new Set<string>(res.data.approvedScheduleIds || []));
+      setPendingScheduleIds(new Set<string>((res.data.items || []).filter((request: any) => request.status === 'PENDING').map((request: any) => request.scheduleId)));
+    } catch { setApprovedScheduleIds(new Set()); }
+  }, [requiresLateApproval]);
 
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void fetchApprovedRequests(); };
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => { window.removeEventListener('focus', refresh); window.clearInterval(timer); };
+  }, [fetchApprovedRequests]);
   const fetchSchedulesForDate = useCallback(async (dateStr: string) => {
     setIsLoading(true);
     try {
@@ -197,9 +201,7 @@ export const FacultyTimetableViewer: React.FC = () => {
 
   const handleRequestApproval = (sess: FacultyScheduleItem) => {
     setTargetSessionForApproval(sess);
-    setApprovalReason(
-      `Permission requested to mark late/retrospective attendance for ${sess.course} (${sess.code}) scheduled on ${sess.lectureDate} (${sess.timeSlot}).`
-    );
+    setApprovalReason('');
     setIsApprovalModalOpen(true);
   };
 
@@ -208,15 +210,7 @@ export const FacultyTimetableViewer: React.FC = () => {
     if (!targetSessionForApproval) return;
     setIsSubmittingApproval(true);
     try {
-      const requesterName = user?.faculty?.firstName
-        ? `Prof. ${user.faculty.firstName} ${user.faculty.lastName || ''} (${user.email})`
-        : user?.email || 'Faculty Member';
-
-      await api.post('/requests', {
-        title: `Late Attendance Approval: ${targetSessionForApproval.course}`,
-        details: `${approvalReason.trim()} [Schedule ID: ${targetSessionForApproval.id}]`,
-        requester: requesterName,
-      });
+      await api.post('/attendance/late-requests', { scheduleId: targetSessionForApproval.id, reason: approvalReason.trim() });
 
       toast.success('Approval request submitted to Admin / HOD.');
       setIsApprovalModalOpen(false);
@@ -365,6 +359,7 @@ export const FacultyTimetableViewer: React.FC = () => {
           <h3 className="text-base font-semibold text-ink">
             Assigned Lectures on {new Date(selectedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           </h3>
+          {requiresLateApproval && <Button variant="link" className="px-0 h-auto mt-2" onClick={() => navigate('/attendance/late-approvals')}>View late attendance requests & decisions</Button>}
           <p className="text-xs text-ink-muted-80 mt-0.5">
             {schedules.length} lecture{schedules.length === 1 ? '' : 's'} assigned to you &bull;{' '}
             <span className="text-emerald-700 font-medium">{completedCount} Completed</span> &bull;{' '}
@@ -453,7 +448,7 @@ export const FacultyTimetableViewer: React.FC = () => {
                           Attendance Summary
                         </Button>
                       </div>
-                    ) : timeStatus === 'FUTURE' ? (
+                    ) : timeStatus === 'FUTURE' && requiresLateApproval ? (
                       <Button
                         disabled
                         className="bg-muted text-muted-foreground text-xs rounded-full h-9 px-4 font-semibold flex items-center gap-1.5 cursor-not-allowed border"
@@ -461,7 +456,7 @@ export const FacultyTimetableViewer: React.FC = () => {
                         <Lock className="h-3.5 w-3.5" />
                         Locked (Future Time)
                       </Button>
-                    ) : timeStatus === 'PAST' && !isApproved ? (
+                    ) : timeStatus === 'PAST' && !isApproved && requiresLateApproval ? (
                       <div className="flex items-center gap-2">
                         <Button
                           disabled
@@ -472,6 +467,7 @@ export const FacultyTimetableViewer: React.FC = () => {
                           Time Passed
                         </Button>
                         <Button
+                          disabled={pendingScheduleIds.has(sess.id)}
                           onClick={() => handleRequestApproval(sess)}
                           className="bg-amber-600 hover:bg-amber-700 text-white text-xs rounded-full h-9 px-4 font-semibold flex items-center gap-1.5 shadow-sm"
                         >
@@ -512,7 +508,7 @@ export const FacultyTimetableViewer: React.FC = () => {
               Request Late Attendance Approval
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted-80">
-              The designated lecture attendance window has passed. Submit an official request to your Admin / HOD to unlock this lecture's attendance.
+              The 15-minute grace period has ended. Request permission from your department Admin/HOD to submit this lecture within 24 hours. Submitted sessions stay locked.
             </DialogDescription>
           </DialogHeader>
 
@@ -558,7 +554,7 @@ export const FacultyTimetableViewer: React.FC = () => {
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={isSubmittingApproval || !approvalReason.trim()}
+                  disabled={isSubmittingApproval || approvalReason.trim().length < 3}
                   className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
                 >
                   {isSubmittingApproval ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}

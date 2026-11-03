@@ -117,6 +117,10 @@ export const MarkAttendancePage: React.FC = () => {
       setScheduleError(null);
       const response = await api.get('/schedules/today', { timeout: 20_000 });
       const data: any[] = response.data.data || [];
+      if (scheduleIdParam && !data.some(schedule => schedule.id === scheduleIdParam)) {
+        const requested = await api.get(`/schedules/${encodeURIComponent(scheduleIdParam)}`);
+        if (requested.data?.data) data.push(requested.data.data);
+      }
       setSelectedSchedule(null);
       setSchedules(data);
       if (data.length > 0) {
@@ -132,7 +136,7 @@ export const MarkAttendancePage: React.FC = () => {
       const cached = user && (!err.response || err.response.status >= 500) ? (await readPacks(user.id).catch(() => [])).filter(p => p.day === campusDay()) : [];
       setSchedules(cached.map(p => p.schedule));
       setSelectedSchedule(null);
-      setScheduleError(cached.length ? null : 'No prepared classes are available for today. Connect and prepare today’s classes before going offline.');
+      setScheduleError(cached.length ? null : err.response?.data?.message || 'No prepared classes are available. Connect to load the requested lecture.');
       console.error('Failed to load today schedules', err);
     } finally {
       setIsLoading(false);
@@ -277,7 +281,7 @@ export const MarkAttendancePage: React.FC = () => {
       {/* Today's Detected Lectures */}
       <div>
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Today's Scheduled Lectures
+          Scheduled Lectures
         </h2>
         {isLoading && !activeSession ? (
           <div className="text-sm text-muted-foreground">Loading schedules...</div>
@@ -420,6 +424,7 @@ export const MarkAttendancePage: React.FC = () => {
             {statusMsg && (
               <div className="p-3 rounded-md bg-secondary text-secondary-foreground text-sm font-medium">
                 {statusMsg}
+                {user?.role.code === 'FACULTY' && selectedSchedule && <Button variant="link" className="block px-0" onClick={() => navigate(`/attendance/late-approvals?scheduleId=${encodeURIComponent(selectedSchedule.id)}`)}>Open late attendance requests</Button>}
               </div>
             )}
 

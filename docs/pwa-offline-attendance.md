@@ -4,6 +4,8 @@ INCA remains a browser-based React application on Netlify with its existing Rend
 
 ## Using the feature
 
+Faculty uploads received after the lecture's 15-minute grace period require [late attendance approval](late-attendance-approvals.md). Local marks remain saved; after approval, use **Recheck cloud** to retry the retained submission.
+
 1. Open the home page or post-login hub and choose **Download / Install app**. Supported browsers offer their installation prompt. Otherwise, the button explains Chrome/Edge installation and Safari's Share → Add to Home Screen flow.
 2. Sign in while connected. The hub now immediately loads the approved profile name/photo and provides a profile card. The header and sidebar use the same identity; opening the profile page is no longer required first.
 3. Faculty accounts automatically prepare today's classes and authorized student rosters. **Prepare today’s classes** refreshes them manually. Check the prepared-class count and **App files ready for offline use** before leaving connectivity. Dates use Asia/Kolkata.

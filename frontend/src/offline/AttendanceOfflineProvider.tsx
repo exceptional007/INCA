@@ -90,6 +90,7 @@ export function OfflineAttendanceStatus() {
     {packs.filter(p => p.state === 'pending' || p.state === 'conflict').map(pack => <details key={pack.key} className="rounded-lg border p-3">
       <summary className="cursor-pointer break-words font-medium">{pack.day} · {pack.schedule.template?.subject?.name || 'Lecture'} · {pack.state === 'conflict' ? 'Needs review' : 'Waiting for upload'}</summary>
       {pack.error && <p role="alert" className="my-2 text-destructive">{pack.error}</p>}
+      {pack.error?.includes('grace period') && <p className="my-2 text-sm"><a className="text-primary underline" href={`/attendance/late-approvals?scheduleId=${encodeURIComponent(pack.schedule.id)}`}>Request late attendance approval</a>. After approval, return and choose Recheck cloud. Your local marks are retained.</p>}
       <ul className="my-3 max-h-48 overflow-y-auto text-xs space-y-2">{pack.students.map(student => <li key={student.id} className="break-words">{student.rollNumber} · {student.firstName} {student.lastName} · {pack.marks[student.id]}</li>)}</ul>
       <div className="flex flex-wrap gap-2"><button type="button" className="rounded border px-3 py-2" onClick={() => exportCopy(pack)}>Download local copy</button>
         {pack.state === 'conflict' && <button type="button" disabled={!online || busy} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void writePack({ ...pack, state: 'pending', error: undefined }, pack.revision).then(() => sync()).catch(e => alert(e.message))}>Recheck cloud</button>}

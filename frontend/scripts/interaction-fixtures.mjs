@@ -6,12 +6,12 @@ const schedule = { id: 'demo-schedule', date, status: 'SCHEDULED', template: { s
 const session = { id: 'demo-session', status: 'OPEN', records: students.map((student, i) => ({ id: `demo-record-${i + 1}`, studentId: student.id, status: 'PRESENT' })) };
 const initialProfileValues = { firstName: 'Aarav', lastName: 'Sharma', phone: '+91 98765 43210', address: 'Campus residence, Computer Science department' };
 const initialSessions = [{ id: 'preview-current', current: true, createdAt: date, expiresAt: '2026-11-08T10:00:00Z' }, { id: 'preview-other', current: false, createdAt: date, expiresAt: '2026-11-08T10:00:00Z' }];
-const state = { session, history: [], messages: [], tutorMessages: [], quizAnswers: {}, requests: [], objections: [], studentRecords: [], attendanceStatus: 'ABSENT', failNext: '', calls: [], offer: null, transaction: null, profileValues: { ...initialProfileValues }, sessions: [...initialSessions] };
+const state = { session, history: [], messages: [], tutorMessages: [], quizAnswers: {}, requests: [], objections: [], lateRequests: [], studentRecords: [], attendanceStatus: 'ABSENT', failNext: '', calls: [], offer: null, transaction: null, profileValues: { ...initialProfileValues }, sessions: [...initialSessions] };
 export function resetInteractions(failNext = '') {
   state.session = { ...session, status: 'OPEN', records: students.map((student, i) => ({ id: `demo-record-${i + 1}`, studentId: student.id, status: 'PRESENT' })) };
   state.history = []; state.messages = []; state.tutorMessages = []; state.requests = []; state.calls = []; state.failNext = failNext;
   state.offer = null; state.transaction = null;
-  state.objections = []; state.studentRecords = []; state.attendanceStatus = 'ABSENT';
+  state.objections = []; state.lateRequests = []; state.studentRecords = []; state.attendanceStatus = 'ABSENT';
   state.profileValues = { ...initialProfileValues }; state.sessions = [...initialSessions];
 }
 async function readJson(req) {
@@ -33,6 +33,10 @@ export async function interactionResponse(req, res, path, send, role = 'ADMIN') 
   state.calls.push({ method: req.method, path });
   if (state.failNext === path) { state.failNext = ''; res.statusCode = 503; send({ message: 'Synthetic temporary failure. Please retry.' }); return true; }
   const get = req.method === 'GET';
+  if (path === '/attendance/late-requests/mine' && get) { send({ items: state.lateRequests, approvedScheduleIds: state.lateRequests.filter(r => r.effectiveStatus === 'APPROVED').map(r => r.scheduleId) }); return true; }
+  if (path === '/attendance/late-requests/queue' && get) { send(state.lateRequests); return true; }
+  if (path === '/attendance/late-requests' && !get) { const body = await readJson(req); const request = { id: `preview-late-${state.lateRequests.length + 1}`, scheduleId: body.scheduleId, reason: body.reason, status: 'PENDING', effectiveStatus: 'PENDING', canCancel: true, createdAt: new Date().toISOString(), snapshot: { date: '2026-10-30', subject: note.subject.name, code: note.subject.code, startTime: '09:10 AM', endTime: '10:05 AM', program: 'B.Tech Computer Science', semester: 6, section: 'A' }, requester: { email: 'faculty.preview@bit.ac.in' }, events: [{ id: 'created', action: 'REQUESTED', createdAt: new Date().toISOString(), actor: { email: 'faculty.preview@bit.ac.in' } }] }; state.lateRequests.push(request); send(request); return true; }
+  if (/^\/attendance\/late-requests\/preview-late-\d+\/(review|cancel)$/.test(path)) { const body = await readJson(req); const row = state.lateRequests.find(r => r.id === path.split('/')[3]); row.status = path.endsWith('/cancel') ? 'CANCELLED' : body.decision; row.effectiveStatus = row.status; row.reviewRemark = body.remark || null; row.canCancel = row.status === 'APPROVED'; row.expiresAt = row.status === 'APPROVED' ? new Date(Date.now() + 24 * 3600000).toISOString() : null; row.reviewer = { email: 'admin.preview@bit.ac.in' }; row.events.push({ id: `event-${row.events.length}`, action: row.status, createdAt: new Date().toISOString(), actor: row.reviewer }); send(row); return true; }
   if (path === '/students/registration-options' && get) { send({ departmentLocked: role !== 'SUPER_ADMIN', departments: [department], sections: [{ id: 'demo-section', name: 'A', semester: { number: 6, program: { name: 'B.Tech Computer Science', departmentId: department.id } } }] }); return true; }
   if (path === '/students/accounts' && !get) { const body = await readJson(req); const student = { ...body, id: 'created-preview-student', photoKey: 'student-photos/synthetic.png', department, section: { id: 'demo-section', name: 'A' }, user: { id: 'created-preview-user', email: body.email, isActive: true }, isActive: true }; delete student.password; state.studentRecords.push(student); send({ success: true, data: { student, user: student.user } }); return true; }
   const query = new URL(req.url, 'http://127.0.0.1:5187').searchParams;
@@ -69,7 +73,7 @@ export async function interactionResponse(req, res, path, send, role = 'ADMIN') 
   if (path === '/__test/state') { send(state); return true; }
   if (path === '/attendance/sessions/demo-session' && get) { wrapped(state.session); return true; }
   if (path === '/attendance/sessions/demo-session/sync' && !get) { const body = await readJson(req); state.session.records = body.records.map((record, i) => ({ ...record, id: `demo-record-${i + 1}` })); state.session.status = 'SUBMITTED'; wrapped(state.session); return true; }
-  if (path === '/schedules/today') { wrapped([schedule]); return true; }
+  if (path === '/schedules/today' || path === '/schedules') { wrapped([{ ...schedule, lectureDate: date }]); return true; }
   if (path === '/attendance/sessions' && !get) { await readJson(req); wrapped(state.session); return true; }
   if (path === '/attendance/sessions/demo-session/roster') { wrapped(students); return true; }
   if (path === '/admin/timetable-imports/test-lecture-session') { await readJson(req); send({ session: state.session, students: students.map(student => ({ ...student, currentStatus: state.session.records.find(record => record.studentId === student.id)?.status || 'PRESENT' })), schedule }); return true; }

@@ -128,6 +128,7 @@ describe('Attendance submission roster validation', () => {
       expect(recordRepository.bulkCreate).toHaveBeenCalledWith(
         'session',
         records,
+        expect.any(Function),
       );
     },
   );

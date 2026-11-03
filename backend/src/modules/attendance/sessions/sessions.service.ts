@@ -135,7 +135,7 @@ export class SessionsService {
       throw new BadRequestException('This session has already been submitted.');
     }
 
-    const submitted = await this.sessionRepository.submit(id);
+    const submitted = await this.sessionRepository.submit(id, tx => this.access.authorizeMarking(id, actor, tx, true));
     return {
       success: true,
       message: 'Attendance session submitted and locked successfully.',

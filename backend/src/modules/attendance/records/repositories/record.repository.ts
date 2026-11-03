@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { AttendanceRecordItemDto } from '../dto/attendance-record-item.dto';
 
@@ -36,35 +36,48 @@ export class RecordRepository {
     });
   }
 
-  async bulkCreate(sessionId: string, records: AttendanceRecordItemDto[]) {
-    return this.prisma.$transaction(
-      records.map((r) =>
-        this.prisma.attendanceRecord.upsert({
-          where: {
-            attendanceSessionId_studentId: {
-              attendanceSessionId: sessionId,
-              studentId: r.studentId,
-            },
-          },
-          create: {
-            attendanceSessionId: sessionId,
-            studentId: r.studentId,
-            status: r.status,
-            remarks: r.remarks ?? null,
-          },
-          update: {
-            status: r.status,
-            remarks: r.remarks ?? null,
-          },
-        }),
-      ),
-    );
+  async bulkCreate(
+    sessionId: string,
+    records: AttendanceRecordItemDto[],
+    authorize: (tx: any) => Promise<void>,
+  ) {
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          await authorize(tx);
+          const saved: any[] = [];
+          for (const r of records)
+            saved.push(
+              await tx.attendanceRecord.upsert({
+                where: {
+                  attendanceSessionId_studentId: {
+                    attendanceSessionId: sessionId,
+                    studentId: r.studentId,
+                  },
+                },
+                create: {
+                  attendanceSessionId: sessionId,
+                  studentId: r.studentId,
+                  status: r.status,
+                  remarks: r.remarks ?? null,
+                },
+                update: { status: r.status, remarks: r.remarks ?? null },
+              }),
+            );
+          return saved;
+        },
+        { isolationLevel: 'Serializable', timeout: 20000 },
+      );
+    } catch (error) {
+      if (error.code === 'P2034')
+        throw new ConflictException(
+          'Attendance changed during saving. Refresh and retry.',
+        );
+      throw error;
+    }
   }
 
-  async update(
-    id: string,
-    data: { status?: any; remarks?: string | null },
-  ) {
+  async update(id: string, data: { status?: any; remarks?: string | null }) {
     return this.prisma.attendanceRecord.update({
       where: { id },
       data,

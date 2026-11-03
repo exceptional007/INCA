@@ -1,5 +1,6 @@
 import { generateInitialPassword, useInitialCredentials } from '@/components/useInitialCredentials';
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardTitle, CardDescription } from '@/components/ui/card';
 import {
   Users,
@@ -373,7 +374,7 @@ export const AdminDashboard: React.FC = () => {
         const reqRes = await api.get('/requests');
         if (reqRes.data?.success) {
           const reqs = reqRes.data.data || [];
-          setPendingApprovals(reqs.filter((r: any) => r.status === 'PENDING'));
+          setPendingApprovals(reqs.filter((r: any) => r.status === 'PENDING' && !r.title?.startsWith('Late Attendance Approval:')));
         }
       } catch (err) {
         console.error('Failed to fetch requests:', err);
@@ -937,6 +938,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
+                <Button asChild variant="outline" className="mb-4 w-full"><Link to="/attendance/late-approvals">Review late attendance requests</Link></Button>
                 {loading ? (
                   <div className="flex flex-col items-center justify-center py-6 space-y-2">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-action-blue"></div>

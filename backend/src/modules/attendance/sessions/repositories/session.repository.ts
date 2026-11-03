@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { CreateSessionDto } from '../dto/create-session.dto';
 import { Prisma } from '@prisma/client';
@@ -71,15 +76,22 @@ export class SessionRepository {
       throw new BadRequestException('The lecture has no assigned section.');
     }
     if (!session.scheduleId && !session.activityId) {
-      throw new BadRequestException('Attendance session has no lecture or activity.');
+      throw new BadRequestException(
+        'Attendance session has no lecture or activity.',
+      );
     }
     // Activities have no section/participant relationship in the existing schema.
     // Lecture rosters use explicit enrollment only, never names or prior attendance.
     return this.prisma.student.findMany({
       where: { isActive: true, ...(sectionId ? { sectionId } : {}) },
       select: {
-        id: true, firstName: true, lastName: true, rollNumber: true,
-        collegeId: true, photoKey: true, sectionId: true,
+        id: true,
+        firstName: true,
+        lastName: true,
+        rollNumber: true,
+        collegeId: true,
+        photoKey: true,
+        sectionId: true,
       },
       orderBy: { rollNumber: 'asc' },
     });
@@ -115,7 +127,10 @@ export class SessionRepository {
     });
   }
 
-  async findByFaculty(facultyId: string, scope: Prisma.AttendanceSessionWhereInput) {
+  async findByFaculty(
+    facultyId: string,
+    scope: Prisma.AttendanceSessionWhereInput,
+  ) {
     return this.prisma.attendanceSession.findMany({
       where: {
         AND: [scope],
@@ -136,25 +151,49 @@ export class SessionRepository {
   }
 
   async create(data: CreateSessionDto & { takenById: string }) {
+    const lecture = data.scheduleId
+      ? await this.prisma.schedule.findUnique({
+          where: { id: data.scheduleId },
+          select: { lectureDate: true },
+        })
+      : null;
+    if (data.scheduleId && !lecture)
+      throw new NotFoundException('Lecture not found.');
     return this.prisma.attendanceSession.create({
       data: {
         scheduleId: data.scheduleId ?? null,
         activityId: data.activityId ?? null,
         takenById: data.takenById,
-        attendanceDate: new Date(data.attendanceDate),
+        attendanceDate: lecture?.lectureDate || new Date(data.attendanceDate),
         status: 'OPEN',
       },
       include: this.include,
     });
   }
 
-  async submit(id: string) {
-    return this.prisma.attendanceSession.update({
-      where: { id },
-      data: {
-        status: 'SUBMITTED',
-        submittedAt: new Date(),
-      },
-    });
+  async submit(id: string, authorize: (tx: any) => Promise<unknown>) {
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          await authorize(tx);
+          const result = await tx.attendanceSession.updateMany({
+            where: { id, status: 'OPEN' },
+            data: { status: 'SUBMITTED', submittedAt: new Date() },
+          });
+          if (result.count !== 1)
+            throw new ConflictException(
+              'This attendance session is already locked.',
+            );
+          return tx.attendanceSession.findUnique({ where: { id } });
+        },
+        { isolationLevel: 'Serializable', timeout: 15000 },
+      );
+    } catch (error) {
+      if (error.code === 'P2034')
+        throw new ConflictException(
+          'Attendance changed during submission. Refresh and retry.',
+        );
+      throw error;
+    }
   }
 }

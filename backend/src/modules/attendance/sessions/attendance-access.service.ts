@@ -1,10 +1,12 @@
 import {
   ForbiddenException,
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { LateAttendanceService } from './late-attendance.service';
 
 export interface AttendanceActor {
   id: string;
@@ -13,7 +15,54 @@ export interface AttendanceActor {
 
 @Injectable()
 export class AttendanceAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly late: LateAttendanceService;
+  constructor(private readonly prisma: PrismaService) {
+    this.late = new LateAttendanceService(prisma);
+  }
+
+  async authorizeMarking(
+    sessionId: string,
+    actor: AttendanceActor,
+    tx: any,
+    consume = false,
+  ) {
+    const scope = await this.sessionScope(actor, true);
+    const session = await tx.attendanceSession.findFirst({
+      where: { id: sessionId, AND: [scope] },
+      include: { schedule: { include: { template: true } }, records: true },
+    });
+    if (!session)
+      throw new ForbiddenException(
+        'You no longer have access to this attendance session.',
+      );
+    if (session.status !== 'OPEN')
+      throw new BadRequestException(
+        'This attendance session is locked. Use audited corrections.',
+      );
+    if (session.schedule?.status === 'CANCELLED')
+      throw new BadRequestException('Cancelled lectures cannot be marked.');
+    const permission = await this.late.enforce(session.scheduleId, actor, tx);
+    if (consume && session.schedule) {
+      const roster = await tx.student.findMany({
+        where: {
+          sectionId: session.schedule.template.sectionId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      const expected = roster.map((student) => student.id).sort();
+      const actual = session.records.map((record) => record.studentId).sort();
+      if (
+        !expected.length ||
+        JSON.stringify(expected) !== JSON.stringify(actual)
+      )
+        throw new BadRequestException(
+          'Mark every current student before submitting. Refresh the roster if it changed.',
+        );
+    }
+    if (consume) await this.late.consume(permission, actor, tx);
+    return session;
+  }
 
   private async departmentIdForActor(actor: AttendanceActor): Promise<string> {
     let departmentId: string | null | undefined;

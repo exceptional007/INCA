@@ -128,6 +128,7 @@ export function AppSidebar() {
     {
       title: "Campus Operations",
       items: [
+        { title: 'Late attendance approvals', url: '/attendance/late-approvals', icon: CheckSquare, roles: ['FACULTY', 'ADMIN', 'HOD'] },
         {
           title: "Take Attendance",
           url: "/attendance/mark",

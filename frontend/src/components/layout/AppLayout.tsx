@@ -48,6 +48,7 @@ export function AppLayout() {
     if (moduleLabels[path]) return [{ label: moduleLabels[path], isCurrent: true }]
     if (path === "/profile") return [{ label: new URLSearchParams(location.search).get('tab') === 'review' ? 'Profile approvals' : 'My Profile', isCurrent: true }]
     if (path === "/attendance/objections") return [{ label: 'Attendance objections', isCurrent: true }]
+    if (path === "/attendance/late-approvals") return [{ label: 'Late attendance approvals', isCurrent: true }]
     if (path === "/dashboard") {
       return [{ label: "ASSAM Dashboard", isCurrent: true }]
     }
