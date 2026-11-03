@@ -47,7 +47,7 @@ interface TodayClassItem {
   time: string;
   room: string;
   instructor: string;
-  status: 'upcoming' | 'completed';
+  status: 'upcoming' | 'completed' | 'cancelled';
 }
 
 interface AcademicNotice {
@@ -71,6 +71,9 @@ export const StudentDashboard: React.FC = () => {
   const [todayClasses, setTodayClasses] = useState<TodayClassItem[]>([]);
   const [isLoadingTimetable, setIsLoadingTimetable] = useState<boolean>(true);
 
+  const [timetableError, setTimetableError] = useState<string | null>(null);
+  const [sectionAssigned, setSectionAssigned] = useState(true);
+
   // Attendance state
   const [subjectSummaries, setSubjectSummaries] = useState<SubjectSummary[]>([]);
   const [selectedSubjectCode, setSelectedSubjectCode] = useState<string | null>(null);
@@ -90,78 +93,36 @@ export const StudentDashboard: React.FC = () => {
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [openingNoticeId, setOpeningNoticeId] = useState<string | null>(null);
 
-  // Helper to determine if a class is completed based on time
-  const isClassCompleted = (endTimeStr: string, lectureDate?: string): boolean => {
-    if (!endTimeStr) return false;
-    if (lectureDate) {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const lecStr = new Date(lectureDate).toISOString().split('T')[0];
-      if (lecStr < todayStr) return true;
-      if (lecStr > todayStr) return false;
-    }
-
-    try {
-      const cleanStr = endTimeStr.trim().toUpperCase();
-      const isPM = cleanStr.includes('PM');
-      const isAM = cleanStr.includes('AM');
-      const timeOnly = cleanStr.replace(/[^0-9:]/g, '');
-      const [hoursStr, minutesStr] = timeOnly.split(':');
-      let hours = parseInt(hoursStr, 10);
-      const minutes = parseInt(minutesStr || '0', 10);
-
-      if (isPM && hours < 12) hours += 12;
-      if (isAM && hours === 12) hours = 0;
-
-      const now = new Date();
-      const classEndTime = new Date();
-      classEndTime.setHours(hours, minutes, 0, 0);
-
-      return now.getTime() >= classEndTime.getTime();
-    } catch {
-      return false;
-    }
-  };
-
-  // 1. Fetch Timetable
+  // Use the same own-student timetable as the scheduling workspace.
   const fetchTimetable = useCallback(async () => {
     setIsLoadingTimetable(true);
+    setTimetableError(null);
     try {
-      let rawSchedules: any[] = [];
-      try {
-        const res = await api.get('/schedules/today');
-        rawSchedules = res.data?.data || [];
-      } catch (err) {
-        console.error('Failed to fetch /schedules/today:', err);
-      }
-
-      const formattedClasses: TodayClassItem[] = rawSchedules.map((sch: any) => {
-        const startTime = sch.template?.startTime || '09:00 AM';
-        const endTime = sch.template?.endTime || '10:00 AM';
-        const room = sch.template?.room?.code || sch.template?.room?.name || 'TBD';
-        const course = sch.template?.subject?.name || 'Class Session';
-        const code = sch.template?.subject?.code || 'GEN';
-        const faculty = sch.template?.faculty;
-        const instructor = faculty
-          ? `${faculty.firstName} ${faculty.lastName || ''}`.trim()
-          : 'Faculty Pending';
-
-        const completed = sch.status === 'COMPLETED' || isClassCompleted(endTime, sch.lectureDate);
-
-        return {
-          id: sch.id,
-          course,
-          code,
-          time: `${startTime} - ${endTime}`,
-          room,
-          instructor,
-          status: completed ? 'completed' : 'upcoming',
-        };
-      });
-
-      setTodayClasses(formattedClasses);
+      const res = await api.get('/student-portal/timetable');
+      const data = res.data;
+      if (!Array.isArray(data?.lectures) || typeof data.sectionAssigned !== 'boolean') throw new Error('Invalid timetable response. Please retry.');
+      setSectionAssigned(data.sectionAssigned);
+      const campusTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+      const minutesNow = Number(campusTime.slice(0, 2)) * 60 + Number(campusTime.slice(3, 5));
+      const ended = (value: string) => {
+        const match = value?.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+        if (!match) return false;
+        let hours = Number(match[1]);
+        if (match[3]) hours = hours % 12 + (match[3].toUpperCase() === 'PM' ? 12 : 0);
+        return minutesNow >= hours * 60 + Number(match[2]);
+      };
+      setTodayClasses(data.lectures.map((lecture: any): TodayClassItem => ({
+        id: lecture.scheduleId,
+        course: lecture.subject.name,
+        code: lecture.subject.code,
+        time: [lecture.startTime, lecture.endTime].filter(Boolean).join(' - '),
+        room: lecture.room || 'Not assigned',
+        instructor: lecture.faculty,
+        status: lecture.lectureStatus === 'CANCELLED' ? 'cancelled' : lecture.lectureStatus === 'COMPLETED' || ended(lecture.endTime) ? 'completed' : 'upcoming',
+      })));
     } catch (err: any) {
-      console.error('Failed to load timetable:', err);
-      toast.error('Failed to load today\'s timetable.');
+      setTodayClasses([]);
+      setTimetableError(err.response?.data?.message || err.message || 'Could not load today’s timetable.');
     } finally {
       setIsLoadingTimetable(false);
     }
@@ -297,13 +258,17 @@ export const StudentDashboard: React.FC = () => {
       {/* --- Tab Content: My Timetable --- */}
       {activeTab === 'timetable' && (
         <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-6">
-          <h3 className="text-base font-semibold text-ink pb-4 border-b mb-6">Today's Class Schedule</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b mb-6"><h3 className="text-base font-semibold text-ink">Today's Class Schedule</h3><Button variant="outline" size="sm" disabled={isLoadingTimetable} onClick={fetchTimetable}>Refresh timetable</Button></div>
           
           {isLoadingTimetable ? (
             <div className="flex flex-col items-center justify-center py-16 text-ink-muted-80">
               <Loader2 className="h-7 w-7 animate-spin text-action-blue mb-2" />
               <p className="text-xs">Loading today's schedule...</p>
             </div>
+          ) : timetableError ? (
+            <div role="alert" className="rounded-xl border border-destructive/30 p-5"><p className="text-sm">{timetableError}</p><Button className="mt-3" variant="outline" onClick={fetchTimetable}>Retry timetable</Button></div>
+          ) : !sectionAssigned ? (
+            <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5"><p className="font-semibold">Your class has not been assigned</p><p className="mt-2 text-sm text-muted-foreground">Ask an Admin to assign your program, semester, and section. Your own scheduled lectures will appear once your class is linked.</p></div>
           ) : todayClasses.length === 0 ? (
             <div className="text-center py-16 px-4 border border-dashed border-[#e0e0e0] rounded-xl bg-canvas-parchment/20">
               <CalendarX className="h-10 w-10 text-ink-muted-48 mx-auto mb-2 opacity-60" />
@@ -328,7 +293,7 @@ export const StudentDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div>
-                    {item.status === 'completed' ? (
+                    {item.status === 'cancelled' ? <Badge variant="outline">Cancelled</Badge> : item.status === 'completed' ? (
                       <Badge className="bg-canvas-parchment text-ink-muted-80 border-none text-[10px] px-3.5 py-1 rounded-full">
                         Logged Completed
                       </Badge>
