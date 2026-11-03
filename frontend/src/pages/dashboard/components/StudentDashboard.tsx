@@ -75,6 +75,7 @@ export const StudentDashboard: React.FC = () => {
   const [sectionAssigned, setSectionAssigned] = useState(true);
 
   // Attendance state
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [subjectSummaries, setSubjectSummaries] = useState<SubjectSummary[]>([]);
   const [selectedSubjectCode, setSelectedSubjectCode] = useState<string | null>(null);
   const [minThreshold, setMinThreshold] = useState<number>(75);
@@ -131,9 +132,11 @@ export const StudentDashboard: React.FC = () => {
   // 2. Fetch Attendance Summary
   const fetchAttendance = useCallback(async () => {
     setIsLoadingAttendance(true);
+    setAttendanceError(null);
     try {
       const res = await api.get('/students/my/attendance-summary');
       const data: AttendanceSummaryResponse = res.data?.data;
+      if (!data || !Array.isArray(data.subjectSummaries)) throw new Error('Could not read your attendance records. Please retry.');
       if (data) {
         setMinThreshold(data.minAttendanceThreshold || 75);
         setOverallStats({
@@ -144,13 +147,12 @@ export const StudentDashboard: React.FC = () => {
         });
         const summaries = data.subjectSummaries || [];
         setSubjectSummaries(summaries);
-        if (summaries.length > 0) {
-          setSelectedSubjectCode((prev) => prev || summaries[0].code);
-        }
+        setSelectedSubjectCode((prev) => summaries.some(subject => subject.code === prev) ? prev : summaries[0]?.code || null);
       }
     } catch (err: any) {
       console.error('Failed to load attendance summary:', err);
-      toast.error('Failed to load attendance tracker.');
+      const detail = err.response?.data?.message || err.message || 'Failed to load attendance tracker.';
+      setAttendanceError(Array.isArray(detail) ? detail.join(' ') : detail);
     } finally {
       setIsLoadingAttendance(false);
     }
@@ -193,14 +195,18 @@ export const StudentDashboard: React.FC = () => {
   }, [fetchTimetable, fetchAttendance, fetchNotices]);
 
   useEffect(() => {
-    const refresh = () => { if (!document.hidden) void fetchTimetable(); };
+    if (activeTab === 'attendance') void fetchAttendance();
+  }, [activeTab, fetchAttendance]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) { void fetchTimetable(); if (activeTab === 'attendance') void fetchAttendance(); } };
     window.addEventListener('focus', refresh);
     const timer = window.setInterval(refresh, 30000);
     return () => {
       window.removeEventListener('focus', refresh);
       window.clearInterval(timer);
     };
-  }, [fetchTimetable]);
+  }, [fetchTimetable, fetchAttendance, activeTab]);
 
   const selectedCourse = subjectSummaries.find((s) => s.code === selectedSubjectCode);
 
@@ -312,12 +318,15 @@ export const StudentDashboard: React.FC = () => {
 
       {/* --- Tab Content: Attendance Tracker --- */}
       {activeTab === 'attendance' && (
-        <div>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">My attendance tracker</h3><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={isLoadingAttendance} onClick={fetchAttendance}>Refresh attendance</Button><Button variant="outline" size="sm" asChild><Link to="/reports">Filter attendance history</Link></Button></div></div>
           {isLoadingAttendance ? (
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-16 flex flex-col items-center justify-center text-ink-muted-80">
               <Loader2 className="h-7 w-7 animate-spin text-action-blue mb-2" />
               <p className="text-xs">Loading attendance records...</p>
             </Card>
+          ) : attendanceError ? (
+            <Card role="alert" className="p-6 border-destructive/30"><p className="text-sm">{attendanceError}</p><Button className="mt-3" variant="outline" onClick={fetchAttendance}>Retry attendance</Button></Card>
           ) : subjectSummaries.length === 0 ? (
             <Card className="bg-white border border-[#e0e0e0] rounded-[18px] shadow-none p-16 text-center">
               <CalendarX className="h-10 w-10 text-ink-muted-48 mx-auto mb-2 opacity-60" />
